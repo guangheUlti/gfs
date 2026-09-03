@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # MySQL 数据库
+  gfs-mysql:
+    image: mysql:8.0
+    container_name: gfs-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: gfs
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      # 数据持久化，防止容器删了数据库就没了
+      - ./mysql/data:/var/lib/mysql
+      # 关键：自动执行初始化 SQL（路径相对本 compose 文件，指向仓库根的 sql/）
+      - ../../sql/mysql/gfs-new.sql:/docker-entrypoint-initdb.d/gfs.sql
+
+  # Redis 缓存
+  gfs-redis:
+    image: redis:7.0
+    container_name: gfs-redis
+    restart: always
+    command: redis-server --requirepass 123456
+    ports:
+      - "6379:6379"
+
+  # gfs 服务
+  gfs-server:
+    build:
+      context: ../..
+      dockerfile: script/docker/Dockerfile
+    container_name: gfs-server
+    restart: always
+    depends_on:
+      - gfs-mysql
+      - gfs-redis
+    ports:
+      - "80:80"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      # 直接通过服务名连接，内部网络互通
+      - SPRING_DATASOURCE_URL=jdbc:mysql://gfs-mysql:3306/gfs?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+      - SPRING_DATA_REDIS_HOST=gfs-redis
+    volumes:
+      - ./logs:/logs
+      - ./tmp:/tmp
+      # 映射你的 D 盘上传目录
+      - D:/gfs/upload:/data/upload
+
+networks:
+  default:
+    name: gfs-net

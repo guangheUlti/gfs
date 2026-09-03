@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${fileName}">PDF预览</title>
+    <style>
+        :root {
+            --color-primary: #165dff;
+            --color-text-1: #ffffff;
+            --color-text-2: rgba(255, 255, 255, 0.7);
+            --color-text-3: rgba(255, 255, 255, 0.5);
+            --color-bg-1: #1a1a1a;
+            --color-bg-2: #000000;
+            --color-border: rgba(255, 255, 255, 0.1);
+            --color-fill-2: rgba(255, 255, 255, 0.1);
+            --color-danger: #f53f3f;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "noto sans", "Microsoft YaHei", "SimSun", sans-serif;
+            background: var(--color-bg-2);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
+
+        .header {
+            height: 48px;
+            background: var(--color-bg-1);
+            border-bottom: 1px solid var(--color-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 10;
+            color: var(--color-text-1);
+            flex-shrink: 0;
+        }
+
+        .file-name {
+            font-size: 14px;
+            opacity: 0.9;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .close-btn {
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 4px;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-btn:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        #pdf-container {
+            flex: 1;
+            background: #525659; /* Standard PDF viewer background */
+            position: relative;
+            overflow: hidden;
+        }
+
+        #pdf-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            opacity: 0;
+            transition: opacity 0.3s ease-in;
+        }
+
+        #pdf-iframe.loaded {
+            opacity: 1;
+        }
+
+        /* Loading & Error */
+        .loading-container, .error-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff; /* Contrast against dark PDF bg */
+            pointer-events: none; /* Allow clicks to pass through if needed */
+        }
+
+        .loading-container {
+            z-index: 1;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <span class="file-name" th:text="${fileName}">文件名</span>
+    <div class="close-btn" onclick="window.close()" title="关闭">
+        <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+            <path d="M14 14L34 34" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 34L34 14" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+    </div>
+</div>
+<div id="pdf-container">
+    <div class="loading-container" id="loading">
+        <div class="spinner"></div>
+        <div>正在加载资源...</div>
+    </div>
+    <iframe id="pdf-iframe"></iframe>
+</div>
+
+<script th:inline="javascript">
+    // 获取服务端变量
+    const streamUrl = /*[[${streamUrl}]]*/ '';
+    const fileSize = /*[[${fileSize}]]*/ 0;
+    // 获取 viewer 路径
+    const viewerPath = /*[[@{/lib/pdfjs/web/viewer.html}]]*/ '/lib/pdfjs/web/viewer.html';
+
+    const iframe = document.getElementById('pdf-iframe');
+    const loading = document.getElementById('loading');
+
+    // 大文件阈值：50MB
+    const MAX_BLOB_SIZE = 50 * 1024 * 1024;
+
+    // 使用 Blob 方式加载 PDF，避免 IDM 等下载工具拦截
+    async function loadPdfWithBlob() {
+        try {
+            loading.innerHTML = '<div class="spinner"></div><div>加载中...</div>';
+
+            // 通过 fetch 获取 PDF 数据
+            const response = await fetch(streamUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/pdf',
+                    // 添加自定义头部，标识这是预览请求
+                    'X-Request-Type': 'preview'
+                },
+                credentials: 'same-origin'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            // 获取 Blob 数据
+            const blob = await response.blob();
+
+            // 创建 Blob URL（这个URL不会被下载工具拦截）
+            const blobUrl = URL.createObjectURL(blob);
+
+            // 使用 Blob URL 加载 PDF
+            iframe.src = `${viewerPath}?file=${encodeURIComponent(blobUrl)}`;
+
+            // iframe 加载完成后隐藏 loading
+            iframe.onload = function () {
+                setTimeout(() => {
+                    loading.style.display = 'none';
+                    iframe.classList.add('loaded');
+                }, 500);
+            };
+
+        } catch (error) {
+            console.error('PDF 加载失败:', error);
+            loading.innerHTML = `
+                <div style="color: #fff; text-align: center;">
+                    <div style="font-size: 18px; margin-bottom: 10px;">❌</div>
+                    <div>PDF 加载失败</div>
+                    <div style="font-size: 12px; margin-top: 8px; opacity: 0.7;">${error.message}</div>
+                </div>
+            `;
+        }
+    }
+
+    // 页面加载完成后执行
+    if (streamUrl) {
+        // 根据文件大小选择加载方式
+        if (fileSize > MAX_BLOB_SIZE) {
+            // 大文件直接使用URL，不用Blob（避免内存溢出）
+            console.log('大文件（' + (fileSize / 1024 / 1024).toFixed(2) + 'MB），使用直接加载方式');
+            iframe.src = `${viewerPath}?file=${encodeURIComponent(streamUrl)}`;
+            iframe.onload = function () {
+                setTimeout(() => {
+                    loading.style.display = 'none';
+                    iframe.classList.add('loaded');
+                }, 500);
+            };
+        } else {
+            // 小文件使用Blob方式（防止IDM拦截）
+            console.log('小文件（' + (fileSize / 1024 / 1024).toFixed(2) + 'MB），使用Blob加载方式');
+            loadPdfWithBlob();
+        }
+    } else {
+        loading.innerHTML = '<div style="color: #fff;">文件路径无效</div>';
+    }
+
+    // 页面卸载时释放 Blob URL
+    window.addEventListener('beforeunload', () => {
+        if (iframe.src && iframe.src.startsWith('blob:')) {
+            URL.revokeObjectURL(iframe.src);
+        }
+    });
+
+    // Disable context menu
+    document.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+    });
+</script>
+</body>
+</html>

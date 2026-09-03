@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${fileName}">TIFF预览</title>
+    <script th:src="@{/lib/tif/UTIF.js}"></script>
+    <style>
+        :root {
+            --color-primary: #165dff;
+            --color-text-1: #ffffff;
+            --color-text-2: rgba(255, 255, 255, 0.7);
+            --color-text-3: rgba(255, 255, 255, 0.5);
+            --color-bg-1: #1a1a1a;
+            --color-bg-2: #000000;
+            --color-border: rgba(255, 255, 255, 0.1);
+            --color-fill-2: rgba(255, 255, 255, 0.1);
+            --color-toolbar-bg: rgba(255, 255, 255, 0.1);
+            --color-toolbar-hover: rgba(255, 255, 255, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "noto sans", "Microsoft YaHei", "SimSun", sans-serif;
+            background: var(--color-bg-2);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
+
+        .header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5), transparent);
+            z-index: 10;
+            color: var(--color-text-1);
+            pointer-events: none;
+        }
+
+        .header > * {
+            pointer-events: auto;
+        }
+
+        .file-name {
+            font-size: 14px;
+            opacity: 0.9;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .close-btn {
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 4px;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        #tif-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            cursor: grab;
+        }
+
+        #tif-container:active {
+            cursor: grabbing;
+        }
+
+        #preview-canvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            transition: transform 0.2s cubic-bezier(0.2, 0, 0.2, 1);
+            transform-origin: center center;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+        }
+
+        /* Bottom Toolbar */
+        .toolbar-container {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            display: flex;
+            gap: 12px;
+            padding: 10px 20px;
+            background: var(--color-toolbar-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 50px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tool-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: transparent;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .tool-btn:hover {
+            background: var(--color-toolbar-hover);
+            transform: translateY(-2px);
+        }
+
+        .tool-btn:active {
+            transform: translateY(0);
+        }
+
+        .tool-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .tool-btn:disabled:hover {
+            background: transparent;
+            transform: none;
+        }
+
+        .tool-btn svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+
+        .tool-btn::after {
+            content: attr(data-title);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%) translateY(-10px);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            margin-bottom: 8px;
+        }
+
+        .tool-btn:hover::after {
+            opacity: 1;
+        }
+
+        .page-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: white;
+            font-size: 14px;
+            padding: 0 8px;
+        }
+
+        .divider {
+            width: 1px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Loading & Error */
+        .loading-container, .error-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: rgba(255, 255, 255, 0.7);
+            z-index: 5;
+        }
+
+        .error-container {
+            display: none;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--color-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .zoom-info {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            z-index: 200;
+        }
+
+        .zoom-info.show { opacity: 1; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="file-name" th:text="${fileName}">filename.tif</div>
+    <div class="close-btn" onclick="window.close()" title="关闭">
+        <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+            <path d="M14 14L34 34" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 34L34 14" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+    </div>
+</div>
+
+<div id="tif-container">
+    <div class="loading-container" id="loading">
+        <div class="spinner"></div>
+        <div>加载中...</div>
+    </div>
+
+    <div id="error" class="error-container">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M24 44C35.0457 44 44 35.0457 44 24C44 12.9543 35.0457 4 24 4C12.9543 4 4 12.9543 4 24C4 35.0457 12.9543 44 24 44ZM32.2426 15.7574C32.6331 15.3668 32.6331 14.7337 32.2426 14.3431C31.8521 13.9526 31.2189 13.9526 30.8284 14.3431L24 21.1716L17.1716 14.3431C16.781 13.9526 16.1479 13.9526 15.7574 14.3431C15.3668 14.7337 15.3668 15.3668 15.7574 15.7574L22.5858 22.5858L15.7574 29.4142C15.3668 29.8047 15.3668 30.4379 15.7574 30.8284C16.1479 31.2189 16.781 31.2189 17.1716 30.8284L24 24L30.8284 30.8284C31.2189 31.2189 31.8521 31.2189 32.2426 30.8284C32.6331 30.4379 32.6331 29.8047 32.2426 29.4142L25.4142 22.5858L32.2426 15.7574Z" fill="#F53F3F"/>
+        </svg>
+        <div style="margin-top: 10px">加载失败</div>
+    </div>
+
+    <canvas id="preview-canvas" style="display: none;"></canvas>
+</div>
+
+<div class="toolbar-container">
+    <button class="tool-btn" id="prevPage" onclick="prevPage()" data-title="上一页" disabled>
+        <svg viewBox="0 0 48 48"><path d="M31 36L19 24L31 12" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <div class="page-info">
+        <span id="pageInfo">1 / 1</span>
+    </div>
+
+    <button class="tool-btn" id="nextPage" onclick="nextPage()" data-title="下一页" disabled>
+        <svg viewBox="0 0 48 48"><path d="M19 12L31 24L19 36" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <div class="divider"></div>
+
+    <button class="tool-btn" onclick="zoomIn()" data-title="放大">
+        <svg viewBox="0 0 48 48"><path d="M21 38C30.3888 38 38 30.3888 38 21C38 11.6112 30.3888 4 21 4C11.6112 4 4 11.6112 4 21C4 30.3888 11.6112 38 21 38Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M21 15L21 27" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 21L27 21" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M33.2218 33.2218L41.7071 41.7071" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <button class="tool-btn" onclick="zoomOut()" data-title="缩小">
+        <svg viewBox="0 0 48 48"><path d="M21 38C30.3888 38 38 30.3888 38 21C38 11.6112 30.3888 4 21 4C11.6112 4 4 11.6112 4 21C4 30.3888 11.6112 38 21 38Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M15 21L27 21" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M33.2218 33.2218L41.7071 41.7071" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <button class="tool-btn" onclick="resetZoom()" data-title="1:1">
+        <svg viewBox="0 0 48 48"><path d="M30 6H42V18" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M42 6L26 22" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 42H6V30" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 42L22 26" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <div class="divider"></div>
+
+    <button class="tool-btn" onclick="rotateLeft()" data-title="向左旋转">
+        <svg viewBox="0 0 48 48"><path d="M12 24H42" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 24C6 33.9411 14.0589 42 24 42C33.9411 42 42 33.9411 42 24" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 24L12 18" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 24L12 30" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <button class="tool-btn" onclick="rotateRight()" data-title="向右旋转">
+        <svg viewBox="0 0 48 48"><path d="M36 24H6" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M42 24C42 33.9411 33.9411 42 24 42C14.0589 42 6 33.9411 6 24" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M42 24L36 18" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M42 24L36 30" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <button class="tool-btn" onclick="toggleFullscreen()" id="fullscreen-btn" data-title="全屏">
+        <svg viewBox="0 0 48 48"><path d="M33 6H42V15" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M42 33V42H33" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 42H6V33" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 15V6H15" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+</div>
+
+<div class="zoom-info" id="zoom-info">100%</div>
+
+<script th:inline="javascript">
+    const streamUrl = /*[[${streamUrl}]]*/ '';
+    const fileName = /*[[${fileName}]]*/ '';
+
+    const canvas = document.getElementById('preview-canvas');
+    const loading = document.getElementById('loading');
+    const errorDiv = document.getElementById('error');
+    const zoomInfo = document.getElementById('zoom-info');
+    const container = document.getElementById('tif-container');
+    const pageInfo = document.getElementById('pageInfo');
+    const prevBtn = document.getElementById('prevPage');
+    const nextBtn = document.getElementById('nextPage');
+
+    let scale = 1;
+    let rotate = 0;
+    let translateX = 0;
+    let translateY = 0;
+    let isDragging = false;
+    let startX, startY;
+    let lastTranslateX = 0;
+    let lastTranslateY = 0;
+
+    let ifds = null;
+    let buffer = null;
+    let currentPage = 0;
+    let totalPages = 0;
+
+    // Load TIFF file
+    function loadTiff() {
+        if (!streamUrl) {
+            showError('文件路径无效');
+            return;
+        }
+
+        fetch(streamUrl)
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response.arrayBuffer();
+            })
+            .then(arrayBuffer => {
+                buffer = arrayBuffer;
+                ifds = UTIF.decode(buffer);
+                totalPages = ifds.length;
+
+                if (totalPages === 0) {
+                    throw new Error('TIFF 文件内容为空');
+                }
+
+                renderPage(0);
+                updatePageControls();
+                loading.style.display = 'none';
+                canvas.style.display = 'block';
+            })
+            .catch(error => {
+                console.error('TIFF 加载错误:', error);
+                showError('文件加载失败: ' + error.message);
+            });
+    }
+
+    function renderPage(pageIndex) {
+        if (!ifds || pageIndex < 0 || pageIndex >= totalPages) return;
+
+        currentPage = pageIndex;
+        UTIF.decodeImage(buffer, ifds[pageIndex]);
+        const rgba = UTIF.toRGBA8(ifds[pageIndex]);
+
+        canvas.width = ifds[pageIndex].width;
+        canvas.height = ifds[pageIndex].height;
+
+        const ctx = canvas.getContext('2d');
+        const imageData = ctx.createImageData(canvas.width, canvas.height);
+        imageData.data.set(rgba);
+        ctx.putImageData(imageData, 0, 0);
+
+        resetZoom();
+        updatePageControls();
+    }
+
+    function updatePageControls() {
+        pageInfo.textContent = `${currentPage + 1} / ${totalPages}`;
+        prevBtn.disabled = currentPage === 0;
+        nextBtn.disabled = currentPage === totalPages - 1;
+    }
+
+    function prevPage() {
+        if (currentPage > 0) {
+            renderPage(currentPage - 1);
+        }
+    }
+
+    function nextPage() {
+        if (currentPage < totalPages - 1) {
+            renderPage(currentPage + 1);
+        }
+    }
+
+    function updateTransform() {
+        canvas.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale}) rotate(${rotate}deg)`;
+    }
+
+    function showZoomInfo() {
+        zoomInfo.textContent = Math.round(scale * 100) + '%';
+        zoomInfo.classList.add('show');
+        clearTimeout(window.zoomTimeout);
+        window.zoomTimeout = setTimeout(() => {
+            zoomInfo.classList.remove('show');
+        }, 1000);
+    }
+
+    function zoomIn() {
+        scale = Math.min(scale + 0.25, 5);
+        updateTransform();
+        showZoomInfo();
+    }
+
+    function zoomOut() {
+        scale = Math.max(scale - 0.25, 0.1);
+        updateTransform();
+        showZoomInfo();
+    }
+
+    function resetZoom() {
+        scale = 1;
+        rotate = 0;
+        translateX = 0;
+        translateY = 0;
+        lastTranslateX = 0;
+        lastTranslateY = 0;
+        updateTransform();
+        showZoomInfo();
+    }
+
+    function rotateLeft() {
+        rotate -= 90;
+        updateTransform();
+    }
+
+    function rotateRight() {
+        rotate += 90;
+        updateTransform();
+    }
+
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+        } else {
+            document.exitFullscreen();
+        }
+    }
+
+    function showError(message) {
+        loading.style.display = 'none';
+        canvas.style.display = 'none';
+        errorDiv.style.display = 'flex';
+        errorDiv.querySelector('div:last-child').textContent = message;
+    }
+
+    // Drag functionality
+    container.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        container.style.cursor = 'grabbing';
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+        const deltaX = e.clientX - startX;
+        const deltaY = e.clientY - startY;
+        translateX = lastTranslateX + deltaX;
+        translateY = lastTranslateY + deltaY;
+        updateTransform();
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            lastTranslateX = translateX;
+            lastTranslateY = translateY;
+            container.style.cursor = 'grab';
+        }
+    });
+
+    // Wheel zoom
+    container.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        if (e.deltaY < 0) {
+            zoomIn();
+        } else {
+            zoomOut();
+        }
+    }, {passive: false});
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        switch (e.key) {
+            case '+': case '=': zoomIn(); break;
+            case '-': zoomOut(); break;
+            case '0': resetZoom(); break;
+            case 'ArrowLeft': rotate === 0 ? prevPage() : rotateLeft(); break;
+            case 'ArrowRight': rotate === 0 ? nextPage() : rotateRight(); break;
+            case 'Escape': window.close(); break;
+        }
+    });
+
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadTiff);
+    } else {
+        loadTiff();
+    }
+</script>
+</body>
+</html>

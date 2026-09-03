@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.guanghe.fs</groupId>
+        <artifactId>fs-framework</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <artifactId>fs-swagger</artifactId>
+
+    <description>
+        fs-swagger - 接口文档模块，基于SpringDoc OpenAPI提供API文档和交互式测试界面
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        </dependency>
+    </dependencies>
+</project>

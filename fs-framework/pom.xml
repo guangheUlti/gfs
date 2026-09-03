@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.guanghe.fs</groupId>
+        <artifactId>gfs</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <artifactId>fs-framework</artifactId>
+    <packaging>pom</packaging>
+
+    <description>
+        fs-framework - 基础设施模块
+    </description>
+
+    <modules>
+        <module>fs-common-core</module>
+        <module>fs-notify</module>
+        <module>fs-orm</module>
+        <module>fs-preview</module>
+        <module>fs-redis</module>
+        <module>fs-security</module>
+        <module>fs-swagger</module>
+        <module>fs-storage-plugin</module>
+        <module>fs-sse</module>
+    </modules>
+</project>

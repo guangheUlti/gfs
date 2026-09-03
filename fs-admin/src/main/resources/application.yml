@@ -1,0 +1,171 @@
+server:
+  port: 80
+  tomcat:
+    # 如果启用了全局虚拟线程，这里的配置会失效
+    threads:
+      min-spare: 50
+      max: 200
+    max-connections: 10000
+spring:
+  application:
+    name: gfs
+  profiles:
+    active: dev
+  mvc:
+    async:
+      # Office 转 PDF 最长等待约 335 秒，避免提前关闭对象存储文件流
+      request-timeout: 360s
+  jackson:
+    time-zone: GMT+8
+    date-format: yyyy-MM-dd HH:mm:ss
+  servlet:
+    multipart:
+      max-file-size: -1
+      max-request-size: -1
+  web:
+    resources:
+      # 添加静态资源位置
+      static-locations:
+        - classpath:/META-INF/resources/
+        - classpath:/resources/
+        - classpath:/static/
+        - classpath:/public/
+        - classpath:/.well-known/
+  # 开启循环依赖
+  main:
+    allow-circular-references: true
+    keep-alive: true
+  # 全局启用虚拟线程
+  threads:
+    virtual:
+      enabled: true
+  # 国际化支持
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+  # 模版引擎配置
+  #  thymeleaf:
+  #    mode: LEGACYHTML5
+  #    prefix: classpath:/templates/
+  #    encoding: UTF-8
+
+  # 邮件配置
+  mail:
+    # 开关
+    enable: true
+    #smtp服务主机  163邮箱则为smtp.163.com（password 需填邮箱的 SMTP 授权码）
+    host: smtp.163.com
+    #编码集
+    default-encoding: UTF-8
+    #发送邮件的账户
+    username: 18903378092@163.com
+    form: GFS <18903378092@163.com>
+    #授权码
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          ssl:
+            enable: true
+          socketFactory:
+            port: 465
+            class: javax.net.ssl.SSLSocketFactory
+          auth: true
+          starttls:
+            enable: true
+            required: true
+
+--- # mybatis-flex配置
+mybatis-flex:
+  # 搜索指定包别名
+  type-aliases-package: com.guanghe.fs.*.domain
+  # 不支持多包, 如有需要可在注解配置 或 提升扫包等级：com.**.**.mapper
+  mapper-package: com.guanghe.fs.*.mapper
+  # 配置mapper的扫描，找到所有的mapper.xml映射文件
+  mapper-locations: classpath*:mapper/*Mapper.xml
+  configuration:
+    ## 以下为mybatis原生配置 https://mybatis.org/mybatis-3/zh/configuration.html
+    # 自动驼峰命名规则（camel case）映射
+    map_underscore_to_camel_case: true
+    # MyBatis 自动映射策略
+    # NONE：不启用 PARTIAL：只对非嵌套 resultMap 自动映射 FULL：对所有 resultMap 自动映射
+    auto_mapping_behavior: FULL
+    # MyBatis 自动映射时未知列或未知属性处理策
+    # NONE：不做处理 WARNING：打印相关警告 FAILING：抛出异常和详细信息
+    auto_mapping_unknown_column_behavior: NONE
+    # 更详细的日志输出 会有性能损耗 org.apache.ibatis.logging.stdout.StdOutImpl
+    # 关闭日志记录 org.apache.ibatis.logging.nologging.NoLoggingImpl
+    # 默认日志输出 org.apache.ibatis.logging.slf4j.Slf4jImpl
+    #log_impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    logImpl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+    cacheEnabled: true
+  global-config:
+    # 是否控制台打印 MyBatis-Flex 的 LOGO 及版本号
+    print-banner: false
+    # 全局的 ID 生成策略配置:雪花算法
+    key-config:
+      key-type: Generator
+      value: snowFlakeId
+    # 逻辑未删除值
+    normal-value-of-logic-delete: 0
+    # 逻辑已删除值(框架表均使用此值 禁止随意修改)
+    deleted-value-of-logic-delete: 1
+    # 默认的逻辑删除字段
+    logic-delete-column: del_flag
+
+--- # 认证授权相关配置
+security:
+  auth-cookie:
+    secure: ${AUTH_COOKIE_SECURE:false}
+    same-site: ${AUTH_COOKIE_SAME_SITE:Strict}
+  # 拦截路由前缀
+  path-pattern: /apis/**
+  #排除不需要登录认证的接口
+  excludes:
+    - /apis/auth/login
+    - /apis/transfer/sse
+    - /apis/user/register
+    - /apis/invitation/verify/**
+    - /apis/share/**/items
+    - /apis/share/verify/code
+    - /apis/share/**/info
+    - /apis/share/**/download/**
+    - /apis/file-collections/public/**
+    - /dav/**
+    - /webdav-test/**
+
+--- #Sa-Token 配置
+sa-token:
+  # token 名称（同时也是 cookie 名称）
+  token-name: Authorization
+  # token 前缀
+  token-prefix: Bearer
+  cookie-auto-fill-prefix: true
+  # token 有效期（单位：秒） 默认30天，-1 代表永久有效
+  timeout: 86400
+  # token 最低活跃频率（单位：秒），如果 token 超过此时间没有访问系统就会被冻结，默认-1 代表不限制，永不冻结
+  active-timeout: 3600
+  # 是否允许同一账号多地同时登录 （为 true 时允许一起登录, 为 false 时新登录挤掉旧登录）
+  is-concurrent: false
+  # 在多人登录同一账号时，是否共用一个 token （为 true 时所有登录共用一个 token, 为 false 时每次登录新建一个 token）
+  is-share: false
+  is-read-body: true
+  # token 风格（默认可取值：uuid、simple-uuid、random-32、random-64、random-128、tik）
+  token-style: random-128
+  # 是否输出操作日志
+  is-log: true
+  cookie:
+    http-only: true
+    secure: ${AUTH_COOKIE_SECURE:false}
+    same-site: ${AUTH_COOKIE_SAME_SITE:Strict}
+  # jwt秘钥
+  jwt-secret-key: asdasdasifhueuiwyurfewbfjsdafjk
+
+--- #接口文档 配置
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+fs:
+  cors:
+    allowed-origins: ${FS_CORS_ALLOWED_ORIGINS:http://localhost,http://127.0.0.1,http://localhost:5173,http://127.0.0.1:5173}

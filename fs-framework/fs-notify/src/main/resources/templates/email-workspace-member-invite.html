@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+    <title>邀请加入 FreeFS</title>
+    <!--[if mso]>
+    <style type="text/css">
+        table {
+            border-collapse: collapse;
+        }
+    </style>
+    <![endif]-->
+</head>
+<body style="margin:0;padding:0;font-family:'Inter',Arial,sans-serif;">
+<!-- 外层容器 -->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="padding:40px 0;">
+    <tr>
+        <td align="center">
+            <!-- 主容器 -->
+            <table width="600" border="0" cellspacing="0" cellpadding="0"
+                   style="max-width:600px;width:100%;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 8px -1px rgba(0,0,0,0.1),0 1px 2px -2px rgba(0,0,0,0.1);">
+
+                <!-- 头部 -->
+                <tr>
+                    <td style="background:linear-gradient(135deg,#7c3aed,#6d28d9);padding:40px 30px;text-align:center;">
+                        <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                            <tr>
+                                <td style="text-align:center;">
+                                    <h1 style="margin:0 0 8px 0;padding:0;font-size:32px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">
+                                        Free<span style="color:#e5e7eb;">FS</span>
+                                    </h1>
+                                    <p style="margin:0;padding:0;font-size:16px;font-weight:600;color:#ffffff;">
+                                        邀请您加入工作空间
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <!-- 主体内容 -->
+                <tr>
+                    <td style="padding:40px 30px;">
+                        <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                            <!-- 问候语 -->
+                            <tr>
+                                <td style="padding-bottom:16px;">
+                                    <p style="margin:0;font-size:16px;color:#374151;">
+                                        您好！
+                                    </p>
+                                </td>
+                            </tr>
+
+                            <!-- 说明文字 -->
+                            <tr>
+                                <td style="padding-bottom:24px;">
+                                    <p style="margin:0;font-size:15px;color:#6b7280;line-height:1.6;">
+                                        <span th:text="${inviterName}" style="font-weight:600;color:#1f2937;"></span> 邀请您加入他们的工作空间。加入后，您将可以共享文件、协作编辑和管理团队资源。
+                                    </p>
+                                </td>
+                            </tr>
+
+                            <!-- 邀请信息卡片 -->
+                            <tr>
+                                <td style="padding:24px 0;">
+                                    <table width="100%" border="0" cellspacing="0" cellpadding="0"
+                                           style="background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">
+                                        <tr>
+                                            <td style="padding:24px;">
+                                                <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                                                    <tr>
+                                                        <td style="padding:8px 0;">
+                                                            <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                                                                <tr>
+                                                                    <td style="width:80px;font-size:13px;color:#9ca3af;">
+                                                                        邀请人：
+                                                                    </td>
+                                                                    <td style="font-size:15px;color:#1f2937;font-weight:500;">
+                                                                        <span th:text="${inviterName}"></span>
+                                                                    </td>
+                                                                </tr>
+                                                            </table>
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td style="padding:8px 0;">
+                                                            <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                                                                <tr>
+                                                                    <td style="width:80px;font-size:13px;color:#9ca3af;">
+                                                                        工作空间：
+                                                                    </td>
+                                                                    <td style="font-size:15px;color:#7c3aed;font-weight:500;">
+                                                                        <span th:text="${workspaceName}"></span>
+                                                                    </td>
+                                                                </tr>
+                                                            </table>
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td style="padding:8px 0;">
+                                                            <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                                                                <tr>
+                                                                    <td style="width:80px;font-size:13px;color:#9ca3af;">
+                                                                        您的角色：
+                                                                    </td>
+                                                                    <td style="font-size:15px;color:#1f2937;font-weight:500;">
+                                                                        <span th:text="${roleName}"></span>
+                                                                    </td>
+                                                                </tr>
+                                                            </table>
+                                                        </td>
+                                                    </tr>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+
+                            <!-- 接受邀请按钮 -->
+                            <tr>
+                                <td style="padding:32px 0;text-align:center;">
+                                    <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                                        <tr>
+                                            <td style="text-align:center;">
+                                                <a th:href="${inviteUrl}" style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;padding:14px 40px;border-radius:6px;font-size:16px;font-weight:600;box-shadow:0 4px 8px -1px rgba(124,58,237,0.3);">
+                                                    接受邀请
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+
+                            <!-- 备用链接 -->
+                            <tr>
+                                <td style="padding:16px 0;">
+                                    <p style="margin:0 0 8px 0;font-size:13px;color:#9ca3af;text-align:center;">
+                                        如果按钮无法点击，请复制链接到浏览器打开：
+                                    </p>
+                                    <table width="100%" border="0" cellspacing="0" cellpadding="0"
+                                           style="background-color:#f3f4f6;border:1px solid #e5e7eb;border-radius:6px;">
+                                        <tr>
+                                            <td style="padding:12px 16px;font-family:'JetBrains Mono','Courier New',monospace;font-size:13px;color:#4b5563;word-break:break-all;text-align:center;">
+                                                <span th:text="${inviteUrl}"></span>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="padding:24px 0;">
+                                    <div style="height:1px;background-color:#e5e7eb;"></div>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <!-- 页脚 -->
+                <tr>
+                    <td style="background-color:#f9fafb;padding:24px 30px;text-align:center;border-top:1px solid #e5e7eb;">
+                        <p style="margin:0 0 8px 0;font-size:13px;color:#9ca3af;">
+                            此邮件由系统自动发送，请勿回复
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

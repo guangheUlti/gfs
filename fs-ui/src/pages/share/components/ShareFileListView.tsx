@@ -1,0 +1,129 @@
+import { useTranslation } from 'react-i18next'
+import type { FileItem } from '@/types/file'
+import { Eye, Download } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { formatFileSize, formatFileTime } from '@/utils/format'
+import { Button } from '@/components/ui/button'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { FileIcon } from '@/components/file-icon'
+
+interface ShareFileListViewProps {
+  fileList: FileItem[]
+  scope?: string
+  onFileClick: (file: FileItem) => void
+  onPreview: (file: FileItem) => void
+  onDownload: (file: FileItem) => void
+}
+
+export function ShareFileListView({
+  fileList,
+  scope,
+  onFileClick,
+  onPreview,
+  onDownload,
+}: ShareFileListViewProps) {
+  const { t } = useTranslation('share')
+  const hasPreviewPermission = () => scope?.includes('preview') ?? true
+  const hasDownloadPermission = () => scope?.includes('download') ?? true
+
+  const handleDoubleClick = (file: FileItem) => {
+    if (file.isDir) {
+      onFileClick(file)
+    }
+  }
+
+  return (
+    <div className='flex-1 overflow-auto'>
+      <Table>
+        <TableHeader>
+          <TableRow className='bg-muted/50'>
+            <TableHead className='font-medium text-muted-foreground'>
+              {t('fileList.name')}
+            </TableHead>
+            <TableHead className='w-32 font-medium text-muted-foreground'>
+              {t('fileList.size')}
+            </TableHead>
+            <TableHead className='w-48 font-medium text-muted-foreground'>
+              {t('fileList.modified')}
+            </TableHead>
+            <TableHead className='w-40 text-center font-medium text-muted-foreground'>
+              {t('fileList.actions')}
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {fileList.map((file) => (
+            <TableRow
+              key={file.id}
+              className={cn(
+                'group transition-colors',
+                file.isDir && 'cursor-pointer'
+              )}
+              onDoubleClick={() => handleDoubleClick(file)}
+            >
+              <TableCell>
+                <div className='flex items-center gap-3'>
+                  <div className='flex h-8 w-8 items-center justify-center rounded'>
+                    <FileIcon
+                      type={file.isDir ? 'dir' : file.suffix || ''}
+                      size={28}
+                      className='shrink-0'
+                    />
+                  </div>
+                  <span className='truncate text-sm font-normal text-foreground/90'>
+                    {file.displayName}
+                  </span>
+                </div>
+              </TableCell>
+              <TableCell className='text-sm text-muted-foreground'>
+                {file.isDir ? '-' : formatFileSize(file.size)}
+              </TableCell>
+              <TableCell className='text-sm text-muted-foreground'>
+                {formatFileTime(file.updateTime)}
+              </TableCell>
+              <TableCell onClick={(e) => e.stopPropagation()}>
+                <div className='flex items-center justify-center gap-1 opacity-0 transition-opacity group-hover:opacity-100'>
+                  {!file.isDir && hasPreviewPermission() && (
+                    <Button
+                      variant='ghost'
+                      size='icon'
+                      className='h-8 w-8'
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onPreview(file)
+                      }}
+                      title={t('fileList.preview')}
+                    >
+                      <Eye className='h-4 w-4' />
+                    </Button>
+                  )}
+                  {!file.isDir && hasDownloadPermission() && (
+                    <Button
+                      variant='ghost'
+                      size='icon'
+                      className='h-8 w-8'
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDownload(file)
+                      }}
+                      title={t('fileList.download')}
+                    >
+                      <Download className='h-4 w-4' />
+                    </Button>
+                  )}
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}

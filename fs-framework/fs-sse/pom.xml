@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.guanghe.fs</groupId>
+        <artifactId>fs-framework</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <artifactId>fs-sse</artifactId>
+
+    <description>
+        fs-sse - sse模块
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>fs-common-core</artifactId>
+        </dependency>
+        
+        <!-- Spring Web for SseEmitter -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+    </dependencies>
+</project>

@@ -1,0 +1,96 @@
+HELP.md
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+/logs/**
+
+### VS Code ###
+.vscode/
+
+.flattened-pom.xml
+
+logs/
+
+.workflow/
+
+.qoder/
+
+.kiro/
+
+### Frontend (fs-ui) ###
+node_modules/
+fs-ui/dist/
+fs-ui/dist-ssr/
+fs-ui/*.local
+fs-ui/.env.local
+fs-ui/.env.*.local
+.cursor
+
+### Logs ###
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+### Release deploy package ###
+# Bundled runtimes - ~600 MB of third-party binaries. Recreate them with the
+# downloads listed in release/deploy-package/README.md instead of committing them.
+release/deploy-package/lib/jdk/
+release/deploy-package/lib/mysql/
+release/deploy-package/lib/redis/
+# Built by bin\env.bat on first run from the values in bin\env.bat itself
+release/deploy-package/conf/my.ini
+release/deploy-package/conf/redis.conf
+# Runtime data - never commit (logs/ is already covered above)
+release/deploy-package/data/
+# Build artifacts (rebuild with Maven / pnpm, see deploy-package README) -
+# also required: GitHub rejects single files larger than 100 MB
+release/deploy-package/lib/*.jar
+release/*.zip
+
+### LibreOffice runtime ###
+# Local preview engine (~760 MB of third-party binaries), see README for setup
+LibreOffice/
+
+### Redis dump ###
+dump.rdb
+
+### Session / credentials ###
+fs-ui/cookies.txt
+
+### OS / Editor (generic) ###
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

@@ -1,0 +1,98 @@
+spring:
+  datasource:
+    type: com.zaxxer.hikari.HikariDataSource
+    url: jdbc:mysql://127.0.0.1:3306/gfs?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # postgresql数据库配置
+#    url: jdbc:postgresql://127.0.0.1:5432/gfs?useUnicode=true&characterEncoding=utf8&useSSL=true&autoReconnect=true&reWriteBatchedInserts=true
+#    username: postgres
+#    password: postgres
+#    driver-class-name: org.postgresql.Driver
+    # 数据源配置
+    hikari:
+      # 最大连接池数量
+      maximum-pool-size: 20
+      # 最小空闲线程数量
+      minimum-idle: 10
+      # 配置获取连接等待超时的时间
+      connectionTimeout: 30000
+      # 校验超时时间
+      validationTimeout: 5000
+      # 空闲连接存活最大时间，默认10分钟
+      idleTimeout: 600000
+      # 此属性控制池中连接的最长生命周期，值0表示无限生命周期，默认30分钟
+      maxLifetime: 1800000
+      # 连接测试query（配置检测连接是否有效）
+      connectionTestQuery: SELECT 1
+      # 多久检查一次连接的活性
+      keepaliveTime: 30000
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password:
+      database: 0
+      # 连接超时时间
+      timeout: 10s
+      lettuce:
+        pool:
+          # 连接池最大连接数f
+          max-active: 200
+          # 连接池最大阻塞等待时间（使用负值表示没有限制）
+          max-wait: -1ms
+          # 连接池中的最大空闲连接
+          max-idle: 10
+          # 连接池中的最小空闲连接
+          min-idle: 0
+  cache:
+    # 缓存类型 redis、none(不使用缓存)
+    type: redis
+    # 缓存时间(单位：ms)
+    redis:
+      time-to-live: 3600000
+      # 缓存null值，防止缓存穿透
+      cache-null-values: true
+
+fs:
+  # 前端地址
+  frontend:
+    domain: ${FS_FRONTEND_DOMAIN:http://localhost:5173}
+  # 预览配置
+  preview:
+    # 预览文件流处理地址，默认是本服务地址,端口号
+    stream-api: http://localhost:80/api/file/stream/preview
+    # 预览文件最大大小（字节），默认500MB
+    max-file-size: 524288000
+    # 单次Range请求最大大小（字节），默认10MB
+    # 用于视频/音频的分片传输，防止内存溢出
+    max-range-size: 10485760
+    # 小文件直接传输阈值（字节），默认10MB
+    # 小于此大小的文件将一次性读取到内存
+    small-file-size: 10485760
+    # 缓冲区大小（字节），默认8KB
+    buffer-size: 8192
+    office:
+      enabled: true
+      #LibreOffice 安装路径
+      # Linux: /usr/lib/libreoffice
+      # Windows: C:/Program Files/LibreOffice
+      # Mac: /Applications/LibreOffice.app/Contents
+#      office-home: C:/Program Files/LibreOffice
+      task-execution-timeout: 300000
+      task-queue-timeout: 30000
+      max-tasks-per-process: 200
+      cache-path: ${java.io.tmpdir}/office-convert
+
+  # 本地存储配置（默认）
+  storage:
+    local:
+      base-path: D:/gfs/upload
+      base-url: http://localhost:80/files
+
+mybatis-flex:
+  # sql审计
+  audit_enable: true
+  # sql打印
+  sql_print: true

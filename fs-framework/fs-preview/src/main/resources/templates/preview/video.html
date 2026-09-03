@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${fileName}">视频预览</title>
+    <style>
+        :root {
+            --color-primary: #165dff;
+            --color-text-1: #ffffff;
+            --color-text-2: rgba(255, 255, 255, 0.7);
+            --color-text-3: rgba(255, 255, 255, 0.5);
+            --color-bg-1: #1a1a1a;
+            --color-bg-2: #000000;
+            --color-border: rgba(255, 255, 255, 0.1);
+            --color-fill-2: rgba(255, 255, 255, 0.1);
+            --color-danger: #f53f3f;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "noto sans", "Microsoft YaHei", "SimSun", sans-serif;
+            background: var(--color-bg-2);
+            height: 100vh;
+            overflow: hidden;
+            /* 使用 flex 垂直布局 */
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
+
+        .header {
+            /* 取消 absolute，改为相对定位使其占据文档流 */
+            position: relative;
+            height: 48px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            /* 增加深色背景，确保在任何视频背景下都可见 */
+            background: #1a1a1a;
+            border-bottom: 1px solid var(--color-border);
+            z-index: 100;
+            color: var(--color-text-1);
+        }
+
+        .file-name {
+            font-size: 14px;
+            font-weight: 500;
+            opacity: 0.9;
+            /* 限制超长文件名显示 */
+            max-width: 70%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .close-btn {
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 4px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-btn:hover {
+            background: var(--color-fill-2);
+        }
+
+        .nav-btn {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 120;
+            width: 52px;
+            height: 72px;
+            border: 0;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 42px;
+            line-height: 1;
+            cursor: pointer;
+            backdrop-filter: blur(8px);
+            transition: background 0.2s, opacity 0.2s;
+        }
+        .nav-btn:hover { background: rgba(255,255,255,0.22); }
+        .nav-btn.prev { left: 24px; }
+        .nav-btn.next { right: 24px; }
+        .nav-btn:disabled { opacity: 0; pointer-events: none; }
+
+        #video-container {
+            /* flex: 1 会自动占据除去 header 后的所有剩余高度 */
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            position: relative;
+            overflow: hidden;
+            /* 增加内边距，防止视频贴边 */
+            padding: 12px;
+        }
+
+        #video-player {
+            /* 核心：限制最大宽高为容器的 100% */
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            outline: none;
+            /* 保持比例 */
+            object-fit: contain;
+            /* 增加轻微投影，更有质感 */
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Loading & Error 样式保持不变，但确保它们在容器中心 */
+        .loading-container, .error-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--color-text-3);
+            z-index: 10;
+        }
+
+        .error-container {
+            display: none;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--color-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--color-text-1);
+            margin-bottom: 8px;
+        }
+
+        .error-desc {
+            font-size: 13px;
+            color: var(--color-text-3);
+        }
+    </style>
+</head>
+<body th:attr="data-file-id=${fileId}">
+<div class="header">
+    <span class="file-name" th:text="${fileName}">视频文件名</span>
+    <div class="close-btn" onclick="window.close()" title="关闭">
+        <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+            <path d="M14 14L34 34" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 34L34 14" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+    </div>
+</div>
+
+<button id="preview-prev" class="nav-btn prev" type="button" title="上一个（←）" onclick="navigatePreview(-1)">‹</button>
+<button id="preview-next" class="nav-btn next" type="button" title="下一个（→）" onclick="navigatePreview(1)">›</button>
+
+<div id="video-container">
+    <div class="loading-container" id="loading">
+        <div class="spinner"></div>
+        <div>正在加载资源...</div>
+    </div>
+
+    <div class="error-container" id="error">
+        <div class="error-title">视频加载失败</div>
+        <div class="error-desc">视频可能已被删除或无法访问</div>
+    </div>
+
+    <video id="video-player"
+           controls
+           preload="metadata"
+           controlslist="nodownload"
+           style="display: none;">
+        您的浏览器不支持视频播放
+    </video>
+</div>
+
+<script th:inline="javascript">
+    // 获取服务端变量
+    const streamUrl = /*[[${streamUrl}]]*/ '';
+    const fileName = /*[[${fileName}]]*/ '';
+
+    const video = document.getElementById('video-player');
+    const loading = document.getElementById('loading');
+    const errorDiv = document.getElementById('error');
+
+    function loadVideo() {
+        if (!streamUrl) {
+            showError('视频路径无效');
+            return;
+        }
+
+        const urlWithParams = `${streamUrl}?_t=${Date.now()}&_r=${Math.random().toString(36).substring(7)}#t=0.1`;
+
+        setTimeout(() => {
+            video.src = urlWithParams;
+            video.style.display = 'block';
+        }, 100);
+    }
+
+    video.addEventListener('loadedmetadata', function () {
+        loading.style.display = 'none';
+    });
+
+    video.addEventListener('canplay', function () {
+        loading.style.display = 'none';
+    });
+
+    video.addEventListener('error', function (e) {
+        console.error('视频加载错误:', e);
+        showError('视频加载失败，请检查文件是否存在');
+    });
+
+    function showError(message) {
+        loading.style.display = 'none';
+        video.style.display = 'none';
+        errorDiv.style.display = 'flex';
+        if (message) {
+            errorDiv.querySelector('.error-desc').textContent = message;
+        }
+    }
+
+    // Disable context menu
+    document.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+    });
+
+    // Disable drag
+    video.addEventListener('dragstart', function (e) {
+        e.preventDefault();
+        return false;
+    });
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadVideo);
+    } else {
+        loadVideo();
+    }
+</script>
+<script src="/lib/preview-navigation.js"></script>
+</body>
+</html>

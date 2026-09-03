@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.guanghe.fs</groupId>
+        <artifactId>fs-framework</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <artifactId>fs-storage-plugin</artifactId>
+    <packaging>pom</packaging>
+
+    <description>
+        fs-storage-plugin - 存储插件模块
+    </description>
+
+    <modules>
+        <module>storage-plugin-boot</module>
+        <module>storage-plugin-core</module>
+        <module>storage-plugin-local</module>
+        <module>storage-plugin-minio</module>
+        <module>storage-plugin-aliyunoss</module>
+        <module>storage-plugin-rustfs</module>
+        <module>storage-plugin-kodo</module>
+        <module>storage-plugin-obs</module>
+    </modules>
+</project>

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${fileName}">压缩包预览</title>
+    <link rel="stylesheet" th:href="@{/lib/ztree/css/zTreeStyle.css}">
+    <style>
+        :root {
+            --color-primary: #165dff;
+            --color-text-1: #ffffff;
+            --color-text-2: rgba(255, 255, 255, 0.7);
+            --color-text-3: rgba(255, 255, 255, 0.5);
+            --color-bg-1: #1a1a1a;
+            --color-bg-2: #000000;
+            --color-border: rgba(255, 255, 255, 0.1);
+        }
+
+        * { 
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body { 
+            font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", sans-serif;
+            background: var(--color-bg-2);
+            color: var(--color-text-1);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 顶部标题栏 */
+        .header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 20px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent);
+            z-index: 10;
+            color: var(--color-text-1);
+            pointer-events: none;
+        }
+
+        .header > * {
+            pointer-events: auto;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .file-name {
+            font-size: 14px;
+            opacity: 0.9;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .format-badge {
+            padding: 2px 8px;
+            background: rgba(255,255,255,0.1);
+            color: var(--color-text-2);
+            border-radius: 2px;
+            font-size: 12px;
+            border: 1px solid var(--color-border);
+        }
+
+        .close-btn {
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 4px;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: none;
+            color: white;
+            position: absolute;
+            right: 20px;
+        }
+
+        .close-btn:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        /* 树形容器 */
+        .tree-container {
+            position: absolute;
+            top: 68px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 900px;
+            bottom: 20px;
+            background: var(--color-bg-1);
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid var(--color-border);
+            overflow: auto;
+        }
+
+        /* zTree 样式覆盖 - 适配暗色主题 */
+        .ztree {
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+        }
+
+        .ztree li {
+            line-height: 32px !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+
+        .ztree li ul {
+            margin: 0 !important;
+            padding: 0 0 0 18px !important;
+        }
+
+        .ztree li a {
+            height: 32px !important;
+            line-height: 32px !important;
+            padding: 0 5px !important;
+            margin: 0 !important;
+            border-radius: 4px;
+            color: var(--color-text-2) !important;
+            transition: background 0.2s;
+            vertical-align: middle !important;
+        }
+
+        .ztree li a:hover {
+            background: rgba(255, 255, 255, 0.04) !important;
+            color: var(--color-text-1) !important;
+            text-decoration: none !important;
+        }
+
+        .ztree li a.curSelectedNode {
+            background: rgba(22, 93, 255, 0.2) !important;
+            color: var(--color-text-1) !important;
+            border: none !important;
+        }
+
+        /* 展开/折叠按钮 - 保留 zTree 默认样式 */
+        .ztree li span.button.switch {
+            vertical-align: middle !important;
+        }
+
+        /* 文件夹和文件图标 - 保留 zTree 默认样式 */
+        .ztree li span.button.ico_open,
+        .ztree li span.button.ico_close,
+        .ztree li span.button.ico_docu {
+            vertical-align: middle !important;
+        }
+
+        /* 节点文字 */
+        .ztree li span.node_name {
+            font-size: 14px !important;
+            line-height: 32px !important;
+            vertical-align: middle !important;
+        }
+
+        .empty-state { 
+            padding: 60px 20px;
+            text-align: center;
+            color: var(--color-text-3);
+            font-size: 14px;
+        }
+        
+        .error-container { 
+            padding: 30px;
+            background: var(--color-bg-1);
+            border-radius: 8px;
+            border: 1px solid rgba(245, 63, 63, 0.3);
+            position: absolute;
+            top: 68px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 900px;
+        }
+        
+        .error-container h2 { 
+            color: #f53f3f;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .error-container p {
+            color: var(--color-text-3);
+            font-size: 14px;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        @media (max-width: 768px) { 
+            .tree-container {
+                top: 58px;
+                width: 95%;
+            }
+            .error-container {
+                top: 58px;
+                width: 95%;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <div class="file-info">
+        <span class="file-name" th:text="${fileName}">archive.zip</span>
+    </div>
+    <div class="close-btn" onclick="window.close()" title="关闭">
+        <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+            <path d="M14 14L34 34" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 34L34 14" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+    </div>
+</div>
+
+<div class="tree-container" th:if="${error == null}">
+    <ul id="archiveTree" class="ztree"></ul>
+</div>
+
+<div class="error-container" th:if="${error != null}">
+    <h2>❌ 解析失败</h2>
+    <p th:text="${error}">压缩包解析失败</p>
+</div>
+
+<script th:src="@{/lib/ztree/jquery-1.4.4.min.js}"></script>
+<script th:src="@{/lib/ztree/jquery.ztree.all.min.js}"></script>
+
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    // 获取后端传来的层级树数据
+    var treeData = /*[[${archiveTree}]]*/ [];
+    var archiveFileId = /*[[${archiveFileId}]]*/ '';
+    
+    console.log('原始 treeData:', treeData);
+    console.log('archiveFileId:', archiveFileId);
+
+    // zTree 配置
+    var setting = {
+        view: {
+            showLine: true,
+            showIcon: true,
+            selectedMulti: false,
+            dblClickExpand: true
+        },
+        data: {
+            simpleData: {
+                enable: false  // 使用嵌套数据格式
+            },
+            key: {
+                name: "name",
+                children: "children"
+            }
+        },
+        callback: {
+            onClick: function(event, treeId, treeNode) {
+                console.log('点击节点:', treeNode.fullPath);
+            },
+            onDblClick: function(event, treeId, treeNode) {
+                console.log('双击节点:', treeNode);
+                // 只有文件才能预览，目录不处理
+                if (!treeNode.isDirectory) {
+                    previewInnerFile(treeNode.fullPath);
+                }
+            }
+        }
+    };
+
+    // 预览压缩包内的文件
+    function previewInnerFile(innerPath) {
+        if (!archiveFileId) {
+            console.error('缺少压缩包文件ID');
+            return;
+        }
+        
+        console.log('预览文件:', innerPath);
+        
+        // 先获取 token
+        fetch('/archive/preview/token/' + archiveFileId + '?innerPath=' + encodeURIComponent(innerPath), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.code === 200 && result.data) {
+                var token = result.data;
+                // 构建预览URL，带上 token
+                var previewUrl = '/archive/preview/' + archiveFileId 
+                    + '?innerPath=' + encodeURIComponent(innerPath)
+                    + '&previewToken=' + token;
+                
+                // 在新窗口打开预览
+                window.open(previewUrl, '_blank');
+            } else {
+                console.error('获取预览 token 失败:', result.message);
+                alert('获取预览 token 失败: ' + (result.message || '未知错误'));
+            }
+        })
+        .catch(error => {
+            console.error('请求失败:', error);
+            alert('获取预览 token 失败，请重试');
+        });
+    }
+
+    // 清理数据：移除文件节点的空 children 数组
+    function cleanTreeData(nodes) {
+        if (!nodes || nodes.length === 0) return nodes;
+        
+        for (var i = 0; i < nodes.length; i++) {
+            var node = nodes[i];
+            
+            // 如果是文件（非目录），删除 children 属性
+            if (!node.isDirectory) {
+                delete node.children;
+            } else if (node.children && node.children.length > 0) {
+                // 如果是目录且有子节点，递归清理
+                cleanTreeData(node.children);
+            } else if (node.children && node.children.length === 0) {
+                // 如果是空目录，删除 children 属性
+                delete node.children;
+            }
+        }
+        return nodes;
+    }
+
+    // 初始化 zTree
+    $(document).ready(function() {
+        console.log('jQuery 加载完成，版本:', $.fn.jquery);
+        console.log('zTree 是否可用:', typeof $.fn.zTree);
+        
+        if (treeData && treeData.length > 0) {
+            console.log('开始初始化 zTree，节点数:', treeData.length);
+            
+            // 清理数据
+            var cleanedData = cleanTreeData(treeData);
+            console.log('清理后的数据:', cleanedData);
+            
+            var zTreeObj = $.fn.zTree.init($("#archiveTree"), setting, cleanedData);
+            console.log('zTree 初始化完成');
+            
+            // 默认展开第一层
+            var rootNodes = zTreeObj.getNodesByParam("level", 0);
+            console.log('根节点数量:', rootNodes.length);
+            for (var i = 0; i < rootNodes.length; i++) {
+                zTreeObj.expandNode(rootNodes[i], true, false, false);
+            }
+        } else {
+            console.log('没有数据，显示空状态');
+            $("#archiveTree").html('<div class="empty-state">暂无文件</div>');
+        }
+    });
+    /*]]>*/
+</script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件无法预览</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f4f6f8; /* 柔和的灰背景 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #333;
+        }
+
+        .no-preview-card {
+            background: #fff;
+            width: 100%;
+            max-width: 480px;
+            padding: 40px 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+            text-align: center;
+            margin: 20px;
+        }
+
+        /* --- 图标区域 --- */
+        .icon-wrapper {
+            width: 80px;
+            height: 80px;
+            background-color: #f0f5ff;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto 24px auto;
+        }
+        .icon-wrapper svg {
+            width: 40px;
+            height: 40px;
+            fill: #0052cc;
+        }
+
+        h1 {
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #172b4d;
+        }
+        p {
+            font-size: 15px;
+            color: #6b778c;
+            line-height: 1.6;
+            margin-bottom: 32px;
+        }
+        .file-name {
+            font-weight: bold;
+            color: #333;
+            word-break: break-all;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+            outline: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 主按钮：下载 */
+        .btn-primary {
+            background-color: #0052cc;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #0747a6;
+        }
+
+        /* 次按钮：复制链接 */
+        .btn-secondary {
+            background-color: #f4f5f7;
+            color: #42526e;
+        }
+        .btn-secondary:hover {
+            background-color: #ebecf0;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+            z-index: 1000;
+        }
+        .toast.show {
+            opacity: 1;
+            visibility: visible;
+        }
+    </style>
+</head>
+<body>
+<div class="no-preview-card">
+    <div class="icon-wrapper">
+        <svg viewBox="0 0 24 24">
+            <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M10,11H14V13H10V11M10,15H14V17H10V15Z" />
+        </svg>
+    </div>
+
+    <h1 th:text="${message}"></h1>
+
+    <p>
+        文件 <span class="file-name" id="fileNameDisplay" th:text="${fileName}"></span> 无法在线打开。<br>
+        您可以下载文件到本地进行查看。
+    </p>
+
+    <div class="btn-group">
+        <button class="btn btn-primary" onclick="handleGoBack()">
+            ↩️ 返回
+        </button>
+    </div>
+</div>
+
+<script th:inline="javascript">
+    const streamUrl = /*[[${streamUrl}]]*/ '';
+    const fileName = /*[[${fileName}]]*/ '';
+    const fileSize = /*[[${fileSize}]]*/ 0;
+
+    function handleGoBack() {
+        if (window.history.length <= 1 || window.opener) {
+            // 尝试关闭窗口
+            window.close();
+        } else {
+            window.history.back();
+        }
+    }
+</script>
+</body>
+</html>

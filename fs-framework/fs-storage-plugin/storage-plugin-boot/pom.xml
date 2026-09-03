@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.guanghe.fs</groupId>
+        <artifactId>fs-storage-plugin</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <artifactId>storage-plugin-boot</artifactId>
+
+    <description>
+        storage-plugin-boot - 存储插件-管理模块
+    </description>
+
+    <dependencies>
+        <!-- 本地存储插件（默认包含） -->
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>storage-plugin-local</artifactId>
+        </dependency>
+
+        <!-- 阿里云OSS插件（可选，根据需要添加） -->
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>storage-plugin-aliyunoss</artifactId>
+        </dependency>
+
+        <!-- RustFS插件（可选，根据需要添加） -->
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>storage-plugin-rustfs</artifactId>
+        </dependency>
+
+        <!-- 华为云OBS插件（可选，根据需要添加） -->
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>storage-plugin-obs</artifactId>
+        </dependency>
+    </dependencies>
+</project>

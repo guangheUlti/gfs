@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <!-- 这里的 width=device-width 很重要，确保移动端适配 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${fileName}">表格预览</title>
+
+    <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/luckysheet/dist/plugins/css/pluginsCss.css'/>
+    <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/luckysheet/dist/plugins/plugins.css'/>
+    <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/luckysheet/dist/css/luckysheet.css'/>
+    <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/luckysheet/dist/assets/iconfont/iconfont.css'/>
+
+    <style>
+        :root {
+            --color-primary: #165dff;
+            --color-text-1: #ffffff;
+            --color-text-2: #c5c5c5;
+            --color-bg-1: #1a1a1a;
+            --color-bg-2: #000000;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            background: var(--color-bg-2);
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            height: 48px;
+            background: var(--color-bg-1);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 999;
+            color: var(--color-text-1);
+        }
+
+        #sheet-wrapper {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            background: #fff;
+        }
+
+        #luckysheet {
+            margin: 0;
+            padding: 0;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            left: 0;
+            top: 0;
+        }
+
+        /* 强制隐藏 LuckySheet 的某些弹窗干扰 */
+        .luckysheet-share-logo, .luckysheet-input-box {
+            display: none !important;
+        }
+
+        .loading-mask {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--color-bg-2);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--color-text-2);
+        }
+
+        .spinner {
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--color-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <span style="font-size:14px; opacity:0.9;" th:text="${fileName}">Preview</span>
+    <div onclick="window.close()" style="cursor:pointer; padding:5px;">
+        <svg width="20" height="20" viewBox="0 0 48 48" fill="none">
+            <path d="M14 14L34 34" stroke="white" stroke-width="4"/>
+            <path d="M14 34L34 14" stroke="white" stroke-width="4"/>
+        </svg>
+    </div>
+</div>
+
+<div id="sheet-wrapper">
+    <div class="loading-mask" id="loading">
+        <div class="spinner"></div>
+        <div id="msg">正在加载资源...</div>
+    </div>
+    <div id="luckysheet"></div>
+</div>
+
+<!-- 库文件加载顺序必须严格保持 -->
+<script src="https://cdn.jsdelivr.net/npm/luckysheet/dist/plugins/js/plugin.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/luckysheet/dist/luckysheet.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/luckyexcel/dist/luckyexcel.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
+
+<script th:inline="javascript">
+    const streamUrl = /*[[${streamUrl}]]*/ '';
+    const fileName = /*[[${fileName}]]*/ 'file.xlsx';
+
+    const mask = document.getElementById('loading');
+    const msg = document.getElementById('msg');
+
+    function init() {
+        if (!streamUrl) return showError('没有文件 URL');
+
+        msg.textContent = '正在下载文件...';
+
+        const ext = (fileName.split('.').pop() || '').toLowerCase();
+
+        if (ext === 'xlsx') {
+            loadXlsx(streamUrl);
+        } else if (ext === 'xls') {
+            msg.textContent = '正在解析 XLS 格式...';
+            loadXls(streamUrl);
+        } else if (ext === 'csv' || ext === 'txt') {
+            msg.textContent = '正在解析 CSV 格式...';
+            loadCsv(streamUrl);
+        } else {
+            // 默认尝试作为 xlsx 解析
+            loadXlsx(streamUrl);
+        }
+    }
+
+    // 1. XLSX (使用官方转换器)
+    function loadXlsx(url) {
+        LuckyExcel.transformExcelToLuckyByUrl(url, fileName,
+            (exportJson) => {
+                if (!exportJson.sheets || !exportJson.sheets.length) return showError('表格内容为空');
+                createSheet(exportJson.sheets, exportJson.info.name);
+            },
+            (err) => {
+                console.error(err);
+                showError('XLSX 解析失败，文件可能已损坏');
+            }
+        );
+    }
+
+    // 2. XLS (使用 SheetJS 转换)
+    function loadXls(url) {
+        const xhr = new XMLHttpRequest();
+        xhr.open("GET", url, true);
+        xhr.responseType = "arraybuffer";
+        xhr.onload = function () {
+            if (xhr.status !== 200) return showError("Http Error: " + xhr.status);
+            try {
+                const data = new Uint8Array(xhr.response);
+                const workbook = XLSX.read(data, {type: "array"});
+
+                const sheets = [];
+                workbook.SheetNames.forEach((name, i) => {
+                    const ws = workbook.Sheets[name];
+                    // 关键：defval: '' 防止 undefined 破坏结构
+                    const json = XLSX.utils.sheet_to_json(ws, {header: 1, defval: ''});
+                    if (json.length) {
+                        sheets.push(buildSheetData(json, name, i));
+                    }
+                });
+
+                if (!sheets.length) return showError('XLS 文件内容为空');
+                createSheet(sheets, fileName);
+            } catch (e) {
+                console.error(e);
+                showError('XLS 解析异常: ' + e.message);
+            }
+        };
+        xhr.onerror = () => showError("网络请求失败");
+        xhr.send();
+    }
+
+    // 3. CSV (使用 PapaParse)
+    function loadCsv(url) {
+        Papa.parse(url, {
+            download: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+                if (!results.data || !results.data.length) return showError('CSV 内容为空');
+                const sheet = buildSheetData(results.data, fileName.replace(/\.[^/.]+$/, ""), 0);
+                createSheet([sheet], fileName);
+            },
+            error: () => showError('CSV 解析失败')
+        });
+    }
+
+    // --- 数据清洗与构建核心 ---
+    function buildSheetData(rows, name, index) {
+        const celldata = [];
+        let maxCol = 0;
+
+        rows.forEach((row, r) => {
+            if (row.length > maxCol) maxCol = row.length;
+            row.forEach((val, c) => {
+                // 防御性编程：确保 val 不是 undefined，也不是 Object 对象
+                if (val === null || val === undefined) val = "";
+                if (typeof val === 'object') val = JSON.stringify(val); // 防止 [object Object] 炸裂
+
+                celldata.push({
+                    r: r, c: c,
+                    v: {
+                        v: val,
+                        m: String(val),
+                        ct: {fa: "General", t: "n"} // 默认当做普通文本/数字处理
+                    }
+                });
+            });
+        });
+
+        return {
+            name: name,
+            index: index,
+            status: index === 0 ? 1 : 0,
+            order: index,
+            celldata: celldata,
+            // 关键配置：给出比实际数据稍大的行列数，防止 resize 计算错误
+            row: rows.length + 20,
+            column: maxCol + 10,
+            config: {},
+            color: '',
+            defaultRowHeight: 20,
+            defaultColWidth: 80
+        };
+    }
+
+    // --- 渲染核心 (解决报错的关键) ---
+    function createSheet(data, title) {
+        msg.textContent = '正在渲染...';
+
+        // 1. 彻底销毁旧实例与 DOM 清理
+        if (window.luckysheet) {
+            try {
+                window.luckysheet.destroy();
+            } catch (e) {
+            }
+        }
+        // 强制清空 HTML，防止 jQuery 选择器找到残留元素
+        document.getElementById('luckysheet').innerHTML = '';
+
+        // 2. 延时执行，确保 DOM 重绘完毕
+        setTimeout(() => {
+            try {
+                window.luckysheet.create({
+                    container: 'luckysheet',
+                    lang: 'zh',
+                    data: data,
+                    title: title,
+                    // ★★★ 核心修复：禁用本地存储缓存，防止脏数据导致 unrecognized expression ★★★
+                    gridKey: 'preview_' + Date.now(), // 每次生成唯一Key，避免读取旧缓存
+                    loadUrl: '',
+                    updateUrl: '',
+                    allowUpdate: false,
+
+                    // 界面精简
+                    showinfobar: false,
+                    showsheetbar: true,
+                    allowEdit: false,
+                    enableAddRow: false,
+                    showstatisticBar: false,
+                    showtoolbar: true,
+                    showtoolbarConfig: {
+                        // 仅保留查找、筛选、冻结
+                        undoRedo: false, paintFormat: false, currencyFormat: false,
+                        percentageFormat: false, numberDecrease: false, numberIncrease: false,
+                        moreFormats: false, font: false, fontSize: false, bold: false,
+                        italic: false, strikethrough: false, underline: false, textColor: false,
+                        fillColor: false, border: false, mergeCell: false, horizontalAlignMode: false,
+                        verticalAlignMode: false, textWrapMode: false, textRotateMode: false,
+                        image: false, link: false, chart: false, postil: false, pivotTable: false,
+                        function: false, conditionalFormat: false, dataVerification: false,
+                        splitColumn: false, screenshot: false, protection: false, print: false,
+
+                        frozenMode: true,
+                        sortAndFilter: true,
+                        findAndReplace: true
+                    }
+                });
+                // 渲染成功后隐藏遮罩
+                setTimeout(() => {
+                    mask.style.display = 'none';
+                }, 100);
+            } catch (e) {
+                console.error("渲染崩溃:", e);
+                showError("渲染引擎初始化失败，请刷新重试");
+            }
+        }, 50);
+    }
+
+    function showError(txt) {
+        mask.style.background = "var(--color-bg-2)";
+        mask.innerHTML = `
+            <svg width="48" height="48" viewBox="0 0 48 48" style="margin-bottom:10px">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M24 44C35.0457 44 44 35.0457 44 24C44 12.9543 35.0457 4 24 4C12.9543 4 4 12.9543 4 24C4 35.0457 12.9543 44 24 44ZM32.2426 15.7574C32.6331 15.3668 32.6331 14.7337 32.2426 14.3431C31.8521 13.9526 31.2189 13.9526 30.8284 14.3431L24 21.1716L17.1716 14.3431C16.781 13.9526 16.1479 13.9526 15.7574 14.3431C15.3668 14.7337 15.3668 15.3668 15.7574 15.7574L22.5858 22.5858L15.7574 29.4142C15.3668 29.8047 15.3668 30.4379 15.7574 30.8284C16.1479 31.2189 16.781 31.2189 17.1716 30.8284L24 24L30.8284 30.8284C31.2189 31.2189 31.8521 31.2189 32.2426 30.8284C32.6331 30.4379 32.6331 29.8047 32.2426 29.4142L25.4142 22.5858L32.2426 15.7574Z" fill="#F53F3F"/>
+            </svg>
+            <div style="color:white; font-size:16px;">${txt}</div>`;
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
+</script>
+</body>
+</html>

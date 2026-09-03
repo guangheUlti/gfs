@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${fileName}">代码预览</title>
+    <style>
+        :root { --color-border: rgba(255, 255, 255, 0.1); }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #1e1e1e; color: white; height: 100vh; overflow: hidden; font-family: sans-serif; }
+
+        .header {
+            height: 48px; display: flex; align-items: center; justify-content: space-between;
+            padding: 0 20px; background: #252526; border-bottom: 1px solid var(--color-border);
+        }
+        .icon-btn {
+            cursor: pointer; background: #333; border: none; color: #ccc;
+            padding: 4px 12px; border-radius: 4px; font-size: 13px;
+        }
+        .icon-btn:hover { background: #444; color: white; }
+
+        /* 编辑器容器 */
+        #editor-main {
+            height: calc(100vh - 48px);
+            width: 100%;
+        }
+
+        .loading-mask {
+            position: absolute; inset: 48px 0 0 0; background: #1e1e1e;
+            display: flex; align-items: center; justify-content: center; z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+<input type="hidden" id="streamUrl" th:value="${streamUrl}">
+<input type="hidden" id="fileLanguage" th:value="${language}">
+
+<div class="header">
+    <div class="file-info">
+        <span th:text="${fileName}">file.java</span>
+    </div>
+    <div class="header-right">
+        <button class="icon-btn" onclick="window.close()">✕</button>
+    </div>
+</div>
+
+<div id="loading" class="loading-mask">加载中...</div>
+<div id="editor-main"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+
+<script>
+    const URL_VAL = document.getElementById('streamUrl').value;
+    const LANG_VAL = document.getElementById('fileLanguage').value || 'javascript';
+
+    let editorInstance = null;
+    let originalContent = "";
+
+    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+
+    require(['vs/editor/editor.main'], async function() {
+        try {
+            const response = await fetch(URL_VAL);
+            originalContent = await response.text();
+
+            // 初始化只读代码预览编辑器
+            editorInstance = monaco.editor.create(document.getElementById('editor-main'), {
+                value: originalContent,
+                language: LANG_VAL,
+                theme: 'vs-dark',
+                automaticLayout: true,
+                minimap: { enabled: false },
+                readOnly: true,  // 只读模式（预览专用）
+                domReadOnly: true
+            });
+
+            document.getElementById('loading').style.display = 'none';
+        } catch (err) {
+            document.getElementById('loading').innerText = "加载失败";
+        }
+    });
+</script>
+
+</body>
+</html>

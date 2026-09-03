@@ -1,0 +1,42 @@
+[
+  {
+    "label": "Access-Key",
+    "dataType": "string",
+    "identifier": "accessKey",
+    "validation": {
+      "required": true
+    }
+  },
+  {
+    "label": "Secret-key",
+    "dataType": "string",
+    "identifier": "secretKey",
+    "validation": {
+      "required": true
+    }
+  },
+  {
+    "label": "服务器端点",
+    "dataType": "string",
+    "identifier": "endpoint",
+    "validation": {
+      "required": true
+    }
+  },
+  {
+    "label": "存储桶名",
+    "dataType": "string",
+    "identifier": "bucket",
+    "validation": {
+      "required": true
+    }
+  },
+  {
+    "label": "区域",
+    "dataType": "string",
+    "identifier": "region",
+    "validation": {
+      "required": true
+    }
+  }
+]

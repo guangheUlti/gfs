@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${fileName}">Draw.io预览</title>
+    <style>
+        :root {
+            --color-primary: #165dff;
+            --color-text-1: #ffffff;
+            --color-text-2: rgba(255, 255, 255, 0.7);
+            --color-text-3: rgba(255, 255, 255, 0.5);
+            --color-bg-1: #1a1a1a;
+            --color-bg-2: #000000;
+            --color-border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "noto sans", "Microsoft YaHei", "SimSun", sans-serif;
+            background: var(--color-bg-2);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
+
+        .header {
+            height: 48px;
+            background: var(--color-bg-1);
+            border-bottom: 1px solid var(--color-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 10;
+            color: var(--color-text-1);
+            flex-shrink: 0;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .file-name {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .close-btn {
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 4px;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        #drawio-container {
+            flex: 1;
+            background: #f5f5f5;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #drawio-viewer {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: white;
+        }
+
+        /* Loading & Error */
+        .loading-container, .error-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            z-index: 10;
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .error-container {
+            display: none;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            border-top-color: var(--color-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .error-desc {
+            font-size: 13px;
+            color: #999;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="file-info">
+        <span class="file-name" th:text="${fileName}">diagram.drawio</span>
+    </div>
+    <div class="close-btn" onclick="window.close()" title="关闭">
+        <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+            <path d="M14 14L34 34" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 34L34 14" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+    </div>
+</div>
+
+<div id="drawio-container">
+    <div class="loading-container" id="loading">
+        <div class="spinner"></div>
+        <div style="margin-top: 8px; color: #666;">正在加载流程图...</div>
+    </div>
+
+    <div class="error-container" id="error">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style="margin-bottom: 16px;">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M24 44C35.0457 44 44 35.0457 44 24C44 12.9543 35.0457 4 24 4C12.9543 4 4 12.9543 4 24C4 35.0457 12.9543 44 24 44ZM32.2426 15.7574C32.6331 15.3668 32.6331 14.7337 32.2426 14.3431C31.8521 13.9526 31.2189 13.9526 30.8284 14.3431L24 21.1716L17.1716 14.3431C16.781 13.9526 16.1479 13.9526 15.7574 14.3431C15.3668 14.7337 15.3668 15.3668 15.7574 15.7574L22.5858 22.5858L15.7574 29.4142C15.3668 29.8047 15.3668 30.4379 15.7574 30.8284C16.1479 31.2189 16.781 31.2189 17.1716 30.8284L24 24L30.8284 30.8284C31.2189 31.2189 31.8521 31.2189 32.2426 30.8284C32.6331 30.4379 32.6331 29.8047 32.2426 29.4142L25.4142 22.5858L32.2426 15.7574Z" fill="#F53F3F"/>
+        </svg>
+        <div class="error-title">加载失败</div>
+        <div class="error-desc" id="error-msg">无法解析 Draw.io 文件</div>
+    </div>
+
+    <div id="drawio-viewer"></div>
+</div>
+
+<script th:inline="javascript">
+    const streamUrl = /*[[${streamUrl}]]*/ '';
+    const fileName = /*[[${fileName}]]*/ '';
+
+    let viewer = null;
+    let diagramXml = null;
+
+    async function loadDrawio() {
+        try {
+            const response = await fetch(streamUrl);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const text = await response.text();
+            diagramXml = text;
+
+            // 检查是否为有效的 Draw.io XML
+            if (!text.includes('mxfile') && !text.includes('mxGraphModel')) {
+                throw new Error('不是有效的 Draw.io 文件格式');
+            }
+
+            renderDiagram();
+
+        } catch (error) {
+            console.error('Draw.io 加载错误:', error);
+            showError(error.message || '文件解析失败');
+        }
+    }
+
+    function renderDiagram() {
+        // 使用 Draw.io 官方 viewer 嵌入方式
+        const container = document.getElementById('drawio-viewer');
+
+        // 使用 iframe 嵌入 viewer.diagrams.net
+        const encodedXml = encodeURIComponent(diagramXml);
+        const viewerUrl = `https://viewer.diagrams.net/?lightbox=1&highlight=0000ff&edit=_blank&layers=1&nav=1&title=${encodeURIComponent(fileName)}#R${encodedXml}`;
+
+        const iframe = document.createElement('iframe');
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = 'none';
+        iframe.src = viewerUrl;
+
+        iframe.onload = function() {
+            document.getElementById('loading').style.display = 'none';
+        };
+
+        iframe.onerror = function() {
+            showError('Draw.io Viewer 加载失败，请检查网络连接');
+        };
+
+        container.appendChild(iframe);
+        viewer = iframe;
+    }
+
+    function showError(message) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'flex';
+        document.getElementById('error-msg').textContent = message;
+    }
+
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadDrawio);
+    } else {
+        loadDrawio();
+    }
+</script>
+</body>
+</html>

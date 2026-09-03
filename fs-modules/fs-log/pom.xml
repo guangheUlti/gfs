@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.guanghe.fs</groupId>
+        <artifactId>fs-modules</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <artifactId>fs-log</artifactId>
+
+    <description>
+        fs-log - 日志管理模块，负责系统的各类日志比如登录日志、操作日志等
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>fs-orm</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>fs-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>fs-swagger</artifactId>
+        </dependency>
+    </dependencies>
+
+</project>

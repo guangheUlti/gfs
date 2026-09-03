@@ -1,0 +1,87 @@
+server:
+  port: ${SERVER_PORT:80}
+
+spring:
+  application:
+    name: gfs
+  datasource:
+    type: com.zaxxer.hikari.HikariDataSource
+    url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/${MYSQL_DB:gfs}?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 10
+      connectionTimeout: 30000
+      validationTimeout: 5000
+      idleTimeout: 600000
+      maxLifetime: 1800000
+      connectionTestQuery: SELECT 1
+      keepaliveTime: 30000
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      timeout: 10s
+      lettuce:
+        pool:
+          max-active: 200
+          max-wait: -1ms
+          max-idle: 10
+          min-idle: 0
+  cache:
+    type: redis
+    redis:
+      time-to-live: 3600000
+      cache-null-values: true
+  jackson:
+    time-zone: GMT+8
+    date-format: yyyy-MM-dd HH:mm:ss
+  web:
+    resources:
+      # The UI lives next to the package in frontend\ rather than inside the
+      # fat JAR, so a new build can be dropped in without touching the backend.
+      # GFS_HOME is exported by bin\env.bat; the fallback covers a JAR started
+      # by hand from the package root. The classpath entries below are the ones
+      # the JAR's own application.yml has - they are replaced, not appended to,
+      # so they have to be restated (file preview assets come from there).
+      static-locations:
+        - file:${GFS_HOME:./}/frontend/
+        - classpath:/META-INF/resources/
+        - classpath:/resources/
+        - classpath:/static/
+        - classpath:/public/
+        - classpath:/.well-known/
+  servlet:
+    multipart:
+      max-file-size: -1
+      max-request-size: -1
+  main:
+    allow-circular-references: true
+    keep-alive: true
+  threads:
+    virtual:
+      enabled: true
+
+fs:
+  frontend:
+    domain: ${FS_FRONTEND_DOMAIN:http://localhost:80}
+  preview:
+    stream-api: ${FS_FRONTEND_DOMAIN:http://localhost:80}/api/file/stream/preview
+    max-file-size: 524288000
+    max-range-size: 10485760
+    small-file-size: 10485760
+    buffer-size: 8192
+    office:
+      enabled: false
+  storage:
+    local:
+      base-path: ${GFS_DATA_DIR:./data}/upload
+      base-url: ${FS_FRONTEND_DOMAIN:http://localhost:80}/files
+
+mybatis-flex:
+  audit_enable: true
+  sql_print: false

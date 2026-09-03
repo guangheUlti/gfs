@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${fileName}">音频预览</title>
+    <style>
+        :root {
+            --color-primary: #165dff;
+            --color-text-1: #ffffff;
+            --color-text-2: rgba(255, 255, 255, 0.7);
+            --color-text-3: rgba(255, 255, 255, 0.5);
+            --color-bg-1: #1a1a1a;
+            --color-bg-2: #000000;
+            --color-border: rgba(255, 255, 255, 0.1);
+            --color-fill-2: rgba(255, 255, 255, 0.1);
+            --color-danger: #f53f3f;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "noto sans", "Microsoft YaHei", "SimSun", sans-serif;
+            background: var(--color-bg-2);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
+
+        .header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5), transparent);
+            z-index: 10;
+            color: var(--color-text-1);
+            pointer-events: none;
+        }
+
+        .header > * {
+            pointer-events: auto;
+        }
+
+        .file-name {
+            font-size: 14px;
+            opacity: 0.9;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .close-btn {
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 4px;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        #audio-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 40px;
+        }
+
+        .audio-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 8px;
+            padding: 40px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+            border: 1px solid var(--color-border);
+        }
+
+        .audio-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.8;
+        }
+
+        .audio-title {
+            font-size: 18px;
+            font-weight: 500;
+            color: var(--color-text-1);
+            margin-bottom: 12px;
+            word-break: break-word;
+        }
+
+        .audio-info {
+            font-size: 13px;
+            color: var(--color-text-3);
+            margin-bottom: 24px;
+        }
+
+        #audio-player {
+            width: 100%;
+            outline: none;
+            filter: invert(1) hue-rotate(180deg); /* Simple dark mode for default audio player */
+        }
+
+        /* Loading & Error */
+        .loading-container, .error-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--color-text-3);
+            z-index: 10;
+        }
+
+        .error-container {
+            display: none;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--color-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--color-text-1);
+            margin-bottom: 8px;
+        }
+
+        .error-desc {
+            font-size: 13px;
+            color: var(--color-text-3);
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <span class="file-name" th:text="${fileName}">音频文件名</span>
+    <div class="close-btn" onclick="window.close()" title="关闭">
+        <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+            <path d="M14 14L34 34" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 34L34 14" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+    </div>
+</div>
+
+<div id="audio-container">
+    <div class="loading-container" id="loading">
+        <div class="spinner"></div>
+        <div>正在加载资源...</div>
+    </div>
+
+    <div class="error-container" id="error">
+        <div class="error-title">音频加载失败</div>
+        <div class="error-desc">音频可能已被删除或无法访问</div>
+    </div>
+
+    <div class="audio-card" style="display: none;" id="audio-card">
+        <div class="audio-icon">🎵</div>
+        <div class="audio-title" th:text="${fileName}">音频文件名</div>
+        <div class="audio-info" id="audio-info">准备播放...</div>
+
+        <audio id="audio-player"
+               controls
+               preload="metadata"
+               controlslist="nodownload">
+            您的浏览器不支持音频播放
+        </audio>
+    </div>
+</div>
+
+<script th:inline="javascript">
+    // 获取服务端变量
+    const streamUrl = /*[[${streamUrl}]]*/ '';
+    const fileName = /*[[${fileName}]]*/ '';
+    const fileSize = /*[[${fileSize}]]*/ 0;
+
+    const audio = document.getElementById('audio-player');
+    const loading = document.getElementById('loading');
+    const errorDiv = document.getElementById('error');
+    const audioCard = document.getElementById('audio-card');
+    const audioInfo = document.getElementById('audio-info');
+
+    // 格式化文件大小
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+
+    // 格式化时长
+    function formatDuration(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function loadAudio() {
+        if (!streamUrl) {
+            showError('音频路径无效');
+            return;
+        }
+
+        const urlWithParams = `${streamUrl}?_t=${Date.now()}&_r=${Math.random().toString(36).substring(7)}`;
+
+        setTimeout(() => {
+            audio.src = urlWithParams;
+            audioCard.style.display = 'block';
+        }, 100);
+    }
+
+    audio.addEventListener('loadedmetadata', function () {
+        loading.style.display = 'none';
+        const duration = formatDuration(audio.duration);
+        const size = formatFileSize(fileSize);
+        audioInfo.textContent = `时长: ${duration} | 大小: ${size}`;
+    });
+
+    audio.addEventListener('canplay', function () {
+        loading.style.display = 'none';
+    });
+
+    audio.addEventListener('error', function (e) {
+        console.error('音频加载错误:', e);
+        showError('音频加载失败，请检查文件是否存在');
+    });
+
+    function showError(message) {
+        loading.style.display = 'none';
+        audioCard.style.display = 'none';
+        errorDiv.style.display = 'flex';
+        if (message) {
+            errorDiv.querySelector('.error-desc').textContent = message;
+        }
+    }
+
+    // Disable context menu
+    document.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+    });
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadAudio);
+    } else {
+        loadAudio();
+    }
+</script>
+</body>
+</html>
