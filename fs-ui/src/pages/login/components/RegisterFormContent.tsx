@@ -61,7 +61,8 @@ export default function RegisterFormContent({ onSwitchForm, inviteToken }: Props
   return (
     <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
       {/* 卡片头部：logo + 标题同行（对齐目标站样式） */}
-      <div className='flex items-center justify-center gap-4'>
+      {/* 与登录页一致：标题在右让视觉重心偏右，整组左移 8px 做光学校正（定值，避开 15px 根字号对 spacing 的缩放） */}
+      <div className='flex -translate-x-[8px] items-center justify-center gap-4'>
         <img
           src='/logo.png'
           alt='GFS'

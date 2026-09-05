@@ -83,7 +83,9 @@ export default function LoginFormContent({ onSwitchForm }: Props) {
   return (
     <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
       {/* 卡片头部：logo + 站名同行（对齐目标站样式） */}
-      <div className='flex items-center justify-center gap-4'>
+      {/* 这组元素几何上是正中的，但右侧长标题让视觉重心偏右，故整体左移 8px 做光学校正 */}
+      {/* 根字号为 15px，spacing 类会打折扣（-translate-x-2 实测只有 7.5px），因此用定值 */}
+      <div className='flex -translate-x-[8px] items-center justify-center gap-4'>
         <img
           src='/logo.png'
           alt='GFS'
