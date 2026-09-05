@@ -83,6 +83,9 @@ LibreOffice/
 ### Redis dump ###
 dump.rdb
 
+### Local file storage (runtime uploads / avatars / temp written by the dev server) ###
+/storage/
+
 ### Session / credentials ###
 fs-ui/cookies.txt
 
