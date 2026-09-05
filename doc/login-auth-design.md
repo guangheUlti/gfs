@@ -10,7 +10,7 @@
 
 | 层 | 组件 | 位置 | 职责 |
 | --- | --- | --- | --- |
-| 入口 | `AuthController` | `fs-modules/fs-system/.../controller/AuthController.java` | `POST /apis/auth/login`、`POST /apis/auth/logout`；登录/登出时下发/失效 `Authorization` Cookie |
+| 入口 | `AuthController` | `fs-modules/fs-system/.../controller/AuthController.java` | `POST /apis/auth/login`、`POST /apis/auth/logout`；只返回响应体里的 `accessToken`，不下发 Cookie（见 §3.1） |
 | 编排 | `AuthServiceImpl` | `fs-modules/fs-system/.../service/impl/AuthServiceImpl.java` | 策略分发 → 建立会话 → 写入会话数据 → 更新最后登录时间 |
 | 分发 | `LoginStrategyFactory` | `fs-modules/fs-system/.../auth/LoginStrategyFactory.java` | 注入所有 `LoginStrategy` 实现，按 `loginType` 路由（新增登录方式无需改动此类） |
 | 认证 | `PasswordLoginStrategy` | `fs-modules/fs-system/.../auth/impl/PasswordLoginStrategy.java` | 账号/邮箱 + 口令认证，当前 `LoginType` 仅有 `password` 一种 |
@@ -46,14 +46,14 @@
   │                         │                                        └─ Account-Session 追加 terminal
   │                         ├─ StpUtil.getSession().set("username", …)
   │                         ├─ 再次更新 last_login_at（业务字段落库）
-  │  ◄── Set-Cookie: Authorization=… ─┤
   │  ◄── body: { code:200, data:{ accessToken, username, id } }
   │ 前端 saveToken(accessToken, remember) → localStorage / sessionStorage
+  │ （不下发任何 Cookie，凭证只此一份）
 ```
 
 **要点**
 
-- token 以**响应体 `accessToken`** 为准：前端存入 web storage 后注入请求头，这是唯一常规鉴权通道。登录同时会下发 `HttpOnly` Cookie，但该 Cookie 目前**不参与鉴权**，原因见 §3.1。
+- token **只通过响应体 `accessToken` 下发**：前端存入 web storage 后注入请求头（或无法设头时注入查询参数），服务端不再下发 `Authorization` Cookie，缘由见 §3.1。
 - 用户不存在与口令错误返回**同一句文案**（`user.account.or.password.incorrect`），避免账号枚举。
 - 禁用/待审核/已拒绝属于业务拒绝，**不计入密码试错次数**，不会因管理员审核延迟把用户锁在门外。
 
@@ -68,23 +68,24 @@
 | 会话存储 | Redis（`sa-token-redis-template` 提供的 `SaTokenDaoForRedisTemplate`）→ 后端重启不掉线、多实例共享会话，键与影响见 §5.4 |
 | 绝对过期 | `timeout: 86400`（24 小时） |
 | 活跃冻结 | `active-timeout: 3600`（1 小时无请求则冻结，再访问视为失效） |
-| 携带方式 | ① `Authorization: Bearer <token>` 请求头（前端 axios 注入，常规通道）② 同名**查询参数** `Authorization=Bearer <token>`（下载/SSE/预览等无法自定义请求头的场景，靠 `is-read-body: true` 读取）③ `Authorization` Cookie：会下发但不被接受，见 §3.1 |
+| 携带方式 | ① `Authorization: Bearer <token>` 请求头（前端 axios 注入，常规通道）② 同名**查询参数** `Authorization=Bearer <token>`（下载/SSE 等无法自定义请求头的场景，靠 `is-read-body: true` 读取）——**没有 Cookie 通道**，见 §3.1 |
 | 前端持久化 | 勾选记住我 → `localStorage`（跨浏览器会话保留）；未勾选 → `sessionStorage`（关闭标签页即清） |
 | 失效处理 | 响应体 `code: 401` → 前端清空本地登录态并整页跳转登录页（登录/注册接口自身的 401 不触发跳转，避免密码输错就跳页） |
 
-> **Cookie 的 `isRemember` 语义**：只有勾选记住我时，Controller 才为 Cookie 设置 `maxAge = timeout`；否则下发的是会话级 Cookie（关闭浏览器即消失）。
+> **`isRemember` 的现行语义**：只影响前端把 token 存在 `localStorage` 还是 `sessionStorage`，不再影响服务端下发的 Cookie 属性（已经没有 Cookie）。
 
-### 3.1 Cookie 通道现状
+### 3.1 为什么没有 Cookie 通道
 
-登录与登出都会手工下发名为 `Authorization` 的 Cookie，但服务端读不懂它（`is-read-cookie` 默认开启也无效）：
+登录/登出**不下发** `Authorization` Cookie，接口也不读它（`sa-token.is-read-cookie: false`）。早期版本曾手工下发过，但那是一条从来没有生效过的死通道：
 
-- `token-prefix: Bearer` 要求凭证值以 `Bearer ` 开头，而 Cookie 里存的是**裸 token**；实测登录响应下发两条 `Set-Cookie`（Sa-Token 自身与 Controller 手工各一条），值都是裸 token，`cookie-auto-fill-prefix: true` 并未生效；
-- 把带前缀的值写进 Cookie 也不行：Cookie 值不允许出现空格，而 `Bearer%20xxx` 不会被解码；
-- 结果：仅凭 Cookie 访问任何接口都得到 `code:401 未提供Token`。`/apis/transfer/sse` 曾因依赖此通道而始终连不上（`EventSource` 无法自定义请求头）。
+- `token-prefix: Bearer` 要求凭证值以 `Bearer ` 开头，而 Cookie 里存的是**裸 token**，回传一律被判 `code:401 未提供Token`；
+- 改写成带前缀的值也不行：Cookie 值不允许出现空格，而 `Bearer%20xxx` 不会被解码；
+- `cookie-auto-fill-prefix: true` 实测并未生效（当时登录响应的两条 `Set-Cookie` 存的都是裸 token）；
+- 实际后果是误导：`/apis/transfer/sse` 就是按「浏览器会自动带 Cookie」的假设写的，因此一直连不上并在控制台反复报「SSE 连接错误」。
 
-因此约定：**无法自定义请求头的请求一律用查询参数 `Authorization=Bearer <token>`**，与下载保持一致。Cookie 仅作兼容保留、不承担鉴权；若未来要真正启用 Cookie 鉴权，需先去掉 `token-prefix` 并重新评估 CSRF 面。
+因此约定：**无法自定义请求头的请求（下载、SSE）一律用查询参数 `Authorization=Bearer <token>`**（`is-read-body: true` 会读取请求参数）。若将来确实需要 Cookie 鉴权，得先去掉 `token-prefix` 并重新评估 CSRF 面。已登录用户浏览器里残留的旧 Cookie 不会被读取，到期自然消失。
 
-> 该端点实测矩阵：Header 传 `Bearer <token>` → 200；Query 传 `Bearer <token>` → 200；Cookie 传裸 token → 401；Cookie 传带前缀 token → 401；无凭据 → 401。
+> `/apis/transfer/sse` 实测矩阵：Header 传 `Bearer <token>` → 200；Query 传 `Bearer <token>` → 200；Cookie 传裸 token → 401；Cookie 传带前缀 token → 401；无凭据 → 401。
 
 ---
 
@@ -170,9 +171,9 @@ Token-Session（按 tokenValue 唯一，端级私有数据）
 
 | 配置项 | 当前值 | 含义 |
 | --- | --- | --- |
-| `token-name` | `Authorization` | 凭证名，同时作为 Cookie 名与请求头名 |
-| `token-prefix` | `Bearer` | 请求头读取 token 时要求的前缀，即 `Authorization: Bearer <token>` |
-| `cookie-auto-fill-prefix` | `true` | 预期是写 Cookie 时自动补上 `Bearer ` 前缀；**实测未生效**，下发的仍是裸 token，见 §3.1 |
+| `token-name` | `Authorization` | 凭证名，请求头与查询参数都用它 |
+| `token-prefix` | `Bearer` | 读取 token 时要求的固定前缀（请求头与查询参数都适用），即 `Authorization: Bearer <token>`；实测不带前缀传裸 token 会被判「未提供Token」 |
+| `is-read-cookie` | `false` | 关闭 Cookie 读取；**它同时决定登录时是否写 Cookie**（`StpLogic.setTokenValue` 仅在该值为 true 时下发），所以一条配置就能关掉读写两端，见 §3.1 |
 | `timeout` | `86400` | token 绝对有效期（秒），24 小时；`-1` 表示永久 |
 | `active-timeout` | `3600` | 最低活跃频率（秒），1 小时无访问则冻结；`-1` 表示不限制 |
 | `is-concurrent` | `true` | **是否允许同账号多端同时在线**，见 §4 |
@@ -180,9 +181,6 @@ Token-Session（按 tokenValue 唯一，端级私有数据）
 | `is-read-body` | `true` | 允许从请求参数读取 token，**下载与 SSE 的查询参数凭证就靠它**，见 §3.1 |
 | `token-style` | `random-128` | token 生成风格：`uuid`/`simple-uuid`/`random-32`/`random-64`/`random-128`/`tik` |
 | `is-log` | `true` | Sa-Token 操作日志开关 |
-| `cookie.http-only` | `true` | Cookie 禁止 JS 读取，降低 XSS 窃取风险 |
-| `cookie.secure` | `${AUTH_COOKIE_SECURE:false}` | 是否仅 HTTPS 下发；生产以 HTTPS 暴露时置 `true` |
-| `cookie.same-site` | `${AUTH_COOKIE_SAME_SITE:Strict}` | 跨站发送策略：`Strict`/`Lax`/`None`；前后端分离跨域部署时通常需调成 `Lax` 或 `None`（`None` 必须配 `secure: true`） |
 
 ### 5.2 `security`（同文件「认证授权相关配置」文档块）
 
@@ -190,7 +188,6 @@ Token-Session（按 tokenValue 唯一，端级私有数据）
 | --- | --- | --- |
 | `path-pattern` | `/apis/**` | 需要登录校验的 URL 前缀（REST 接口全部收敛在此前缀下）；`/files/**` 等静态资源不在其中 |
 | `excludes` | 见下 | **免登录白名单**（Ant 风格），逐条含义见下表 |
-| `auth-cookie.secure` / `auth-cookie.same-site` | 环境变量注入 | Controller 手工下发 Cookie 时使用，与 `sa-token.cookie` 保持同源配置 |
 | `brute-force.max-attempts` | 默认 `3` | 连续失败多少次触发锁定（`LoginGuardService`） |
 | `brute-force.lock-minutes` | 默认 `30` | 锁定时长（分钟），同时作为失败计数的窗口期 |
 
@@ -210,7 +207,6 @@ Token-Session（按 tokenValue 唯一，端级私有数据）
 
 - `conf/application-prod.yml` **不含** `sa-token` / `security` 段 → 这些配置继承自 jar 内的 `application.yml`；
 - 因此**修改登录相关配置需要重新打包 jar**；临时覆盖可用启动参数（`--sa-token.timeout=7200`）或环境变量 `SPRING_APPLICATION_JSON`；
-- Cookie 的跨站策略通过 `bin\env.bat` 导出的 `AUTH_COOKIE_SECURE` / `AUTH_COOKIE_SAME_SITE` 调整，无需改配置文件；
 - 发行版内置 MySQL/Redis/JDK，`bin\start.bat` 按 Redis → MySQL → 应用顺序拉起。
 - 发行包整体由 `script\package-release.ps1` 重建（构建 → 产物入位 → 打「干净」zip：剔除 `data\mysql`、`data\redis`、`data\upload`、`logs\*`、`*.log` 以及 `bin\env.bat` 首次运行会重新生成的 `conf\my.ini` / `conf\redis.conf`）。zip 不进代码仓库，作为 GitHub Release 附件分发。
 

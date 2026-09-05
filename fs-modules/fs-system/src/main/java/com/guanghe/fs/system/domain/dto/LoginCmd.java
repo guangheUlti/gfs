@@ -24,6 +24,6 @@ public class LoginCmd {
     @NotBlank(message = "密码不能为空，验证码模式下此为code")
     private String password;
 
-    @Schema(description = "是否记住我")
+    @Schema(description = "是否记住我：仅影响前端把 token 存在 localStorage 还是 sessionStorage，服务端不再据此下发持久 Cookie")
     private Boolean isRemember = false;
 }

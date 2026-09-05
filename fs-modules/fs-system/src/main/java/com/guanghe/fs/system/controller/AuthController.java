@@ -2,20 +2,20 @@ package com.guanghe.fs.system.controller;
 
 import com.guanghe.fs.framework.common.domain.Result;
 import com.guanghe.fs.system.domain.dto.LoginCmd;
-import com.guanghe.fs.system.domain.vo.LoginResult;
 import com.guanghe.fs.system.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseCookie;
 import org.springframework.web.bind.annotation.*;
 
-import jakarta.servlet.http.HttpServletResponse;
-import java.time.Duration;
-
+/**
+ * 认证入口
+ * <p>
+ * 凭证只通过响应体的 {@code accessToken} 下发，由前端注入请求头或查询参数。
+ * 不再下发 Authorization Cookie：token-prefix 为 Bearer 时，Cookie 里的裸 token
+ * 过不了 Sa-Token 的前缀校验，下发的是一个永远不被接受的死凭证，容易误导后续开发。
+ */
 @RestController
 @RequestMapping("/apis/auth")
 @RequiredArgsConstructor
@@ -24,43 +24,16 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @Value("${security.auth-cookie.secure:false}")
-    private boolean authCookieSecure;
-
-    @Value("${security.auth-cookie.same-site:Strict}")
-    private String authCookieSameSite;
-
-    @Value("${sa-token.timeout:86400}")
-    private long tokenTimeout;
-
     @Operation(summary = "登录")
     @PostMapping("/login")
-    public Result<?> doLogin(@Valid @RequestBody LoginCmd cmd, HttpServletResponse response) {
-        LoginResult loginResult = authService.doLogin(cmd);
-        ResponseCookie.ResponseCookieBuilder cookieBuilder = ResponseCookie.from("Authorization", loginResult.getAccessToken())
-                .httpOnly(true)
-                .secure(authCookieSecure)
-                .sameSite(authCookieSameSite)
-                .path("/");
-        if (Boolean.TRUE.equals(cmd.getIsRemember())) {
-            cookieBuilder.maxAge(Duration.ofSeconds(tokenTimeout));
-        }
-        response.addHeader(HttpHeaders.SET_COOKIE, cookieBuilder.build().toString());
-        return Result.ok(loginResult);
+    public Result<?> doLogin(@Valid @RequestBody LoginCmd cmd) {
+        return Result.ok(authService.doLogin(cmd));
     }
 
     @Operation(summary = "登出")
     @PostMapping("/logout")
-    public Result<?> logout(HttpServletResponse response) {
+    public Result<?> logout() {
         authService.logout();
-        ResponseCookie expiredCookie = ResponseCookie.from("Authorization", "")
-                .httpOnly(true)
-                .secure(authCookieSecure)
-                .sameSite(authCookieSameSite)
-                .path("/")
-                .maxAge(Duration.ZERO)
-                .build();
-        response.addHeader(HttpHeaders.SET_COOKIE, expiredCookie.toString());
         return Result.ok();
     }
 }

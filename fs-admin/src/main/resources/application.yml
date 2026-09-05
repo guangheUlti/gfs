@@ -115,9 +115,6 @@ mybatis-flex:
 
 --- # 认证授权相关配置
 security:
-  auth-cookie:
-    secure: ${AUTH_COOKIE_SECURE:false}
-    same-site: ${AUTH_COOKIE_SAME_SITE:Strict}
   # 拦截路由前缀
   path-pattern: /apis/**
   #排除不需要登录认证的接口
@@ -136,11 +133,10 @@ security:
 
 --- #Sa-Token 配置
 sa-token:
-  # token 名称（同时也是 cookie 名称）
+  # token 名称（作为请求头与查询参数的凭证名）
   token-name: Authorization
   # token 前缀
   token-prefix: Bearer
-  cookie-auto-fill-prefix: true
   # token 有效期（单位：秒） 默认30天，-1 代表永久有效
   timeout: 86400
   # token 最低活跃频率（单位：秒），如果 token 超过此时间没有访问系统就会被冻结，默认-1 代表不限制，永不冻结
@@ -149,15 +145,15 @@ sa-token:
   is-concurrent: true
   # 在多人登录同一账号时，是否共用一个 token （为 true 时所有登录共用一个 token, 为 false 时每次登录新建一个 token）
   is-share: false
+  # 从请求参数读取 token：下载、SSE 等无法自定义请求头的场景靠此通道传 Authorization=Bearer <token>
   is-read-body: true
+  # 关闭 cookie 读写：token-prefix 为 Bearer 时 cookie 里的裸 token 过不了前缀校验，
+  # 开着只会多余地下发一个永不被接受的死凭证（此开关同时控制登录时是否写 cookie）
+  is-read-cookie: false
   # token 风格（默认可取值：uuid、simple-uuid、random-32、random-64、random-128、tik）
   token-style: random-128
   # 是否输出操作日志
   is-log: true
-  cookie:
-    http-only: true
-    secure: ${AUTH_COOKIE_SECURE:false}
-    same-site: ${AUTH_COOKIE_SAME_SITE:Strict}
 
 --- #接口文档 配置
 springdoc:

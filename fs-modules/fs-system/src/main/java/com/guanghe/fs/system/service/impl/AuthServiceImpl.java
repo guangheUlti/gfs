@@ -39,7 +39,6 @@ public class AuthServiceImpl implements AuthService {
         // 登录时把本次的登录环境写到终端记录上：is-share=false 时同一账号每个终端都是独立 token，
         // 不记则全是一样的默认值，「登录管理」里管理员无法判断该踢哪一个（见 SessionAdminServiceImpl）
         StpUtil.login(result.getId(), StpUtil.createSaLoginParameter()
-                .setIsLastingCookie(Boolean.TRUE.equals(cmd.getIsRemember()))
                 .setTerminalExtra(TerminalExtraKey.IP, IpUtils.getIpAddr())
                 .setTerminalExtra(TerminalExtraKey.BROWSER, IpUtils.getBrowser())
                 .setTerminalExtra(TerminalExtraKey.OS, IpUtils.getOs()));
