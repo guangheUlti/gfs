@@ -1,3 +1,4 @@
+import { getToken } from '@/utils/auth'
 import type {
   SSEMessage,
   SSEMessageType,
@@ -88,7 +89,16 @@ class SSEService {
 
     this.currentUserId = userId
 
-    const url = `${this.config.baseUrl}${this.config.endpoint}?userId=${encodeURIComponent(userId)}`
+    const params = new URLSearchParams()
+    params.set('userId', userId)
+    // EventSource 不能自定义请求头，服务端又不读 cookie，只能像下载那样
+    // 把带前缀的 token 放到查询参数（sa-token 已开启 is-read-body）
+    const token = getToken()
+    if (token) {
+      params.set('Authorization', `Bearer ${token}`)
+    }
+
+    const url = `${this.config.baseUrl}${this.config.endpoint}?${params.toString()}`
 
     try {
       this.eventSource = new EventSource(url)
