@@ -53,7 +53,7 @@
 
 **要点**
 
-- token **双通道下发**：响应体 `accessToken`（供前端存 web storage 并注入请求头）+ `HttpOnly` Cookie（供浏览器直接发起的下载/预览请求携带）。
+- token 以**响应体 `accessToken`** 为准：前端存入 web storage 后注入请求头，这是唯一常规鉴权通道。登录同时会下发 `HttpOnly` Cookie，但该 Cookie 目前**不参与鉴权**，原因见 §3.1。
 - 用户不存在与口令错误返回**同一句文案**（`user.account.or.password.incorrect`），避免账号枚举。
 - 禁用/待审核/已拒绝属于业务拒绝，**不计入密码试错次数**，不会因管理员审核延迟把用户锁在门外。
 
@@ -68,11 +68,23 @@
 | 会话存储 | Redis（`sa-token-redis-template` 提供的 `SaTokenDaoForRedisTemplate`）→ 后端重启不掉线、多实例共享会话，键与影响见 §5.4 |
 | 绝对过期 | `timeout: 86400`（24 小时） |
 | 活跃冻结 | `active-timeout: 3600`（1 小时无请求则冻结，再访问视为失效） |
-| 携带方式 | ① `Authorization: Bearer <token>` 请求头（前端 axios 注入）② `Authorization` Cookie（浏览器自动）③ `is-read-body: true` 允许从请求体读取 |
+| 携带方式 | ① `Authorization: Bearer <token>` 请求头（前端 axios 注入，常规通道）② 同名**查询参数** `Authorization=Bearer <token>`（下载/SSE/预览等无法自定义请求头的场景，靠 `is-read-body: true` 读取）③ `Authorization` Cookie：会下发但不被接受，见 §3.1 |
 | 前端持久化 | 勾选记住我 → `localStorage`（跨浏览器会话保留）；未勾选 → `sessionStorage`（关闭标签页即清） |
 | 失效处理 | 响应体 `code: 401` → 前端清空本地登录态并整页跳转登录页（登录/注册接口自身的 401 不触发跳转，避免密码输错就跳页） |
 
 > **Cookie 的 `isRemember` 语义**：只有勾选记住我时，Controller 才为 Cookie 设置 `maxAge = timeout`；否则下发的是会话级 Cookie（关闭浏览器即消失）。
+
+### 3.1 Cookie 通道现状
+
+登录与登出都会手工下发名为 `Authorization` 的 Cookie，但服务端读不懂它（`is-read-cookie` 默认开启也无效）：
+
+- `token-prefix: Bearer` 要求凭证值以 `Bearer ` 开头，而 Cookie 里存的是**裸 token**；实测登录响应下发两条 `Set-Cookie`（Sa-Token 自身与 Controller 手工各一条），值都是裸 token，`cookie-auto-fill-prefix: true` 并未生效；
+- 把带前缀的值写进 Cookie 也不行：Cookie 值不允许出现空格，而 `Bearer%20xxx` 不会被解码；
+- 结果：仅凭 Cookie 访问任何接口都得到 `code:401 未提供Token`。`/apis/transfer/sse` 曾因依赖此通道而始终连不上（`EventSource` 无法自定义请求头）。
+
+因此约定：**无法自定义请求头的请求一律用查询参数 `Authorization=Bearer <token>`**，与下载保持一致。Cookie 仅作兼容保留、不承担鉴权；若未来要真正启用 Cookie 鉴权，需先去掉 `token-prefix` 并重新评估 CSRF 面。
+
+> 该端点实测矩阵：Header 传 `Bearer <token>` → 200；Query 传 `Bearer <token>` → 200；Cookie 传裸 token → 401；Cookie 传带前缀 token → 401；无凭据 → 401。
 
 ---
 
@@ -160,12 +172,12 @@ Token-Session（按 tokenValue 唯一，端级私有数据）
 | --- | --- | --- |
 | `token-name` | `Authorization` | 凭证名，同时作为 Cookie 名与请求头名 |
 | `token-prefix` | `Bearer` | 请求头读取 token 时要求的前缀，即 `Authorization: Bearer <token>` |
-| `cookie-auto-fill-prefix` | `true` | 写 Cookie 时自动补上 `Bearer ` 前缀，保持与请求头一致 |
+| `cookie-auto-fill-prefix` | `true` | 预期是写 Cookie 时自动补上 `Bearer ` 前缀；**实测未生效**，下发的仍是裸 token，见 §3.1 |
 | `timeout` | `86400` | token 绝对有效期（秒），24 小时；`-1` 表示永久 |
 | `active-timeout` | `3600` | 最低活跃频率（秒），1 小时无访问则冻结；`-1` 表示不限制 |
 | `is-concurrent` | `true` | **是否允许同账号多端同时在线**，见 §4 |
 | `is-share` | `false` | 多端是否共用同一 token；`false` = 每次登录新建独立 token |
-| `is-read-body` | `true` | 允许从请求体读取 token（配合表单/特殊客户端场景） |
+| `is-read-body` | `true` | 允许从请求参数读取 token，**下载与 SSE 的查询参数凭证就靠它**，见 §3.1 |
 | `token-style` | `random-128` | token 生成风格：`uuid`/`simple-uuid`/`random-32`/`random-64`/`random-128`/`tik` |
 | `is-log` | `true` | Sa-Token 操作日志开关 |
 | `cookie.http-only` | `true` | Cookie 禁止 JS 读取，降低 XSS 窃取风险 |
@@ -187,7 +199,7 @@ Token-Session（按 tokenValue 唯一，端级私有数据）
 | 路径 | 为什么免登录 |
 | --- | --- |
 | `/apis/auth/login` | 登录本身 |
-| `/apis/transfer/sse` | SSE 长连接（`EventSource` 无法自定义请求头） |
+| `/apis/transfer/sse` | SSE 长连接：不进拦截器，由 `FileTransferController.subscribe()` 自己调 `StpUtil.isLogin()` 把关；凭证走查询参数（见 §3.1） |
 | `/apis/user/register` | 开放注册（注册后仍需审核才可登录） |
 | `/apis/invitation/verify/**` | 邀请链接校验，被邀请人可能尚未登录 |
 | `/apis/share/**/items`、`/apis/share/verify/code`、`/apis/share/**/info`、`/apis/share/**/download/**` | 分享链接的匿名访问/提取码校验/取文件 |
@@ -284,4 +296,5 @@ Token-Session（按 tokenValue 唯一，端级私有数据）
 | 拦截器注册 | `fs-admin/src/main/java/com/guanghe/fs/web/WebMvcConfig.java` |
 | 工作空间校验 | `fs-admin/src/main/java/com/guanghe/fs/interceptor/WorkspaceInterceptor.java` |
 | 前端登录态 | `fs-ui/src/contexts/auth-context.tsx`、`fs-ui/src/utils/auth.ts`、`fs-ui/src/api/request.ts` |
+| SSE 连接与凭证 | `fs-ui/src/services/sse.service.ts`（`EventSource` 只靠查询参数带 token） |
 | 登录页跳转 | `fs-ui/src/router/index.tsx`（`RootRedirect`：登录后直达 `/w/{slug}/files`） |
