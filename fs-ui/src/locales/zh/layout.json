@@ -6,7 +6,6 @@
       "common": "常用"
     },
     "nav": {
-      "home": "首页",
       "allFiles": "全部文件",
       "transfer": "传输",
       "storage": "云存储配置",
@@ -15,7 +14,7 @@
       "shares": "我的分享",
       "recycle": "回收站"
     },
-    "settings": "设置"
+    "storageUsed": "已使用空间"
   },
   "workspaceSwitcher": {
     "switchToast": "已切换到「{{name}}」",

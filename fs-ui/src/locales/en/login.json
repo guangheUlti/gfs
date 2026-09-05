@@ -1,4 +1,5 @@
 {
+  "siteTitle": "GuangHe AI Data Center",
   "welcomeBack": "Welcome back",
   "loginAccount": "Sign in to your GFS account",
   "createAccount": "Create an account",
@@ -10,6 +11,8 @@
   "placeholderUsername": "Username",
   "placeholderConfirmPassword": "Confirm password",
   "placeholderNicknameOptional": "Nickname (optional)",
+  "showPassword": "Show password",
+  "hidePassword": "Hide password",
   "rememberMe": "Remember me",
   "loggingIn": "Signing in...",
   "login": "Sign in",
@@ -35,5 +38,33 @@
   },
   "invitationRegisterNotice": "You're registering via invitation",
   "autoJoinWorkspace": "You'll automatically join the workspace after registration",
-  "emailFixedByInvite": "Email is specified by the invitation and cannot be modified"
+  "emailFixedByInvite": "Email is specified by the invitation and cannot be modified",
+  "userAgreementDialog": {
+    "title": "Terms of Service",
+    "updated": "Last updated: September 5, 2026",
+    "sections": [
+      "Acceptance: By registering, signing in, or using the GFS file management service (the 'Service'), you acknowledge that you have read, understood, and agreed to these Terms. If you do not agree with any part of these Terms, please do not use the Service.",
+      "Accounts & Security: Accounts may be created via open registration (subject to admin approval) or invitation links. Keep your credentials safe; you are responsible for all actions taken under your account.",
+      "Acceptable Use: You must not upload, store, or share content that violates applicable laws, or act in ways that harm the Service or others. We may warn, restrict, or suspend accounts that violate these rules.",
+      "File Storage: Storage is provided within your workspace quota. We do not guarantee permanent retention of files; please back up important files on your own.",
+      "Intellectual Property: You retain rights to the content you upload and warrant that it does not infringe others' rights. The Service's software, UI, and branding are owned by the operator.",
+      "Changes & Termination: The operator may adjust, suspend, or discontinue the Service; material changes will be announced on the platform.",
+      "Disclaimer: We are not liable for indirect losses caused by force majeure, network failures, or scheduled maintenance.",
+      "Miscellaneous: These Terms are governed by the laws of the People's Republic of China. For questions, contact the platform administrator."
+    ]
+  },
+  "privacyPolicyDialog": {
+    "title": "Privacy Policy",
+    "updated": "Last updated: September 5, 2026",
+    "sections": [
+      "Information We Collect: account details (username, email, nickname, avatar), login logs (IP address, browser and OS type, timestamps), and file metadata (names, sizes, storage usage).",
+      "How We Use It: solely for authentication, account security and brute-force protection, quota accounting, and service operations—not for unrelated purposes.",
+      "File Confidentiality: Your files are accessible only to you and authorized members of your workspace. Except as required by law, we do not inspect, use, or disclose your file contents.",
+      "Storage & Protection: Passwords are stored one-way encrypted, traffic is encrypted in transit, and least-privilege access controls are enforced.",
+      "Sharing: We do not share your personal information with third parties without consent, except where required by law or competent authorities.",
+      "Local Storage: Session tokens are kept in Cookies and local storage to keep you signed in; clearing browser data will sign you out.",
+      "Your Rights: You can review and update your profile in settings; contact the administrator to delete your account or export your data.",
+      "Policy Updates: This policy may be updated from time to time; updates will be posted on this page."
+    ]
+  }
 }

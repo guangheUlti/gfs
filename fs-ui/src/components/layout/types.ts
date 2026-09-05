@@ -19,7 +19,7 @@ type Team = {
 }
 
 type BaseNavItem = {
-  /** i18n key under `layout` namespace, e.g. sidebar.nav.home */
+  /** i18n key under `layout` namespace, e.g. sidebar.nav.allFiles */
   titleKey: string
   badge?: string
   icon?: SidebarNavIconPair

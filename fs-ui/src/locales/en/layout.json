@@ -6,7 +6,6 @@
       "common": "Common"
     },
     "nav": {
-      "home": "Home",
       "allFiles": "All files",
       "transfer": "Transfer",
       "storage": "Storage",
@@ -15,7 +14,7 @@
       "shares": "Shares",
       "recycle": "Trash"
     },
-    "settings": "Settings"
+    "storageUsed": "Storage used"
   },
   "workspaceSwitcher": {
     "switchToast": "Switched to \"{{name}}\"",

@@ -7,8 +7,6 @@ import {
   RiFolderOpenLine,
   RiHistoryFill,
   RiHistoryLine,
-  RiHome9Fill,
-  RiHome9Line,
   RiServerFill,
   RiServerLine,
   RiShareFill,
@@ -29,11 +27,6 @@ export const sidebarData: SidebarData = {
     {
       titleKey: 'sidebar.groups.main',
       items: [
-        {
-          titleKey: 'sidebar.nav.home',
-          url: '/',
-          icon: { line: RiHome9Line, fill: RiHome9Fill },
-        },
         {
           titleKey: 'sidebar.nav.allFiles',
           url: '/files',

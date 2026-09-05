@@ -4,7 +4,6 @@ import { initReactI18next } from 'react-i18next'
 
 import enCommon from '@/locales/en/common.json'
 import enFiles from '@/locales/en/files.json'
-import enHome from '@/locales/en/home.json'
 import enLayout from '@/locales/en/layout.json'
 import enLogin from '@/locales/en/login.json'
 import enInvite from '@/locales/en/invite.json'
@@ -15,7 +14,6 @@ import enTransfer from '@/locales/en/transfer.json'
 import enWorkspace from '@/locales/en/workspace.json'
 import zhCommon from '@/locales/zh/common.json'
 import zhFiles from '@/locales/zh/files.json'
-import zhHome from '@/locales/zh/home.json'
 import zhLayout from '@/locales/zh/layout.json'
 import zhLogin from '@/locales/zh/login.json'
 import zhInvite from '@/locales/zh/invite.json'
@@ -51,7 +49,6 @@ void i18n
       en: {
         common: enCommon,
         files: enFiles,
-        home: enHome,
         layout: enLayout,
         login: enLogin,
         invite: enInvite,
@@ -64,7 +61,6 @@ void i18n
       zh: {
         common: zhCommon,
         files: zhFiles,
-        home: zhHome,
         layout: zhLayout,
         login: zhLogin,
         invite: zhInvite,
@@ -82,7 +78,6 @@ void i18n
     ns: [
       'common',
       'files',
-      'home',
       'layout',
       'login',
       'invite',

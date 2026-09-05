@@ -5,7 +5,6 @@ import { usePermission } from '@/hooks/use-permission'
 import { useWorkspaceStore, findBySlug } from '@/store/workspace'
 import type { PermissionCodeType } from '@/types/permission'
 import FileManagerPage from '@/pages/files'
-import HomePage from '@/pages/home'
 import LoginPage from '@/pages/login'
 import InvitePage from '@/pages/invite'
 import NewWorkspacePage from '@/pages/workspace/new'
@@ -74,7 +73,7 @@ function AuthOnlyRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-/** 根路径重定向：已登录 → /w/{slug}/，未登录 → /login */
+/** 根路径重定向：已登录 → /w/{slug}/files，未登录 → /login */
 function RootRedirect() {
   const { t } = useTranslation('common')
   const { isAuthenticated, isLoading, needsWorkspaceSetup } = useAuth()
@@ -110,7 +109,7 @@ function RootRedirect() {
   
   // Preserve query parameters from the original URL
   const searchParams = location.search
-  const redirectPath = `/w/${target.slug}/${searchParams}`
+  const redirectPath = `/w/${target.slug}/files${searchParams}`
   return <Navigate to={redirectPath} replace />
 }
 
@@ -254,8 +253,9 @@ export const router = createBrowserRouter([
     ),
     children: [
       {
+        // 主页已移除，工作空间根路径直达全部文件
         index: true,
-        element: <HomePage />,
+        element: <Navigate to='files' replace />,
       },
       {
         path: 'files',

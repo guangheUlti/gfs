@@ -3,13 +3,14 @@ import { useTranslation } from 'react-i18next'
 import { userApi } from '@/api'
 import { useAuth } from '@/contexts/auth-context'
 import type { LoginParams } from '@/types/user'
-import { User, Lock } from 'lucide-react'
+import { User, Lock, Eye, EyeOff } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { setToken } from '@/utils/auth'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import FieldBox, { fieldInputClass } from './FieldBox'
 
 interface Props {
   onSwitchForm: (form: 'login' | 'register') => void
@@ -35,6 +36,7 @@ export default function LoginFormContent({ onSwitchForm }: Props) {
   const [loading, setLoading] = useState(false)
   const [account, setAccount] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [isRemember, setIsRemember] = useState(true)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -79,45 +81,58 @@ export default function LoginFormContent({ onSwitchForm }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className='space-y-6'>
-      <div className='space-y-2 text-center'>
-        <h3 className='text-2xl font-bold tracking-tight'>{t('welcomeBack')}</h3>
-        <p className='text-sm text-muted-foreground'>{t('loginAccount')}</p>
+    <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
+      {/* 卡片头部：logo + 站名同行（对齐目标站样式） */}
+      <div className='flex items-center justify-center gap-4'>
+        <img
+          src='/logo.png'
+          alt='GFS'
+          className='h-14 w-14 rounded-xl object-contain'
+        />
+        <h3 className='text-3xl font-bold text-[#3573FF]'>
+          {t('siteTitle')}
+        </h3>
       </div>
 
-      <div className='space-y-3'>
-        <div className='relative'>
-          <User className='absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
-          <Input
-            id='account'
-            type='text'
-            placeholder={t('placeholderUsernameOrEmail')}
-            value={account}
-            onChange={(e) => setAccount(e.target.value)}
-            className='h-11 pl-10'
-            autoComplete='username'
-            required
-          />
-        </div>
-      </div>
+      <FieldBox icon={<User className='h-5 w-5 shrink-0 text-neutral-400' />}>
+        <Input
+          id='account'
+          type='text'
+          placeholder={t('placeholderUsernameOrEmail')}
+          value={account}
+          onChange={(e) => setAccount(e.target.value)}
+          className={fieldInputClass}
+          autoComplete='username'
+          required
+        />
+      </FieldBox>
 
-      <div className='space-y-3'>
-        <div className='relative'>
-          <Lock className='absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
-          <Input
-            id='password'
-            type='password'
-            placeholder={t('placeholderPassword')}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className='h-11 pl-10'
-            autoComplete='current-password'
-            required
-          />
-        </div>
-      </div>
+      <FieldBox icon={<Lock className='h-5 w-5 shrink-0 text-neutral-400' />}>
+        <Input
+          id='password'
+          type={showPassword ? 'text' : 'password'}
+          placeholder={t('placeholderPassword')}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className={fieldInputClass}
+          autoComplete='current-password'
+          required
+        />
+        <button
+          type='button'
+          onClick={() => setShowPassword(!showPassword)}
+          aria-label={showPassword ? t('hidePassword') : t('showPassword')}
+          className='shrink-0 rounded-md p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-300'
+        >
+          {showPassword ? (
+            <EyeOff className='h-5 w-5' />
+          ) : (
+            <Eye className='h-5 w-5' />
+          )}
+        </button>
+      </FieldBox>
 
-      <div className='flex items-center justify-between gap-2'>
+      <div className='flex w-full items-center justify-between px-1 text-sm text-neutral-500 dark:text-neutral-400'>
         <div className='flex items-center space-x-2'>
           <Checkbox
             id='remember'
@@ -126,27 +141,33 @@ export default function LoginFormContent({ onSwitchForm }: Props) {
           />
           <label
             htmlFor='remember'
-            className='cursor-pointer text-sm text-muted-foreground select-none'
+            className='cursor-pointer select-none'
           >
             {t('rememberMe')}
           </label>
         </div>
       </div>
 
-      <Button type='submit' className='h-11 w-full' disabled={loading}>
+      <Button
+        type='submit'
+        disabled={loading}
+        className='mt-2 h-[45px] w-full rounded-xl bg-[#3573FF] text-base font-bold text-white hover:bg-[#2B5CD9] active:bg-[#1E40AF]'
+      >
         {loading ? t('loggingIn') : t('login')}
       </Button>
 
-      <p className='text-center text-sm text-muted-foreground'>
-        {t('noAccount')}{' '}
+      <div className='flex w-full items-center justify-between text-sm'>
+        <span className='text-neutral-500 dark:text-neutral-400'>
+          {t('noAccount')}
+        </span>
         <button
           type='button'
-          className='underline underline-offset-2 hover:text-foreground'
+          className='cursor-pointer text-[#3573FF] hover:underline'
           onClick={() => onSwitchForm('register')}
         >
           {t('registerNow')}
         </button>
-      </p>
+      </div>
     </form>
   )
 }

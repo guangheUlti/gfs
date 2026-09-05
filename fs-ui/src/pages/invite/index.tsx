@@ -192,7 +192,7 @@ export default function InvitePage() {
 
       <Card className="relative z-10 w-full max-w-lg overflow-hidden rounded-3xl border border-white/60 bg-white/85 p-0 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl">
         {/* 顶部装饰条 */}
-        <div className="h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
+        <div className="h-2 bg-gradient-to-r from-blue-500 via-sky-500 to-cyan-500" />
 
         <div className="p-8">
           {/* 标题 */}

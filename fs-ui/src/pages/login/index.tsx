@@ -1,15 +1,17 @@
-import React, { Suspense } from 'react'
+import React, { Suspense, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Card } from '@/components/ui/card'
-import { AnimatedBeamDemo } from './components/AnimatedBeamDemo'
 import LoginFormContent from './components/LoginFormContent'
 import RegisterFormContent from './components/RegisterFormContent'
 import { LoginLanguageSwitcher } from './components/LoginLanguageSwitcher'
+import CornerTop from './components/CornerTop'
+import CornerBottom from './components/CornerBottom'
+import LegalDialog, { type LegalType } from './components/LegalDialog'
 import { useSearchParams } from 'react-router-dom'
 
 const LoginPage: React.FC = () => {
   const { t } = useTranslation('login')
   const [searchParams, setSearchParams] = useSearchParams()
+  const [legalType, setLegalType] = useState<LegalType>(null)
   const type = searchParams.get('type') || 'login'
 
   const handleSwitchForm = (form: 'login' | 'register') => {
@@ -33,64 +35,64 @@ const LoginPage: React.FC = () => {
   }
 
   return (
-    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-slate-50 p-4 md:p-8">
-      {/* 极客风点阵背景 */}
+    <div className='relative flex min-h-screen w-full items-center justify-center overflow-hidden p-4'>
+      {/* 全屏背景（alist 旧版风格：浅蓝紫纯色 + 角部渐变装饰） */}
       <div
-        className="absolute inset-0 z-0"
-        style={{
-          backgroundImage:
-            'radial-gradient(#e2e8f0 1.5px, transparent 1.5px)',
-          backgroundSize: '24px 24px',
-        }}
-      />
+        className='fixed inset-0 z-0 overflow-hidden bg-[#a9c6ff] dark:bg-[#062b74]'
+        aria-hidden
+      >
+        <div className='absolute -top-[1170px] -right-[100px] sm:-top-[900px] sm:-right-[300px]'>
+          <CornerTop />
+        </div>
+        <div className='absolute -bottom-[760px] -left-[100px] sm:-bottom-[400px] sm:-left-[200px]'>
+          <CornerBottom />
+        </div>
+      </div>
 
-      {/* 装饰性背景光晕 */}
-      <div className="absolute top-1/2 left-1/2 z-0 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-100/50 blur-[120px]" />
-
-      <div className="relative z-10 w-full max-w-5xl">
-        <Card className="gap-0 overflow-hidden rounded-3xl border border-white/60 bg-white/85 p-0 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl">
-          <div className="grid md:grid-cols-2">
-            {/* 左侧视觉区（分屏动画）；需 p-0 否则 Card 默认 py-6 会在上下露出白边 */}
-            <div className="relative hidden min-h-full items-center justify-center bg-linear-to-b from-sidebar-primary/12 via-muted/45 to-muted/25 dark:from-sidebar-primary/22 dark:via-muted/35 dark:to-muted/20 md:flex">
-              <div
-                className="absolute inset-0 bg-linear-to-br from-primary/10 to-transparent dark:from-primary/15"
-                aria-hidden
-              />
-              <div className="absolute inset-y-0 right-0 w-px bg-border/70" />
-              <div className="relative w-full max-w-sm opacity-80">
-                <AnimatedBeamDemo />
+      {/* 登录卡片 + 底部信息 */}
+      <div className='relative z-10 flex w-full max-w-[420px] flex-col items-center gap-6 py-8'>
+        <div className='flex w-full flex-col gap-4 rounded-xl bg-white p-6 shadow-[0_8px_30px_rgba(0,0,0,0.18)] dark:bg-neutral-900'>
+          <Suspense
+            fallback={
+              <div className='flex h-[240px] items-center justify-center'>
+                <div className='h-6 w-6 animate-spin rounded-full border-2 border-[#3573FF] border-t-transparent' />
               </div>
-            </div>
+            }
+          >
+            {renderContent()}
+          </Suspense>
+        </div>
 
-            {/* 右侧表单 */}
-            <div className="p-6 md:p-10">
-              <Suspense
-                fallback={
-                  <div className="h-[240px] flex items-center justify-center">
-                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
-                  </div>
-                }
-              >
-                {renderContent()}
-              </Suspense>
-            </div>
-          </div>
-        </Card>
-
-        {/* 底部信息 */}
-        <div className="mt-8 flex flex-col items-center gap-3 text-xs text-slate-400">
-          <div className="flex flex-wrap items-center justify-center gap-4">
+        {/* 底部信息（浅蓝背景上用深色文字，暗色模式下用白色） */}
+        <div className='flex flex-col items-center gap-3 text-xs text-slate-600/80 dark:text-white/60'>
+          <div className='flex flex-wrap items-center justify-center gap-4'>
             <LoginLanguageSwitcher />
-            <span className="cursor-pointer transition-colors hover:text-slate-600">
+            <button
+              type='button'
+              onClick={() => setLegalType('terms')}
+              className='cursor-pointer transition-colors hover:text-slate-800 dark:hover:text-white/90'
+            >
               {t('termsOfService')}
-            </span>
-            <span className="cursor-pointer transition-colors hover:text-slate-600">
+            </button>
+            <button
+              type='button'
+              onClick={() => setLegalType('privacy')}
+              className='cursor-pointer transition-colors hover:text-slate-800 dark:hover:text-white/90'
+            >
               {t('privacyPolicy')}
-            </span>
+            </button>
           </div>
           <p>{t('footerCopyright')} @guangheUlti</p>
         </div>
       </div>
+
+      {/* 用户协议 / 隐私政策弹窗 */}
+      <LegalDialog
+        type={legalType}
+        onOpenChange={(open) => {
+          if (!open) setLegalType(null)
+        }}
+      />
     </div>
   )
 }
