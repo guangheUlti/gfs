@@ -15,6 +15,7 @@ export type SettingsTab =
   | 'members'
   | 'roles'
   | 'user-approval'
+  | 'login-management'
 
 type SettingsModalValue = {
   open: boolean

@@ -34,6 +34,35 @@ export interface PendingUser {
   createdAt: string
 }
 
+/** 在线登录终端（一个 token 即一个终端） */
+export interface OnlineTerminal {
+  /** 同一账号内从 0 开始，用于定位要下线的会话 */
+  index: number
+  /** token 末 6 位，用于确认要踢的还是同一个会话，不可用于登录 */
+  tokenTail: string
+  deviceType?: string
+  ip?: string
+  browser?: string
+  os?: string
+  /** 登录时间（毫秒时间戳） */
+  loginTime?: number
+  /** 最后活跃时间（毫秒时间戳） */
+  lastActiveTime?: number
+  /** 是否为当前管理员正在使用的会话 */
+  current?: boolean
+}
+
+/** 在线登录用户及其终端 */
+export interface OnlineUser {
+  loginId: string
+  username?: string
+  nickname?: string
+  avatar?: string
+  email?: string
+  status?: number
+  terminals: OnlineTerminal[]
+}
+
 export interface LoginRes {
   accessToken: string
 }

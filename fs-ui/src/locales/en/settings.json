@@ -13,7 +13,8 @@
     "workspace": "General",
     "members": "Members",
     "roles": "Roles",
-    "userApproval": "User Approval"
+    "userApproval": "User Approval",
+    "loginManagement": "Login Management"
   },
   "userApproval": {
     "pageTitle": "User Approval",
@@ -33,6 +34,42 @@
     "actionFailed": "Action failed, please retry",
     "confirmRejectTitle": "Reject this registration?",
     "confirmRejectDesc": "After rejection, {{name}} will not be able to sign in."
+  },
+  "loginManagement": {
+    "pageTitle": "Login Management",
+    "pageDescription": "Review online accounts and devices, and force any account offline",
+    "refresh": "Refresh",
+    "searchPlaceholder": "Search username / nickname / IP",
+    "colUser": "User",
+    "colDevice": "Device",
+    "colLoginAt": "Signed in",
+    "colLastActive": "Last active",
+    "colActions": "Actions",
+    "loading": "Loading...",
+    "empty": "No online sessions",
+    "listFailed": "Failed to load online sessions",
+    "currentSession": "This device",
+    "unknownDevice": "Unknown device",
+    "tokenTail": "Session",
+    "justNow": "just now",
+    "minutesAgo": "{{n}} min ago",
+    "hoursAgo": "{{n}} h ago",
+    "daysAgo": "{{n}} d ago",
+    "kickDevice": "Sign out",
+    "kickAll": "Sign out all",
+    "kicked": "That device has been signed out",
+    "kickedAll": "All {{n}} sessions of this account have been signed out",
+    "actionFailed": "Action failed, please refresh and retry",
+    "confirmKickTitle": "Sign out this device?",
+    "confirmKickDesc": "{{name}} will be asked to sign in again on that device.",
+    "confirmKickSelfTitle": "Sign out your current session?",
+    "confirmKickSelfDesc": "This is the session you are using now. You will also be signed out and sent back to the sign-in page.",
+    "confirmKickAllTitle": "Sign out this account everywhere?",
+    "confirmKickAllDesc": "All {{n}} online sessions of {{name}} will be signed out.",
+    "confirmKickAllSelfWarning": " That includes the session you are using now, so you will be signed out too.",
+    "statusDisabled": "Disabled",
+    "statusPending": "Pending",
+    "statusRejected": "Rejected"
   },
   "sidebar": {
     "selectPlaceholder": "Choose a section"

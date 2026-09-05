@@ -13,7 +13,8 @@
     "workspace": "通用",
     "members": "成员",
     "roles": "角色",
-    "userApproval": "用户审核"
+    "userApproval": "用户审核",
+    "loginManagement": "登录管理"
   },
   "userApproval": {
     "pageTitle": "用户审核",
@@ -33,6 +34,42 @@
     "actionFailed": "操作失败，请重试",
     "confirmRejectTitle": "确认拒绝该注册申请？",
     "confirmRejectDesc": "拒绝后 {{name}} 将无法登录系统。"
+  },
+  "loginManagement": {
+    "pageTitle": "登录管理",
+    "pageDescription": "查看当前在线的账号与设备，可将任意账号强制下线",
+    "refresh": "刷新",
+    "searchPlaceholder": "搜索用户名/昵称/IP",
+    "colUser": "用户",
+    "colDevice": "设备",
+    "colLoginAt": "登录时间",
+    "colLastActive": "最后活跃",
+    "colActions": "操作",
+    "loading": "加载中...",
+    "empty": "当前没有在线会话",
+    "listFailed": "获取在线会话失败",
+    "currentSession": "当前设备",
+    "unknownDevice": "未知设备",
+    "tokenTail": "会话",
+    "justNow": "刚刚",
+    "minutesAgo": "{{n}} 分钟前",
+    "hoursAgo": "{{n}} 小时前",
+    "daysAgo": "{{n}} 天前",
+    "kickDevice": "下线此设备",
+    "kickAll": "全部下线",
+    "kicked": "已将该设备强制下线",
+    "kickedAll": "已将该账号的 {{n}} 个会话全部下线",
+    "actionFailed": "操作失败，请刷新后重试",
+    "confirmKickTitle": "确认将该设备强制下线？",
+    "confirmKickDesc": "下线后，{{name}} 在该设备上会被要求重新登录。",
+    "confirmKickSelfTitle": "确认下线当前设备？",
+    "confirmKickSelfDesc": "这是你正在使用的会话，确认后你自己也会被强制下线并返回登录页。",
+    "confirmKickAllTitle": "确认将该账号全部下线？",
+    "confirmKickAllDesc": "{{name}} 当前在线的 {{n}} 个会话都会被强制下线。",
+    "confirmKickAllSelfWarning": "其中包含你正在使用的会话，你也会一并被下线。",
+    "statusDisabled": "已禁用",
+    "statusPending": "待审核",
+    "statusRejected": "已驳回"
   },
   "sidebar": {
     "selectPlaceholder": "选择设置项"

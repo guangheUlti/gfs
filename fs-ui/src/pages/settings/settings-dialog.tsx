@@ -8,6 +8,8 @@ import {
   RiArrowLeftRightLine,
   RiBuildingFill,
   RiBuildingLine,
+  RiComputerFill,
+  RiComputerLine,
   RiGroupFill,
   RiGroupLine,
   RiShieldUserFill,
@@ -39,6 +41,7 @@ import { SettingsWorkspace } from './workspace'
 import { SettingsMembers } from './members'
 import { SettingsRoles } from './roles'
 import { SettingsUserApproval } from './user-approval'
+import { SettingsLoginManagement } from './login-management'
 import { SidebarNav, type SettingsNavGroup } from './components/sidebar-nav'
 import { useAuth } from '@/contexts/auth-context'
 
@@ -110,6 +113,12 @@ function buildNavConfig(
           icon: { line: RiAdminLine, fill: RiAdminFill },
           superAdminOnly: true,
         },
+        {
+          title: t('nav.loginManagement'),
+          tab: 'login-management',
+          icon: { line: RiComputerLine, fill: RiComputerFill },
+          superAdminOnly: true,
+        },
       ],
     },
   ]
@@ -170,6 +179,12 @@ function SettingsPanel({ tab }: { tab: SettingsTab }) {
     case 'user-approval':
       return user?.isSuperAdmin ? (
         <SettingsUserApproval />
+      ) : (
+        <NoPermission />
+      )
+    case 'login-management':
+      return user?.isSuperAdmin ? (
+        <SettingsLoginManagement />
       ) : (
         <NoPermission />
       )

@@ -41,4 +41,5 @@ public final class OperationType {
     public static final String DELETE_STORAGE = "DELETE_STORAGE";
     public static final String APPROVE_USER = "APPROVE_USER";
     public static final String REJECT_USER = "REJECT_USER";
+    public static final String KICKOUT_SESSION = "KICKOUT_SESSION";
 }

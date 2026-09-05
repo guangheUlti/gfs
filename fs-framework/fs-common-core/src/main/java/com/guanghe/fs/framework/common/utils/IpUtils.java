@@ -109,7 +109,13 @@ public class IpUtils {
         }
 
         UserAgent userAgent = UserAgentUtil.parse(userAgentStr);
-        return userAgent.getBrowser().getName() + " " + userAgent.getVersion();
+        String browserName = userAgent.getBrowser().getName();
+        String browserVersion = userAgent.getVersion();
+        // 脚本客户端等非浏览器 UA 解析不出版本号，直接拼接会得到 "Unknown null" 这种脏数据
+        if (browserVersion == null || browserVersion.isEmpty()) {
+            return browserName;
+        }
+        return browserName + " " + browserVersion;
     }
 
     /**

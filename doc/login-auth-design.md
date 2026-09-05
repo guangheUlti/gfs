@@ -215,6 +215,23 @@ Token-Session（按 tokenValue 唯一，端级私有数据）
 | 代价 | Redis 成为登录硬依赖。但 `spring.cache.type: redis` 本就要求 Redis 可用，`bin\start.bat` 也已按 Redis → MySQL → 应用顺序拉起，**没有新增运维前提** |
 | 回退 | 注释掉该依赖即回到 JVM 内存实现，无需其它改动（代价：重启掉线、无法多实例） |
 
+### 5.5 登录管理（在线会话查看与强制下线）
+
+入口：设置 → 系统 → 登录管理（仅超管可见，与“用户审核”同组同级）。
+
+| 项 | 说明 |
+| --- | --- |
+| 接口 | `GET /apis/admin/sessions?keyword=`、`DELETE /apis/admin/sessions/{loginId}`（整账号）、`DELETE /apis/admin/sessions/{loginId}/terminals/{index}?tokenTail=`（单终端） |
+| 权限 | 在 Service 层调 `SysUserService.assertSuperAdmin()`，与用户审核一致；非超管得到 `code:403 + admin.forbidden`。`/apis/admin/**` 已在 `WorkspaceInterceptor.WHITELIST` 内，不需工作空间上下文 |
+| 会话来源 | `StpUtil.searchTokenValue("", 0, -1, false)` 枚举服务端 token。注意它返回的是**完整存储键**，必须剥掉 `splicingKeyTokenValue("")` 前缀才是 token 值 |
+| 幽灵会话 | 每个 token 再走 `StpUtil.getLoginIdByToken()`，其内部的 `isValidLoginId` 会对被踢/被顶/已过期/活跃冻结的标记值返回 null → 这类残留键不会出现在列表里（尽管 `kickout` 后键仍保留至过期） |
+| 终端环境 | 登录时通过 `SaLoginParameter.setTerminalExtra(...)` 写入 IP / 浏览器 / 系统（键定义见 `TerminalExtraKey`），落到 `SaTerminalInfo.extraData`。**本节改动之前登录的会话这些字段为空**，前端归入“未知设备” |
+| 序号一致性 | `is-share=false` 下同一账号每个终端是独立 token，新登录会改变集合。`orderTokens()` 以 Account-Session 的终端记录顺序为准、无记录者按字典序补末尾，列表与踢人复用同一函数，因此 `index` 可复用 |
+| 错踢保护 | 列表展示与点击踢人之间可能已变化，所以 `tokenTail`（token 末 6 位）作为乐观校验：不匹配或 `index` 越界 → `code:404 + admin.session.changed`，**宁可让管理员刷新重来也不踢错** |
+| 被踢端提示 | 用 `kickoutByTokenValue` 而非 `logout`：被踢端下次请求得到 `code:401 + auth.kick.out.token`（“Token已被踢下线”），区别于自己退出（分支见 `GlobalExceptionHandler` 对 `NotLoginException.KICK_OUT` 的处理） |
+| 验证结果 | 未登录 401；非超管 403（列表与踢人均拦）；踢单终端后该 token 401、同账号其他终端还是 200；整账号下线 `data` 为实际会话数且包含管理员自己时也能正常踢并保留审计；错误 `tokenTail` 不会误伤（目标仍 200）；全部登出后 Redis `Authorization:login:*` 归零 |
+| 依赖 | 必须配合 §5.4 的 Redis 存储。若退回 JVM 内存实现，每个实例只能看到并踢自己发的 token，“登录管理”在多实例下会失真 |
+
 ---
 
 ## 6. 请求进入时的鉴权链
@@ -244,7 +261,7 @@ Token-Session（按 tokenValue 唯一，端级私有数据）
 | 新增登录方式（短信、OAuth…） | 在 `LoginType` 枚举加值 → 实现 `LoginStrategy`（`getLoginType()` 返回新枚举）并注册为 `@Component`，工厂自动收集，无需改 `LoginStrategyFactory` |
 | 调整多端策略 | 见 §4.5；改完重启后端 |
 | 支持多实例部署 / 重启不掉线 | ✅ 已是默认行为（`sa-token-redis-template` 已启用，实测见 §4.3、键与代价见 §5.4）；退回 JVM 内存存储只需注释掉该依赖 |
-| 强制某端下线 | 普通 token 模式下 `StpUtil.logout(loginId, device)` / `StpUtil.kickout(...)` 均可用（旧 JWT 模式下这些API 均失效） |
+| 强制某端下线 | 已在「登录管理」中实现（见 §5.5）；普通 token 模式下 `StpUtil.logout(loginId, device)` / `StpUtil.kickout(...)` 均可用（旧 JWT 模式下这些API 均失效） |
 | 直连数据库改 `sys_user` | 必须清 Redis 用户缓存 `user:{userId}`，否则 `/apis/user/info` 返回旧值（`SysUserServiceImpl.getDetail()` 带 `@Cacheable("user")`） |
 | 换头像/改资料后前端不更新 | 走应用接口（会自动 evict 缓存），不要直接改库 |
 
@@ -256,6 +273,10 @@ Token-Session（按 tokenValue 唯一，端级私有数据）
 | --- | --- |
 | 登录/登出接口 | `fs-modules/fs-system/src/main/java/com/guanghe/fs/system/controller/AuthController.java` |
 | 登录编排 | `fs-modules/fs-system/src/main/java/com/guanghe/fs/system/service/impl/AuthServiceImpl.java` |
+| 登录管理接口 | `fs-modules/fs-system/src/main/java/com/guanghe/fs/system/controller/AdminSessionController.java` |
+| 会话枚举与踢人 | `fs-modules/fs-system/src/main/java/com/guanghe/fs/system/service/impl/SessionAdminServiceImpl.java` |
+| 终端环境键 | `fs-modules/fs-system/src/main/java/com/guanghe/fs/system/constant/TerminalExtraKey.java` |
+| 登录管理页面 | `fs-ui/src/pages/settings/login-management/index.tsx` |
 | 密码认证与防爆破调用 | `fs-modules/fs-system/src/main/java/com/guanghe/fs/system/auth/impl/PasswordLoginStrategy.java` |
 | 失败锁定 | `fs-modules/fs-system/src/main/java/com/guanghe/fs/system/auth/LoginGuardService.java` |
 | 口令哈希与升级 | `fs-modules/fs-system/src/main/java/com/guanghe/fs/system/auth/PasswordHashService.java` |
