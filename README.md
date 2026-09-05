@@ -36,7 +36,7 @@
 - **虚拟线程** - 全面启用 Java 虚拟线程，异步任务、定时任务与预览队列高并发下更稳
 - **模块化架构** - 清晰的分层设计，易于维护和扩展
 - **在线预览** - 支持多种文件格式的在线预览，预览防盗链功能
-- **安全可靠** - JWT 认证、权限控制、文件完整性校验
+- **安全可靠** - Sa-Token 会话认证（服务端可即时登出/踢人）、多端并发登录、权限控制、文件完整性校验
 
 ### 功能特性
 
@@ -107,7 +107,7 @@
 - JDK >= 21
 - Maven >= 3.8
 - MySQL >= 8.0 或 PostgreSQL >= 14
-- Redis
+- Redis >= 8.0
 
 ### 安装
 
@@ -178,7 +178,7 @@ pnpm dev
 
 ### Windows 一键部署
 
-仓库内 `release/deploy-package/` 是一个自带 JDK 21、MySQL 8.4、Redis 的免安装部署包（`release/` 下另有同版本 zip 可直接拷走），目标服务器无需预装任何软件：
+仓库内 `release/deploy-package/` 是一个自带 JDK 21、MySQL 8.4、Redis 的免安装部署包，目标服务器无需预装任何软件；压缩包不入库，发布时由 `script/package-release.ps1` 构建，并以 **GitHub Release 附件**（`gfs-<版本>-windows-x64.zip`）提供下载：
 
 ```bat
 cd release\deploy-package
@@ -190,6 +190,14 @@ bin\install-service.bat :: 注册开机自启（需管理员）
 ```
 
 端口、数据库密码、JVM 参数统一在 `bin\env.bat` 里改，详见 `release/deploy-package/README.md`。
+
+---
+
+## 设计文档
+
+| 文档 | 内容 |
+|------|------|
+| [`doc/login-auth-design.md`](doc/login-auth-design.md) | 登录认证链路设计、多端登录互不影响的原理、Sa-Token / security 配置项逐条含义 |
 
 ---
 
@@ -237,9 +245,12 @@ gfs/
     ├── fs-file/                 # 文件管理模块
     ├── fs-storage/              # 存储平台管理模块
     ├── fs-system/               # 系统管理模块（用户、工作空间、角色、权限）
-    ├── fs-log/                  # 日志模块
-    └── fs-plan/                 # 计划任务模块
+    └── fs-log/                  # 日志模块
 fs-ui/                           # Web 前端（React 19 + Vite）
+doc/                             # 设计文档（登录认证等）
+release/deploy-package/          # 免安装部署包（脚本 + 配置，运行时由脚本重建）
+script/                          # 构建/部署脚本（package-release.ps1、docker）
+sql/                             # 数据库初始化脚本
 ```
 
 ---
