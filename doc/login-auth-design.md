@@ -65,7 +65,7 @@
 | --- | --- |
 | token 形态 | Sa-Token **普通模式**，`token-style: random-128`（128 位随机串），**不是 JWT** |
 | 有效性判定 | 每次请求回查服务端 `token → loginId` 映射，因此**服务端可即时作废** |
-| 会话存储 | JVM 内存（`sa-token-redis-template` 依赖处于注释未启用状态）→ 后端重启后所有 token 失效，需重新登录 |
+| 会话存储 | Redis（`sa-token-redis-template` 提供的 `SaTokenDaoForRedisTemplate`）→ 后端重启不掉线、多实例共享会话，键与影响见 §5.4 |
 | 绝对过期 | `timeout: 86400`（24 小时） |
 | 活跃冻结 | `active-timeout: 3600`（1 小时无请求则冻结，再访问视为失效） |
 | 携带方式 | ① `Authorization: Bearer <token>` 请求头（前端 axios 注入）② `Authorization` Cookie（浏览器自动）③ `is-read-body: true` 允许从请求体读取 |
@@ -113,7 +113,22 @@ Token-Session（按 tokenValue 唯一，端级私有数据）
 | 此时 token2 再访问 | 仍可用 | ✅ `code:200` |
 | 伪造 token 访问 | 被拒绝 | ✅ `code:401` |
 
-> 上述验证以 `release\deploy-package\lib\fs-admin.jar`（`java -jar ... --server.port=18080`）复跑一遍，即结论对**发行包产物**成立，不只是对 `mvn spring-boot:run`。
+> 上述五项的基础验证是直接用 `java -jar release\deploy-package\lib\fs-admin.jar --server.port=18080` 跑的，即结论对**当时的发行包产物**成立，不只是对 `mvn spring-boot:run`。
+
+启用 `sa-token-redis-template`（会话真正落到 Redis）之后，按当前源码追加验证（验证脚本为本地辅助脚本，放在未入库的 `.qoder/` 下：`verify-redis-session.ps1` 分 pre/post 两阶段跨越一次重启、`verify-multi-instance.ps1` 跑双实例）：
+
+| 步骤 | 预期 | 实测 |
+| --- | --- | --- |
+| 登录两次后查 Redis | 出现 `Authorization:login:token:*`、`session:*`、`last-active:*` | ✅ 7 个键，键名内嵌 token |
+| 单独登出 token1 后查键数 | 只回收 token1 相关的键 | ✅ 7 → 5 |
+| **kill 后端进程并重启**，token2 再访问 | 仍可用（会话不在了 JVM 里） | ✅ `code:200` |
+| 重启后，用重启前已登出的 token1 访问 | 仍被拒绝（登出记录也持久化） | ✅ `code:401` |
+| 实例 A（:80）签发的 token 拿到实例 B（:18080）访问 | 通过（共享会话） | ✅ `code:200`，两实例 token 仍互不相同 |
+| 在实例 B 登出该 token，回实例 A 访问 | 被拒绝（登出/踢人全集群可见） | ✅ `code:401` |
+| 期间另一实例签发的 token 在 A 上访问 | 不受影响 | ✅ `code:200` |
+| 全部登出后 Redis 残留会话键 | 无泄漏 | ✅ `Authorization:login:*` = 0 |
+
+> 注意：追加验证跑的是**当前源码**，而 GitHub 上已发布的 `v2.3.1` zip 是本次改动**之前**构建的；要让发行包具备该能力，需用 `script\package-release.ps1` 重新出包（见 §5.3）。
 
 ### 4.4 历史坑：为什么过去「配置看起来不生效」
 
@@ -187,6 +202,19 @@ Token-Session（按 tokenValue 唯一，端级私有数据）
 - 发行版内置 MySQL/Redis/JDK，`bin\start.bat` 按 Redis → MySQL → 应用顺序拉起。
 - 发行包整体由 `script\package-release.ps1` 重建（构建 → 产物入位 → 打「干净」zip：剔除 `data\mysql`、`data\redis`、`data\upload`、`logs\*`、`*.log` 以及 `bin\env.bat` 首次运行会重新生成的 `conf\my.ini` / `conf\redis.conf`）。zip 不进代码仓库，作为 GitHub Release 附件分发。
 
+### 5.4 会话存储（`SaTokenDao`）
+
+| 项 | 说明 |
+| --- | --- |
+| 实现类 | `cn.dev33.satoken.dao.SaTokenDaoForRedisTemplate`，由 `fs-framework/fs-security/pom.xml` 引入的 `sa-token-redis-template` 提供，通过 jar 内 `AutoConfiguration.imports` 自动装配，**无需额外配置** |
+| 生效确认 | 启动日志 `Sa-Token 全局组件 SaTokenDao 载入成功: cn.dev33.satoken.dao.SaTokenDaoForRedisTemplate`（未启用时是 `SaTokenDaoDefaultImpl`） |
+| 存储介质 | 复用 `spring.data.redis`（dev/prod 均为 `127.0.0.1:6379` db0，无密码），与 Spring Cache 同一实例 |
+| 键名 | `Authorization:login:token:<tokenValue>`（token → loginId 映射）、`Authorization:login:session:<loginId>`（账号级 Account-Session）、`Authorization:login:last-active:<tokenValue>`（活跃时间戳，支撑 `active-timeout`） |
+| 值格式 | 走 `StringRedisTemplate`，值为 JSON 字符串，可直接 `redis-cli get` 排查（区别于 JDK 二进制序列化） |
+| 收益 | 后端重启不再全员掉线；多实例可共享会话且登出/踢人全集群即时生效 |
+| 代价 | Redis 成为登录硬依赖。但 `spring.cache.type: redis` 本就要求 Redis 可用，`bin\start.bat` 也已按 Redis → MySQL → 应用顺序拉起，**没有新增运维前提** |
+| 回退 | 注释掉该依赖即回到 JVM 内存实现，无需其它改动（代价：重启掉线、无法多实例） |
+
 ---
 
 ## 6. 请求进入时的鉴权链
@@ -215,7 +243,7 @@ Token-Session（按 tokenValue 唯一，端级私有数据）
 | --- | --- |
 | 新增登录方式（短信、OAuth…） | 在 `LoginType` 枚举加值 → 实现 `LoginStrategy`（`getLoginType()` 返回新枚举）并注册为 `@Component`，工厂自动收集，无需改 `LoginStrategyFactory` |
 | 调整多端策略 | 见 §4.5；改完重启后端 |
-| 支持多实例部署 / 重启不掉线 | 启用 `fs-framework/fs-security/pom.xml` 中被注释的 `sa-token-redis-template` 依赖，会话即落到 Redis（与 Spring Cache 共用实例） |
+| 支持多实例部署 / 重启不掉线 | ✅ 已是默认行为（`sa-token-redis-template` 已启用，实测见 §4.3、键与代价见 §5.4）；退回 JVM 内存存储只需注释掉该依赖 |
 | 强制某端下线 | 普通 token 模式下 `StpUtil.logout(loginId, device)` / `StpUtil.kickout(...)` 均可用（旧 JWT 模式下这些API 均失效） |
 | 直连数据库改 `sys_user` | 必须清 Redis 用户缓存 `user:{userId}`，否则 `/apis/user/info` 返回旧值（`SysUserServiceImpl.getDetail()` 带 `@Cacheable("user")`） |
 | 换头像/改资料后前端不更新 | 走应用接口（会自动 evict 缓存），不要直接改库 |
