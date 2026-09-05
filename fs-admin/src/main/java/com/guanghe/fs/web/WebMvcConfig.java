@@ -7,11 +7,14 @@ import com.guanghe.fs.interceptor.PreviewInterceptor;
 import com.guanghe.fs.interceptor.StoragePlatformInterceptor;
 import com.guanghe.fs.interceptor.WorkspaceInterceptor;
 import com.guanghe.fs.storage.plugin.local.config.LocalStorageProperties;
+import java.io.IOException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.Resource;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.servlet.resource.PathResourceResolver;
 
 /**
  * Web 配置
@@ -45,6 +48,27 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
         registry.addResourceHandler("/" + prefix + "/**")
                 .addResourceLocations("file:" + storageProperties.getBasePath() + "/");
+
+        // 前端 SPA 静态资源与 history 路由回退：未命中的非接口路径回退到 index.html
+        registry.addResourceHandler("/**")
+                .addResourceLocations("classpath:/static/")
+                .resourceChain(true)
+                .addResolver(new PathResourceResolver() {
+                    @Override
+                    protected Resource getResource(String resourcePath, Resource location) throws IOException {
+                        Resource requested = location.createRelative(resourcePath);
+                        if (requested.exists() && requested.isReadable()) {
+                            return requested;
+                        }
+                        // 接口路径不回退到前端页面，保持 404 行为
+                        if (resourcePath.startsWith("apis/") || resourcePath.startsWith("api/")
+                                || resourcePath.startsWith("preview/") || resourcePath.startsWith("archive/")) {
+                            return null;
+                        }
+                        Resource index = location.createRelative("index.html");
+                        return index.exists() && index.isReadable() ? index : null;
+                    }
+                });
     }
 
     @Override

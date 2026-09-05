@@ -52,5 +52,5 @@ public interface CommonConstant {
     /**
      * 头像保存本地路径
      */
-    String AVATAR_SAVE_PATH = "/avatar";
+    String AVATAR_SAVE_PATH = "avatar";
 }

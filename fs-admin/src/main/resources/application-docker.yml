@@ -105,7 +105,7 @@ fs:
   # 本地存储配置（默认）
   storage:
     local:
-      base-path: ${FS_LOCAL_STORAGE_PATH:/data/upload}
+      base-path: ${FS_LOCAL_STORAGE_PATH:/data}
       base-url: ${FS_LOCAL_STORAGE_BASE_URL:http://127.0.0.1:80/files}
 
 mybatis-flex:

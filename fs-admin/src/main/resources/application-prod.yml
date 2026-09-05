@@ -88,7 +88,7 @@ fs:
   # 本地存储配置（默认）
   storage:
     local:
-      base-path: /data/upload
+      base-path: /data
       base-url: http://localhost:80/files
 
 mybatis-flex:

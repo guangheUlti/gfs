@@ -110,18 +110,15 @@ public class FileUtils {
 
     /**
      * 生成对象键
-     * 格式: {projectName}/{userId}/{yyyyMMdd}/{fileId}.{suffix}
-     * 示例: gfs/user001/20241226/abc123.pdf
+     * 格式: {userId}/{yyyyMMdd}/{fileId}.{suffix}
+     * 示例: user001/20241226/abc123.pdf
      *
-     * @param prefix     前缀
      * @param userId     用户ID
      * @param objectName 对象名称
      * @return
      */
-    public static String generateObjectKey(String prefix, String userId, String objectName) {
+    public static String generateObjectKey(String userId, String objectName) {
         StringBuilder objectKey = new StringBuilder();
-
-        objectKey.append(prefix).append("/");
 
         if (StrUtil.isNotBlank(userId)) {
             objectKey.append(userId).append("/");

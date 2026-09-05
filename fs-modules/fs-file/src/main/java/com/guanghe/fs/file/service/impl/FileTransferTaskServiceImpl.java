@@ -103,8 +103,6 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     private final SysUserService sysUserService;
     private final SysUserTransferSettingService userTransferSettingService;
     private final SysOperationLogService operationLogService;
-    @Value("${spring.application.name:gfs}")
-    private String applicationName;
     @Value("${fs.folder-download.temp-dir:${java.io.tmpdir}/gfs-folder-download}")
     private String folderDownloadTempDir;
     private static final long FOLDER_DOWNLOAD_TASK_TTL_MS = 2 * 60 * 60 * 1000L;
@@ -266,7 +264,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             String taskId = IdUtil.fastSimpleUUID();
             String suffix = FileUtils.extName(cmd.getFileName());
             String tempFileName = IdUtil.fastSimpleUUID() + "." + suffix;
-            String objectKey = FileUtils.generateObjectKey(applicationName, userId, tempFileName);
+            String objectKey = FileUtils.generateObjectKey(userId, tempFileName);
             String displayName = fileInfoService.generateUniqueName(
                     workspaceId,
                     cmd.getParentId(),

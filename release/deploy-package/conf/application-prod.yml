@@ -79,7 +79,7 @@ fs:
       enabled: false
   storage:
     local:
-      base-path: ${GFS_DATA_DIR:./data}/upload
+      base-path: ${GFS_STORAGE_DIR:./storage}
       base-url: ${FS_FRONTEND_DOMAIN:http://localhost:80}/files
 
 mybatis-flex:

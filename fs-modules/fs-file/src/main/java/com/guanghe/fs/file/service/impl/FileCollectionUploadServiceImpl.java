@@ -30,7 +30,6 @@ import com.guanghe.fs.storage.facade.StorageServiceFacade;
 import com.guanghe.fs.storage.plugin.core.IStorageOperationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -66,9 +65,6 @@ public class FileCollectionUploadServiceImpl implements FileCollectionUploadServ
     private final StorageServiceFacade storageServiceFacade;
     private final SysOperationLogService operationLogService;
 
-    @Value("${spring.application.name:gfs}")
-    private String applicationName;
-
     @Override
     @Transactional(rollbackFor = Exception.class)
     public String initUpload(String collectionId, String submissionId,
@@ -90,7 +86,7 @@ public class FileCollectionUploadServiceImpl implements FileCollectionUploadServ
         String objectName = IdUtil.fastSimpleUUID()
                 + (StrUtil.isBlank(suffix) ? "" : "." + suffix);
         String objectKey = FileUtils.generateObjectKey(
-                applicationName, collection.getUserId(), objectName);
+                collection.getUserId(), objectName);
 
         FileTransferTask task = new FileTransferTask();
         task.setTaskId(IdUtil.fastSimpleUUID());

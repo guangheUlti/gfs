@@ -47,10 +47,15 @@ set "DB_INIT_FLAG=%DATA_DIR%\mysql\.gfs-initialized"
 :: scratch file scripts use to capture one line of command output (read_cap)
 set "GFS_CAPFILE=%TEMP%\gfs-capture.tmp"
 
-:: exported for conf\application-prod.yml, which resolves ${GFS_HOME} and
-:: ${GFS_DATA_DIR} instead of relying on the JVM's working directory.
+:: exported for conf\application-prod.yml, which resolves ${GFS_HOME},
+:: ${GFS_DATA_DIR} and ${GFS_STORAGE_DIR} instead of relying on the JVM's
+:: working directory.
 set "GFS_HOME=%PKG_ROOT%"
 set "GFS_DATA_DIR=%DATA_DIR%"
+:: Upload storage root - kept separate from DATA_DIR so bundled MySQL/Redis
+:: runtime data never mixes with user files.
+set "STORAGE_DIR=%PKG_ROOT%\storage"
+set "GFS_STORAGE_DIR=%STORAGE_DIR%"
 
 :: ---- tunables -------------------------------------------------------------
 if not defined SERVER_PORT    set "SERVER_PORT=80"
@@ -107,7 +112,7 @@ exit /b 2
 if not exist "%CONF_DIR%" mkdir "%CONF_DIR%"
 if not exist "%DATA_DIR%\mysql" mkdir "%DATA_DIR%\mysql"
 if not exist "%DATA_DIR%\redis" mkdir "%DATA_DIR%\redis"
-if not exist "%DATA_DIR%\upload" mkdir "%DATA_DIR%\upload"
+if not exist "%STORAGE_DIR%" mkdir "%STORAGE_DIR%"
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 
 if not exist "%MY_INI%" (

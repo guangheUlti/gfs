@@ -75,11 +75,11 @@ fs:
     buffer-size: 8192
     office:
       enabled: true
-      #LibreOffice 安装路径
+      #LibreOffice 安装路径（项目内置便携版，绝对路径避免工作目录差异）
       # Linux: /usr/lib/libreoffice
       # Windows: C:/Program Files/LibreOffice
       # Mac: /Applications/LibreOffice.app/Contents
-#      office-home: C:/Program Files/LibreOffice
+      office-home: D:/workspace/lab/gfs/LibreOffice
       task-execution-timeout: 300000
       task-queue-timeout: 30000
       max-tasks-per-process: 200
@@ -88,7 +88,7 @@ fs:
   # 本地存储配置（默认）
   storage:
     local:
-      base-path: D:/gfs/upload
+      base-path: ./storage
       base-url: http://localhost:80/files
 
 mybatis-flex:

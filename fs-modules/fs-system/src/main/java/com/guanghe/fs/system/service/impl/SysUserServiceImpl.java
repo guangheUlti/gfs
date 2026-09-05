@@ -65,9 +65,6 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     @Value("${security.super-admin.username:admin}")
     private String superAdminUsername;
 
-    @Value("${spring.application.name:gfs}")
-    private String applicationName;
-
     @Override
     public SysUser getByUsername(String username) {
 
@@ -153,7 +150,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
             // 优化路径拼接与命名，防止路径穿越
             String suffix = FileUtil.getSuffix(file.getOriginalFilename());
             String fileName = userId + "_" + System.currentTimeMillis() + "." + suffix;
-            String avatarPath = applicationName + CommonConstant.AVATAR_SAVE_PATH + "/" + userId;
+            String avatarPath = CommonConstant.AVATAR_SAVE_PATH + "/" + userId;
 
             // 目录创建逻辑可以封装在 storageOperationService 内部
             String objectKey = avatarPath + "/" + fileName;

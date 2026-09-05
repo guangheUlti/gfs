@@ -47,8 +47,8 @@ services:
     volumes:
       - ./logs:/logs
       - ./tmp:/tmp
-      # 映射你的 D 盘上传目录
-      - D:/gfs/upload:/data/upload
+      # 上传文件存储目录（容器内 /data，对应 application-docker.yml 的 FS_LOCAL_STORAGE_PATH 默认值）
+      - ../../storage:/data
 
 networks:
   default:
