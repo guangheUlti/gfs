@@ -1,5 +1,5 @@
 {
-  "siteTitle": "GuangHe AI Data Center",
+  "siteTitle": "AI Data Center",
   "welcomeBack": "Welcome back",
   "loginAccount": "Sign in to your GFS account",
   "createAccount": "Create an account",
@@ -62,7 +62,7 @@
       "File Confidentiality: Your files are accessible only to you and authorized members of your workspace. Except as required by law, we do not inspect, use, or disclose your file contents.",
       "Storage & Protection: Passwords are stored one-way encrypted, traffic is encrypted in transit, and least-privilege access controls are enforced.",
       "Sharing: We do not share your personal information with third parties without consent, except where required by law or competent authorities.",
-      "Local Storage: Session tokens are kept in Cookies and local storage to keep you signed in; clearing browser data will sign you out.",
+      "Local Storage: To keep you signed in, session tokens are stored only in browser local storage (localStorage or sessionStorage) and are never kept in cookies; clearing browser data will sign you out.",
       "Your Rights: You can review and update your profile in settings; contact the administrator to delete your account or export your data.",
       "Policy Updates: This policy may be updated from time to time; updates will be posted on this page."
     ]
