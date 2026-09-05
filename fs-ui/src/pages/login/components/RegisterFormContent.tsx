@@ -71,9 +71,12 @@ export default function RegisterFormContent({ onSwitchForm, inviteToken }: Props
           {t('createAccount')}
         </h3>
       </div>
-      <p className='-mt-2 text-center text-xs text-neutral-500 dark:text-neutral-400'>
-        {hasInvitation ? t('registerSubtitleInvite') : t('registerSubtitle')}
-      </p>
+      {/* 副标题只在邀请注册时出现：普通注册已有「创建账号」标题，不需要再补一行 */}
+      {hasInvitation && (
+        <p className='-mt-2 text-center text-xs text-neutral-500 dark:text-neutral-400'>
+          {t('registerSubtitleInvite')}
+        </p>
+      )}
 
       {/* 邀请注册提示 */}
       {hasInvitation && (

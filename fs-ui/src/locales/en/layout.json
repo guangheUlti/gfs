@@ -6,11 +6,11 @@
       "common": "Common"
     },
     "nav": {
-      "allFiles": "All files",
+      "allFiles": "Files",
       "transfer": "Transfer",
       "storage": "Storage",
       "favorites": "Favorites",
-      "recents": "Recent",
+      "recents": "History",
       "shares": "Shares",
       "recycle": "Trash"
     },
