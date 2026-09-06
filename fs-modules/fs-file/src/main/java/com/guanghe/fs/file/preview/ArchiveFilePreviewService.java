@@ -3,7 +3,6 @@ package com.guanghe.fs.file.preview;
 import com.guanghe.fs.file.domain.FileInfo;
 import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.framework.common.constant.RedisKey;
-import com.guanghe.fs.framework.common.context.WorkspaceContext;
 import com.guanghe.fs.framework.common.enums.FileTypeEnum;
 import com.guanghe.fs.framework.common.utils.I18nUtils;
 import com.guanghe.fs.framework.preview.config.FilePreviewConfig;
@@ -111,11 +110,6 @@ public class ArchiveFilePreviewService {
             // 每次内层预览单独签发流 token，避免共用 previewToken+:stream 覆盖 Redis 导致多窗口 403/串文件
             String streamAccessToken = UUID.randomUUID().toString().replace("-", "");
             redisRepository.setExpire(RedisKey.getPreviewTokenKey(streamAccessToken), tempId, CACHE_EXPIRE_SECONDS);
-            redisRepository.setExpire(
-                    RedisKey.getPreviewWorkspaceKey(streamAccessToken),
-                    WorkspaceContext.getWorkspaceId(),
-                    CACHE_EXPIRE_SECONDS
-            );
 
             String streamUrl = "/api/file/stream/preview/archive/inner/" + tempId
                     + "?previewToken=" + streamAccessToken;

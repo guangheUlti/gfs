@@ -2,8 +2,8 @@
   "sidebar": {
     "userPlaceholder": "用户",
     "groups": {
-      "main": "主导航",
-      "common": "常用"
+      "files": "文件",
+      "system": "系统"
     },
     "nav": {
       "allFiles": "文件",
@@ -12,33 +12,17 @@
       "favorites": "收藏",
       "recents": "历史",
       "shares": "分享",
-      "recycle": "回收站"
+      "recycle": "回收站",
+      "settings": "设置"
     },
-    "storageUsed": "已使用空间"
-  },
-  "workspaceSwitcher": {
-    "switchToast": "已切换到「{{name}}」",
-    "switchFailed": "切换工作空间失败",
-    "selectWorkspace": "选择工作空间",
-    "memberCount": "{{count}} 位成员",
-    "settings": "设置",
-    "inviteMembers": "邀请成员",
-    "sectionTitle": "工作空间",
-    "current": "当前",
-    "createWorkspace": "创建工作空间"
+    "storage": {
+      "title": "存储空间",
+      "usedOfTotal": "已用 {{used}} / 共 {{total}}",
+      "usedOnly": "已用 {{used}}"
+    }
   },
   "navUser": {
-    "accountSettings": "账户设置",
     "logout": "退出登录"
-  },
-  "breadcrumb": {
-    "home": "首页",
-    "allFiles": "全部文件",
-    "transfer": "传输",
-    "storage": "云存储配置",
-    "settings": "设置",
-    "appearance": "外观",
-    "transferSettings": "传输设置"
   },
   "header": {
     "lightMode": "明亮模式",

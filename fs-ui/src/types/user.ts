@@ -1,13 +1,6 @@
 import type { PermissionCodeType } from './permission'
 
-/** 用户在某个工作空间内的角色与权限 */
-export interface UserRolePermissions {
-  roleCode: string
-  roleName: string
-  permissions: PermissionCodeType[]
-}
-
-/** 与 GET/PUT `/apis/user/info` 返回的 `data` 对象一致（全局信息，不含权限） */
+/** 与 GET/PUT `/apis/user/info` 返回的 `data` 对象一致 */
 export interface UserInfo {
   id: string
   username: string
@@ -22,6 +15,8 @@ export interface UserInfo {
   isSetPassword?: boolean
   /** 是否系统管理员（用户名与系统配置一致） */
   isSuperAdmin?: boolean
+  /** 用户级权限编码，由后端按是否系统管理员下发 */
+  permissions?: PermissionCodeType[]
 }
 
 /** 待审核用户（新注册需管理员审核） */
@@ -84,7 +79,6 @@ export interface UserRegisterParams {
   email: string
   nickname: string
   avatar?: string
-  inviteToken?: string
 }
 
 export interface UpdateUserInfoParams {

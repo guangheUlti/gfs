@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RiArrowRightSLine } from '@remixicon/react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import {
   Collapsible,
@@ -49,28 +49,11 @@ function NavItemIcon({
   return <Cmp className={cn('size-4 shrink-0', className)} />
 }
 
-/** 将 sidebar-data 中的相对路径拼接为 /w/{slug}{path} */
-function useSlugPrefix() {
-  const { slug } = useParams<{ slug: string }>()
-  return (path: string) => `/w/${slug}${path}`
-}
-
-/**
- * 从当前 URL 中剥离 /w/:slug 前缀，
- * 使 checkIsActive 能和 sidebar-data 中的相对路径进行匹配
- */
-function stripSlugPrefix(fullPath: string): string {
-  const match = fullPath.match(/^\/w\/[^/]+(.*)$/)
-  return match ? match[1] || '/' : fullPath
-}
-
 export function NavGroup({ titleKey, items }: NavGroupProps) {
   const { t } = useTranslation('layout')
   const { state, isMobile } = useSidebar()
   const location = useLocation()
-  const rawHref = location.pathname + location.search
-  const href = stripSlugPrefix(rawHref)
-  const prefix = useSlugPrefix()
+  const href = location.pathname + location.search
 
   return (
     <SidebarGroup>
@@ -80,33 +63,14 @@ export function NavGroup({ titleKey, items }: NavGroupProps) {
           const key = `${item.titleKey}-${item.url}`
 
           if (!item.items)
-            return (
-              <SidebarMenuLink
-                key={key}
-                item={item}
-                href={href}
-                prefix={prefix}
-              />
-            )
+            return <SidebarMenuLink key={key} item={item} href={href} />
 
           if (state === 'collapsed' && !isMobile)
             return (
-              <SidebarMenuCollapsedDropdown
-                key={key}
-                item={item}
-                href={href}
-                prefix={prefix}
-              />
+              <SidebarMenuCollapsedDropdown key={key} item={item} href={href} />
             )
 
-          return (
-            <SidebarMenuCollapsible
-              key={key}
-              item={item}
-              href={href}
-              prefix={prefix}
-            />
-          )
+          return <SidebarMenuCollapsible key={key} item={item} href={href} />
         })}
       </SidebarMenu>
     </SidebarGroup>
@@ -120,16 +84,40 @@ function NavBadge({ children }: { children: ReactNode }) {
 function SidebarMenuLink({
   item,
   href,
-  prefix,
 }: {
   item: NavLink
   href: string
-  prefix: (path: string) => string
 }) {
   const { t } = useTranslation('layout')
   const { setOpenMobile } = useSidebar()
   const active = checkIsActive(href, item)
   const label = t(item.titleKey)
+  const content = (
+    <>
+      {item.icon && <NavItemIcon icon={item.icon} active={active} />}
+      <span className='sidebar-nav-label'>{label}</span>
+      {item.badge && <NavBadge>{item.badge}</NavBadge>}
+    </>
+  )
+
+  // 动作项（如「设置」）：不是路由，渲染按钮；手机侧栏点完要收起
+  if (item.onClick || !item.url) {
+    return (
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          isActive={active}
+          tooltip={label}
+          onClick={() => {
+            item.onClick?.()
+            setOpenMobile(false)
+          }}
+        >
+          {content}
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    )
+  }
+
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
@@ -137,10 +125,8 @@ function SidebarMenuLink({
         isActive={active}
         tooltip={label}
       >
-        <Link to={prefix(item.url)} onClick={() => setOpenMobile(false)}>
-          {item.icon && <NavItemIcon icon={item.icon} active={active} />}
-          <span className='sidebar-nav-label'>{label}</span>
-          {item.badge && <NavBadge>{item.badge}</NavBadge>}
+        <Link to={item.url} onClick={() => setOpenMobile(false)}>
+          {content}
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>
@@ -150,11 +136,9 @@ function SidebarMenuLink({
 function SidebarMenuCollapsible({
   item,
   href,
-  prefix,
 }: {
   item: NavCollapsible
   href: string
-  prefix: (path: string) => string
 }) {
   const { t } = useTranslation('layout')
   const { setOpenMobile } = useSidebar()
@@ -184,7 +168,7 @@ function SidebarMenuCollapsible({
                   isActive={checkIsActive(href, subItem)}
                 >
                   <Link
-                    to={prefix(subItem.url)}
+                    to={subItem.url}
                     onClick={() => setOpenMobile(false)}
                   >
                     {subItem.icon && (
@@ -211,11 +195,9 @@ function SidebarMenuCollapsible({
 function SidebarMenuCollapsedDropdown({
   item,
   href,
-  prefix,
 }: {
   item: NavCollapsible
   href: string
-  prefix: (path: string) => string
 }) {
   const { t } = useTranslation('layout')
   const parentActive = checkIsActive(href, item)
@@ -244,7 +226,7 @@ function SidebarMenuCollapsedDropdown({
           {item.items.map((sub) => (
             <DropdownMenuItem key={`${sub.titleKey}-${sub.url}`} asChild>
               <Link
-                to={prefix(sub.url)}
+                to={sub.url}
                 className={`${checkIsActive(href, sub) ? 'bg-secondary' : ''}`}
               >
                 {sub.icon && (
@@ -267,12 +249,22 @@ function SidebarMenuCollapsedDropdown({
 }
 
 function checkIsActive(href: string, item: NavItem, mainNav = false) {
-  return (
-    href === item.url ||
-    href.split('?')[0] === item.url ||
-    !!item?.items?.filter((i) => i.url === href).length ||
-    (mainNav &&
-      href.split('/')[1] !== '' &&
-      href.split('/')[1] === item?.url?.split('/')[1])
-  )
+  // 折叠父项：任一子项命中即激活
+  if (item.items?.some((i) => i.url === href)) return true
+
+  const itemUrl = item.url
+  if (!itemUrl) return false
+
+  const [itemPath, itemQuery = ''] = itemUrl.split('?')
+  const [hrefPath, hrefQuery = ''] = href.split('?')
+
+  // 同一路径下按 view 参数区分视图身份（文件/收藏/历史/分享/回收站互斥）：
+  // 「文件」不带 view，在带 view 的页面上不激活；带 view 的项只在自己的 view 下激活。
+  // href 上多余的参数（如搜索 keyword）不影响激活状态
+  const samePath = itemPath === hrefPath
+  const sameView =
+    new URLSearchParams(itemQuery).get('view') ===
+    new URLSearchParams(hrefQuery).get('view')
+
+  return (samePath && sameView) || (mainNav && samePath)
 }

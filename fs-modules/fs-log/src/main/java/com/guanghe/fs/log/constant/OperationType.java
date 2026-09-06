@@ -12,6 +12,8 @@ public final class OperationType {
     public static final String UPLOAD = "UPLOAD";
     public static final String DOWNLOAD = "DOWNLOAD";
     public static final String CREATE_FOLDER = "CREATE_FOLDER";
+    public static final String CREATE_TEXT = "CREATE_TEXT";
+    public static final String EDIT_TEXT = "EDIT_TEXT";
     public static final String COPY = "COPY";
     public static final String MOVE = "MOVE";
     public static final String RENAME = "RENAME";
@@ -25,16 +27,6 @@ public final class OperationType {
     public static final String UPDATE_COLLECTION = "UPDATE_COLLECTION";
     public static final String DELETE_COLLECTION = "DELETE_COLLECTION";
     public static final String COLLECTION_UPLOAD = "COLLECTION_UPLOAD";
-    public static final String CREATE_WORKSPACE = "CREATE_WORKSPACE";
-    public static final String UPDATE_WORKSPACE = "UPDATE_WORKSPACE";
-    public static final String DELETE_WORKSPACE = "DELETE_WORKSPACE";
-    public static final String UPDATE_MEMBER_ROLE = "UPDATE_MEMBER_ROLE";
-    public static final String REMOVE_MEMBER = "REMOVE_MEMBER";
-    public static final String CREATE_INVITATION = "CREATE_INVITATION";
-    public static final String CANCEL_INVITATION = "CANCEL_INVITATION";
-    public static final String CREATE_ROLE = "CREATE_ROLE";
-    public static final String UPDATE_ROLE = "UPDATE_ROLE";
-    public static final String DELETE_ROLE = "DELETE_ROLE";
     public static final String ADD_STORAGE = "ADD_STORAGE";
     public static final String UPDATE_STORAGE = "UPDATE_STORAGE";
     public static final String SWITCH_STORAGE = "SWITCH_STORAGE";

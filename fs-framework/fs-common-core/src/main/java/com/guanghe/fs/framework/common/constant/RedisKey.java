@@ -33,8 +33,6 @@ public class RedisKey {
      */
     private static final String PREVIEW_TOKEN_KEY = "preview:token";
 
-    private static final String PREVIEW_WORKSPACE_KEY = "preview:workspace";
-
     /**
      * 预览token过期时间 默认5分钟
      */
@@ -59,9 +57,5 @@ public class RedisKey {
      */
     public static String getPreviewTokenKey(String token) {
         return String.join(SEPARATOR, BASE_KEY, PREVIEW_TOKEN_KEY, token);
-    }
-
-    public static String getPreviewWorkspaceKey(String token) {
-        return String.join(SEPARATOR, BASE_KEY, PREVIEW_WORKSPACE_KEY, token);
     }
 }

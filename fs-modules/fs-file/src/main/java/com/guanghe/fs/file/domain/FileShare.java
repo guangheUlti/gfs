@@ -30,11 +30,6 @@ public class FileShare extends BaseEntity {
     private String userId;
 
     /**
-     * 所属工作空间ID
-     */
-    private String workspaceId;
-
-    /**
      * 分享名称（默认取第一个文件名）
      */
     private String shareName;

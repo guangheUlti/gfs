@@ -18,17 +18,10 @@ const LoginPage: React.FC = () => {
     setSearchParams({ type: form })
   }
 
-  const inviteToken = searchParams.get('token') || undefined
-
   const renderContent = () => {
     switch (type) {
       case 'register':
-        return (
-          <RegisterFormContent
-            onSwitchForm={handleSwitchForm}
-            inviteToken={inviteToken}
-          />
-        )
+        return <RegisterFormContent onSwitchForm={handleSwitchForm} />
       default:
         return <LoginFormContent onSwitchForm={handleSwitchForm} />
     }
@@ -36,9 +29,9 @@ const LoginPage: React.FC = () => {
 
   return (
     <div className='relative flex min-h-screen w-full items-center justify-center overflow-hidden p-4'>
-      {/* 全屏背景（alist 旧版风格：浅蓝紫纯色 + 角部渐变装饰） */}
+      {/* 全屏背景（alist 旧版风格：浅蓝紫纯色 + 角部渐变装饰；暗黑下改中性灰黑底） */}
       <div
-        className='fixed inset-0 z-0 overflow-hidden bg-[#a9c6ff] dark:bg-[#062b74]'
+        className='fixed inset-0 z-0 overflow-hidden bg-[#a9c6ff] dark:bg-neutral-950'
         aria-hidden
       >
         <div className='absolute -top-[1170px] -right-[100px] sm:-top-[900px] sm:-right-[300px]'>

@@ -20,16 +20,7 @@ public interface SysOperationLogService extends IService<SysOperationLog> {
                        String targetName,
                        String detail);
 
-    void recordSuccess(String workspaceId,
-                       String operationType,
-                       String operationName,
-                       String targetType,
-                       String targetId,
-                       String targetName,
-                       String detail);
-
-    void recordSuccessAs(String workspaceId,
-                         String operatorId,
+    void recordSuccessAs(String operatorId,
                          String operatorName,
                          String operationType,
                          String operationName,

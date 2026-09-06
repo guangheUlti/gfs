@@ -1,11 +1,11 @@
 package com.guanghe.fs.file.schedule;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.guanghe.fs.file.domain.FileInfo;
 import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.file.service.FileRecycleService;
-import com.guanghe.fs.framework.common.context.WorkspaceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -49,22 +49,21 @@ public class RecycleBinCleanupTask {
                 return;
             }
 
-            Map<String, List<String>> filesByWorkspace = expiredFiles.stream()
+            // 按所属用户分组：定时任务没有登录上下文，需把 userId 显式传给删除逻辑
+            Map<String, List<String>> filesByUser = expiredFiles.stream()
+                    .filter(file -> StrUtil.isNotBlank(file.getUserId()))
                     .collect(Collectors.groupingBy(
-                            FileInfo::getWorkspaceId,
+                            FileInfo::getUserId,
                             Collectors.mapping(FileInfo::getId, Collectors.toList())
                     ));
 
             int totalCleaned = 0;
-            for (Map.Entry<String, List<String>> entry : filesByWorkspace.entrySet()) {
+            for (Map.Entry<String, List<String>> entry : filesByUser.entrySet()) {
                 try {
-                    WorkspaceContext.setWorkspaceId(entry.getKey());
-                    recycleService.permanentlyDeleteFiles(entry.getValue());
+                    recycleService.permanentlyDeleteFiles(entry.getValue(), entry.getKey());
                     totalCleaned += entry.getValue().size();
                 } catch (Exception e) {
-                    log.error("清理工作空间 {} 的过期文件失败", entry.getKey(), e);
-                } finally {
-                    WorkspaceContext.clear();
+                    log.error("清理用户 {} 的过期文件失败", entry.getKey(), e);
                 }
             }
 

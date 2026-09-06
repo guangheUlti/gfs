@@ -8,7 +8,6 @@ type SidebarNavIconPair = {
 
 type User = {
   name: string
-  email: string
   avatar: string
 }
 
@@ -27,7 +26,10 @@ type BaseNavItem = {
 }
 
 type NavLink = BaseNavItem & {
-  url: string
+  /** 动作项（有 onClick）没有 url；路由项必有 url */
+  url?: string
+  /** 非路由动作项（如打开设置弹窗）：有 onClick 时渲染按钮而不是链接 */
+  onClick?: () => void
   items?: never
 }
 

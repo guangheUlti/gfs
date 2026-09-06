@@ -67,6 +67,31 @@ export function createFolder(data: { folderName: string; parentId?: string }) {
 }
 
 /**
+ * 新建纯文本文件（后缀固定 .txt）
+ */
+export function createTextFile(data: {
+  fileName: string
+  parentId?: string
+  content?: string
+}) {
+  return request.post('/apis/file/text', data)
+}
+
+/**
+ * 读取文本文件内容（.txt）
+ */
+export function readTextContent(fileId: string) {
+  return request.get<string>(`/apis/file/${fileId}/content`)
+}
+
+/**
+ * 保存在线编辑后的文本内容（.txt）
+ */
+export function updateTextContent(fileId: string, content: string) {
+  return request.put(`/apis/file/${fileId}/content`, { content })
+}
+
+/**
  * 删除文件（移到回收站）
  */
 export function deleteFiles(fileIds: string[]) {

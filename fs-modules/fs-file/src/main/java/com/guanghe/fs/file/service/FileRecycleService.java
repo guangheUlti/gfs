@@ -31,12 +31,21 @@ public interface FileRecycleService {
     void restoreFiles(List<String> fileIds);
 
     /**
-     * 永久删除文件
+     * 永久删除当前登录用户的文件
      *
      * @param fileIds 文件ID集合
-     * @return
      */
     void permanentlyDeleteFiles(List<String> fileIds);
+
+    /**
+     * 永久删除指定用户的文件。
+     * <p>
+     * 供定时任务等无登录上下文的场景使用，避开对 Sa-Token 会话的依赖。
+     *
+     * @param fileIds 文件ID集合
+     * @param userId  文件所属用户ID
+     */
+    void permanentlyDeleteFiles(List<String> fileIds, String userId);
 
     /**
      * 清空回收站

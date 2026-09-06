@@ -31,9 +31,4 @@ public class UserRegisterCmd {
     private String nickname;
 
     private String avatar;
-
-    /**
-     * 邀请令牌（可选）
-     */
-    private String inviteToken;
 }

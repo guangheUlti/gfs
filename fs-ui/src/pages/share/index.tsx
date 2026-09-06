@@ -22,7 +22,6 @@ import {
 import { getToken } from '@/utils/auth'
 import { getAvatarFallback } from '@/utils/avatar'
 import { openFilePreviewWithToken } from '@/utils/preview'
-import { getCurrentWorkspaceId } from '@/store/workspace'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   Breadcrumb,
@@ -209,15 +208,11 @@ export default function SharePage() {
   const handleDownload = (file: FileItem) => {
     try {
       const token = getToken()
-      const workspaceId = getCurrentWorkspaceId()
-      
-      // 构建下载链接，将 token 和 workspaceId 放到 URL 参数中
+
+      // 构建下载链接，浏览器直接下载带不了请求头，把 token 放到 URL 参数中
       const params = new URLSearchParams()
       params.set('Authorization', `Bearer ${token}`)
-      if (workspaceId) {
-        params.set('X-Workspace-Id', workspaceId)
-      }
-      
+
       const downloadUrl = `${import.meta.env.VITE_API_BASE_URL}/apis/share/${shareToken}/download/${file.id}?${params.toString()}`
 
       const link = document.createElement('a')
@@ -264,7 +259,7 @@ export default function SharePage() {
   if (hasError) {
     return (
       <div className='flex min-h-screen items-center justify-center bg-gradient-to-b from-blue-50 to-gray-50 p-4'>
-        <div className='w-full max-w-md rounded-2xl bg-white p-12 text-center shadow-lg'>
+        <div className='w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-lg sm:p-12'>
           <XCircle className='mx-auto mb-6 h-20 w-20 text-destructive opacity-80' />
           <h2 className='mb-3 text-2xl font-semibold'>{errorMessage}</h2>
           <p className='mb-6 text-muted-foreground'>{t('errorState.hint')}</p>
@@ -281,7 +276,7 @@ export default function SharePage() {
   if (shareData.isExpire) {
     return (
       <div className='flex min-h-screen items-center justify-center bg-gradient-to-b from-blue-50 to-gray-50 p-4'>
-        <div className='w-full max-w-md rounded-2xl bg-white p-12 text-center shadow-lg'>
+        <div className='w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-lg sm:p-12'>
           <Clock className='mx-auto mb-6 h-20 w-20 text-muted-foreground opacity-60' />
           <h2 className='mb-3 text-2xl font-semibold'>{t('expired.title')}</h2>
           <p className='mb-6 text-muted-foreground'>{t('expired.desc')}</p>
@@ -312,7 +307,7 @@ export default function SharePage() {
 
     return (
       <div className='flex min-h-screen items-center justify-center bg-gradient-to-b from-blue-50 to-gray-50 p-4'>
-        <div className='w-full max-w-md rounded-2xl bg-white p-10 shadow-lg'>
+        <div className='w-full max-w-md rounded-2xl bg-white p-6 shadow-lg sm:p-10'>
           <div className='mb-8 text-center'>
             <Avatar className='mx-auto mb-4 h-16 w-16'>
               <AvatarFallback className='bg-sidebar-accent text-xl font-semibold text-sidebar-accent-foreground'>
@@ -353,20 +348,20 @@ export default function SharePage() {
 
   // 文件浏览状态
   return (
-    <div className='flex min-h-screen items-center justify-center bg-gradient-to-b from-blue-50 to-gray-50 p-4'>
-      <div
-        className='flex w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-lg'
-        style={{ maxHeight: '85vh', minHeight: '500px' }}
-      >
+    <div className='flex min-h-screen items-center justify-center bg-gradient-to-b from-blue-50 to-gray-50 p-0 sm:p-4'>
+      {/* 窄屏占满整屏，宽屏恢复居中卡片 */}
+      <div className='flex h-[100dvh] w-full flex-col overflow-hidden bg-white sm:h-auto sm:max-h-[85vh] sm:min-h-[500px] sm:max-w-6xl sm:rounded-2xl sm:shadow-lg'>
         {/* 头部 */}
-        <div className='flex items-center justify-between border-b bg-muted/30 px-8 py-6'>
-          <div className='flex items-center gap-3'>
-            <div className='rounded-xl bg-primary/10 p-3'>
+        <div className='flex flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-4 py-4 sm:px-8 sm:py-6'>
+          <div className='flex min-w-0 items-center gap-3'>
+            <div className='shrink-0 rounded-xl bg-primary/10 p-3'>
               <Share2 className='h-8 w-8 text-primary' />
             </div>
-            <div>
-              <div className='text-lg font-semibold'>{shareData.shareName}</div>
-              <div className='flex items-center gap-4 text-sm text-muted-foreground'>
+            <div className='min-w-0'>
+              <div className='truncate text-lg font-semibold'>
+                {shareData.shareName}
+              </div>
+              <div className='flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground'>
                 <span>
                   {t('browse.fileCount', { count: shareData.fileCount ?? 1 })}
                 </span>
@@ -382,7 +377,7 @@ export default function SharePage() {
         </div>
 
         {/* 面包屑导航 */}
-        <div className='border-b bg-white px-8 py-3'>
+        <div className='border-b bg-white px-4 py-3 sm:px-8'>
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem>
@@ -412,7 +407,7 @@ export default function SharePage() {
         </div>
 
         {/* 工具栏 */}
-        <div className='flex items-center justify-between border-b px-8 py-3'>
+        <div className='flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3 sm:px-8'>
           <span className='text-sm text-muted-foreground'>
             {t('browse.totalFiles', { count: fileList.length })}
           </span>
@@ -429,14 +424,20 @@ export default function SharePage() {
                 <LayoutGrid className='h-4 w-4' />
               </ToggleGroupItem>
             </ToggleGroup>
-            <Button variant='outline' size='sm' onClick={fetchShareFile}>
+            <Button
+              variant='outline'
+              size='icon'
+              className='shrink-0'
+              onClick={fetchShareFile}
+              aria-label={t('browse.refresh')}
+            >
               <RefreshCw className='h-4 w-4' />
             </Button>
           </div>
         </div>
 
         {/* 文件列表 */}
-        <div className='flex-1 overflow-auto p-4'>
+        <div className='flex-1 overflow-auto p-3 sm:p-4'>
           {bodyLoading ? (
             <div className='flex h-full items-center justify-center'>
               <div className='text-center'>
@@ -471,7 +472,7 @@ export default function SharePage() {
         </div>
 
         {/* 底部 */}
-        <div className='border-t bg-muted/20 px-8 py-3 text-center text-xs text-muted-foreground'>
+        <div className='border-t bg-muted/20 px-4 py-3 text-center text-xs text-muted-foreground sm:px-8'>
           {t('browse.footer')}
         </div>
       </div>

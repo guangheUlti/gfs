@@ -1,76 +1,50 @@
 package com.guanghe.fs.system.auth;
 
 import cn.dev33.satoken.stp.StpInterface;
-import com.guanghe.fs.framework.common.context.WorkspaceContext;
-import com.guanghe.fs.system.domain.SysRole;
-import com.guanghe.fs.system.domain.SysWorkspaceMember;
-import com.guanghe.fs.system.service.SysRolePermissionService;
-import com.guanghe.fs.system.service.SysRoleService;
-import com.guanghe.fs.system.service.SysWorkspaceMemberService;
+import com.guanghe.fs.system.constant.UserPermissions;
+import com.guanghe.fs.system.domain.SysUser;
+import com.guanghe.fs.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
  * 自定义权限加载接口实现类
- * 基于工作空间的权限验证
+ * <p>
+ * 权限为用户级：所有登录用户拥有文件读写与分享权限；系统管理员
+ * （用户名与 security.super-admin.username 一致）额外拥有存储管理与日志查看权限。
  *
  * @Author: guangheUlti
- * @Date: 2024/11/20 14:46
+ * @Date: 2024-11-20 14:46
  */
 @Component
 @RequiredArgsConstructor
 public class StpInterfaceImpl implements StpInterface {
 
-    private final SysWorkspaceMemberService memberService;
-    private final SysRoleService roleService;
-    private final SysRolePermissionService rolePermissionService;
+    private final SysUserMapper userMapper;
+
+    /** 系统管理员用户名 */
+    @Value("${security.super-admin.username:admin}")
+    private String superAdminUsername;
 
     @Override
     public List<String> getPermissionList(Object loginId, String loginType) {
-        // 获取当前工作空间ID
-        String workspaceId = WorkspaceContext.getWorkspaceId();
-        if (workspaceId == null || workspaceId.isBlank()) {
-            // 如果没有工作空间上下文，返回空权限列表
-            return new ArrayList<>();
-        }
-
-        // 查询用户在当前工作空间的成员信息
-        String userId = String.valueOf(loginId);
-        SysWorkspaceMember member = memberService.findByWorkspaceAndUser(workspaceId, userId);
-        if (member == null) {
-            return new ArrayList<>();
-        }
-
-        // 根据角色ID获取权限列表
-        List<String> permissions = rolePermissionService.getPermissionCodesByRoleId(member.getRoleId());
-        return permissions != null ? permissions : new ArrayList<>();
+        return UserPermissions.of(isSuperAdmin(loginId));
     }
 
     @Override
     public List<String> getRoleList(Object loginId, String loginType) {
-        // 获取当前工作空间ID
-        String workspaceId = WorkspaceContext.getWorkspaceId();
-        if (workspaceId == null || workspaceId.isBlank()) {
-            // 如果没有工作空间上下文，返回空角色列表
-            return new ArrayList<>();
-        }
+        return UserPermissions.rolesOf(isSuperAdmin(loginId));
+    }
 
-        // 查询用户在当前工作空间的成员信息
-        String userId = String.valueOf(loginId);
-        SysWorkspaceMember member = memberService.findByWorkspaceAndUser(workspaceId, userId);
-        if (member == null) {
-            return new ArrayList<>();
-        }
-
-        // 根据角色ID获取角色信息
-        SysRole role = roleService.getRoleById(member.getRoleId());
-        if (role != null) {
-            return List.of(role.getRoleCode());
-        }
-
-        return new ArrayList<>();
+    /**
+     * 是否系统管理员。查不到用户时按普通用户处理，未登录的情况由 Sa-Token 登录校验先行拦截。
+     */
+    private boolean isSuperAdmin(Object loginId) {
+        SysUser user = userMapper.selectOneById(String.valueOf(loginId));
+        return user != null && user.getUsername() != null
+                && user.getUsername().equals(superAdminUsername);
     }
 }

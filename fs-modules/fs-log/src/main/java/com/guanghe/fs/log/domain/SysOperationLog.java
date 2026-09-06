@@ -10,7 +10,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 工作空间操作日志。
+ * 操作日志。
  */
 @Data
 @Table("sys_operation_log")
@@ -25,8 +25,6 @@ public class SysOperationLog implements Serializable {
     private String operatorId;
 
     private String operatorName;
-
-    private String workspaceId;
 
     private String operationType;
 

@@ -45,6 +45,7 @@ export function FileBulkSelectionBar({
       selectedCount={selectedCount}
       onClear={onClear}
       ariaLabel={t('bulk.ariaBar')}
+      className='bottom-14 sm:bottom-16'
     >
       {selectedCount === 1 ? (
         <>

@@ -40,11 +40,6 @@ public interface CommonConstant {
     String X_STORAGE_PLATFORM_CONFIG_ID = "X-Storage-Platform-Config-Id";
 
     /**
-     * 工作空间请求头标识
-     */
-    String X_WORKSPACE_ID = "X-Workspace-Id";
-
-    /**
      * 验证码长度
      */
     Integer VERIFY_CODE_LENGTH = 6;

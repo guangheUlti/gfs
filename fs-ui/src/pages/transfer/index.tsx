@@ -11,7 +11,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
-import { SidebarTrigger } from '@/components/ui/sidebar'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import TransferTable from './components/TransferTable'
 
@@ -138,17 +137,21 @@ export default function TransferPage() {
 
   return (
     <div className='flex h-full flex-col'>
-      {/* 顶部工具栏 */}
-      <div className='flex items-center gap-4 border-b px-6 py-4'>
-        <SidebarTrigger className='md:hidden' />
-
-        <div className='flex-1'>
+      {/* 顶部工具栏：窄屏放不下时自动换行 */}
+      <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 py-3 sm:px-6 sm:py-4'>
+        <div className='min-w-0 flex-1'>
           <h2 className='text-xl font-semibold tracking-tight'>
             {t('page.title')}
           </h2>
         </div>
 
-        <Button variant='outline' size='icon' onClick={handleRefresh}>
+        <Button
+          variant='outline'
+          size='icon'
+          className='shrink-0'
+          onClick={handleRefresh}
+          aria-label={tc('refresh')}
+        >
           <RefreshCw className='h-4 w-4' />
         </Button>
 
@@ -156,6 +159,7 @@ export default function TransferPage() {
           <Button
             variant='destructive'
             size='sm'
+            className='shrink-0'
             onClick={handleClearCompleted}
           >
             <Trash2 className='mr-2 h-4 w-4' />
@@ -165,8 +169,12 @@ export default function TransferPage() {
       </div>
 
       {/* 标签页和操作按钮 */}
-      <div className='flex items-center justify-between border-b px-6 py-3'>
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <div className='inset-divider flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2.5 sm:px-6 sm:py-3'>
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className='min-w-0'
+        >
           <TabsList>
             <TabsTrigger value='uploading'>
               {t('page.tabUploading')}{' '}
@@ -189,7 +197,7 @@ export default function TransferPage() {
       </div>
 
       {/* 主内容区域 */}
-      <div className='flex-1 overflow-auto p-6'>
+      <div className='flex-1 overflow-auto p-3 sm:p-6'>
         {loading ? (
           <div className='flex h-full items-center justify-center'>
             <p className='text-muted-foreground'>{tc('loading')}</p>

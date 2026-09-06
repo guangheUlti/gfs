@@ -16,7 +16,7 @@ import {
   clearRecycle,
 } from '@/api/file'
 import { cn } from '@/lib/utils'
-import { formatFileSize, formatTime } from '@/utils/format'
+import { formatFileSize, formatFileListDisplayTime } from '@/utils/format'
 import { usePermission } from '@/hooks/use-permission'
 import {
   AlertDialog,
@@ -30,7 +30,13 @@ import {
 } from '@/components/ui/alert-dialog'
 import { BulkSelectionBar } from '@/components/bulk-selection-bar'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
 import {
   Empty,
   EmptyDescription,
@@ -66,11 +72,11 @@ import { FileListRowActionIcon } from './FileListView'
 import { DataTablePagination } from '@/components/data-table'
 
 const RECYCLE_TABLE_HEAD: Record<string, string> = {
-  select: 'w-12',
   displayName: '',
   size: 'w-32',
   deletedTime: 'w-48',
-  actions: 'w-40 text-center',
+  // 行尾操作列只在触屏出现，鼠标端靠右键菜单；表头用 sr-only 占位
+  actions: 'w-10 px-1 text-right hoverable:hidden',
 }
 
 export default function RecycleBinView() {
@@ -87,6 +93,8 @@ export default function RecycleBinView() {
   const [fileList, setFileList] = useState<FileRecycleItem[]>([])
   const [total, setTotal] = useState(0)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  // 触屏多选模式：无 Ctrl/右键，进入后点行即切换选中
+  const [selectMode, setSelectMode] = useState(false)
   const { searchInput, setSearchInput, searchKeyword, commitSearch } =
     useToolbarSearch('keyword')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 })
@@ -195,19 +203,55 @@ export default function RecycleBinView() {
   }
 
   const handleSelectAll = (checked: boolean) => {
-    const pageIds = fileList.map((f) => f.id)
+    const ids = fileList.map((f) => f.id)
     setSelectedIds((prev) => {
       if (checked) {
-        return [...new Set([...prev, ...pageIds])]
+        return [...new Set([...prev, ...ids])]
       }
-      return prev.filter((id) => !pageIds.includes(id))
+      return prev.filter((id) => !ids.includes(id))
     })
+  }
+
+  /** 上一次普通点击的行号，Shift 范围选以它为起点（与文件列表同款交互） */
+  const lastClickedIndexRef = useRef<number | null>(null)
+
+  const handleRowClick = (
+    rowIndex: number,
+    id: string,
+    event: React.MouseEvent
+  ) => {
+    if (selectMode) {
+      setSelectedIds((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      )
+      lastClickedIndexRef.current = rowIndex
+      return
+    }
+    if (event.shiftKey && lastClickedIndexRef.current !== null) {
+      event.preventDefault()
+      const [from, to] = [lastClickedIndexRef.current, rowIndex].sort(
+        (a, b) => a - b
+      )
+      const rangeIds = fileList.slice(from, to + 1).map((f) => f.id)
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...rangeIds])))
+      return
+    }
+    if (event.ctrlKey || event.metaKey) {
+      setSelectedIds((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      )
+      lastClickedIndexRef.current = rowIndex
+      return
+    }
+    setSelectedIds([id])
+    lastClickedIndexRef.current = rowIndex
   }
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         clearSelection()
+        setSelectMode(false)
       }
     }
 
@@ -228,51 +272,11 @@ export default function RecycleBinView() {
   }, [searchKeyword, pagination.pageIndex, pagination.pageSize, fetchRecyclePage])
 
   const pageIds = fileList.map((f) => f.id)
-  const selectedOnPageCount = pageIds.filter((id) =>
-    selectedIds.includes(id)
-  ).length
   const isAllPageSelected =
-    pageIds.length > 0 && selectedOnPageCount === pageIds.length
-  const isSomePageSelected =
-    selectedOnPageCount > 0 && !isAllPageSelected
+    pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id))
 
   const columns = useMemo<ColumnDef<FileRecycleItem>[]>(
     () => [
-      {
-        id: 'select',
-        header: () => (
-          <Checkbox
-            checked={
-              isAllPageSelected
-                ? true
-                : isSomePageSelected
-                  ? 'indeterminate'
-                  : false
-            }
-            onCheckedChange={handleSelectAll}
-            aria-label={t('recycle.ariaSelectAll')}
-          />
-        ),
-        cell: ({ row }) => (
-          <Checkbox
-            checked={selectedIds.includes(row.original.id)}
-            onCheckedChange={(checked) => {
-              const id = row.original.id
-              setSelectedIds((prev) => {
-                if (checked) {
-                  return prev.includes(id) ? prev : [...prev, id]
-                }
-                return prev.filter((x) => x !== id)
-              })
-            }}
-            aria-label={t('recycle.ariaSelectRow', {
-              name: row.original.displayName,
-            })}
-          />
-        ),
-        enableSorting: false,
-        size: 48,
-      },
       {
         accessorKey: 'displayName',
         header: t('recycle.colName'),
@@ -310,18 +314,14 @@ export default function RecycleBinView() {
         accessorKey: 'deletedTime',
         header: t('recycle.colDeleted'),
         cell: ({ row }) => (
-          <span className='text-sm text-muted-foreground'>
-            {formatTime(row.original.deletedTime)}
+          <span className='text-sm tabular-nums whitespace-nowrap text-muted-foreground'>
+            {formatFileListDisplayTime(row.original.deletedTime)}
           </span>
         ),
       },
       {
         id: 'actions',
-        header: () => (
-          <span className='block w-full text-center'>
-            {t('recycle.colActions')}
-          </span>
-        ),
+        header: () => <span className='sr-only'>{t('recycle.colActions')}</span>,
         cell: ({ row }) => {
           const file = row.original
           return (
@@ -390,7 +390,6 @@ export default function RecycleBinView() {
       canOperateRecycle,
       canRestore,
       fileList,
-      selectedIds,
       openMenuId,
       t,
     ]
@@ -416,8 +415,9 @@ export default function RecycleBinView() {
 
   return (
     <div className='flex h-full flex-col'>
-      <div className='flex items-center gap-4 border-b px-6 py-4'>
-        <div className='min-w-0 flex-1'>
+      {/* 顶部工具栏：窄屏时标题独占一行，搜索与清空按钮同处第二行 */}
+      <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 py-3 sm:px-6 sm:py-4'>
+        <div className='w-full min-w-0 sm:w-auto sm:flex-1'>
           <FileBreadcrumb
             breadcrumbPath={[]}
             customTitle={t('recycle.title')}
@@ -425,30 +425,50 @@ export default function RecycleBinView() {
           />
         </div>
 
-        <Toolbar
-          searchKeyword={searchInput}
-          onSearchChange={setSearchInput}
-          onSearch={commitSearch}
-          onUpload={() => {}}
-          onCreateFolder={() => {}}
-          onRefresh={handleRefresh}
-          hideActions={true}
-        />
+        <div className='flex w-full items-center gap-2 sm:w-auto'>
+          <Toolbar
+            searchKeyword={searchInput}
+            onSearchChange={setSearchInput}
+            onSearch={commitSearch}
+            onUpload={() => {}}
+            onCreateFolder={() => {}}
+            onRefresh={handleRefresh}
+            hideActions={true}
+            selectMode={selectMode}
+            onToggleSelectMode={
+              fileList.length > 0 ? () => setSelectMode((v) => !v) : undefined
+            }
+          />
 
-        <Button
-          variant='destructive'
-          size='sm'
-          disabled={total === 0}
-          onClick={handleClearRecycle}
-          hidden={!canClear}
-        >
-          <Trash2 className='mr-2 h-4 w-4' />
-          {t('recycle.clearTrash')}
-        </Button>
+          <Button
+            variant='destructive'
+            size='sm'
+            className='shrink-0'
+            disabled={total === 0}
+            onClick={handleClearRecycle}
+            hidden={!canClear}
+          >
+            <Trash2 className='mr-2 h-4 w-4' />
+            {t('recycle.clearTrash')}
+          </Button>
+        </div>
       </div>
 
-      <div className='flex items-center justify-between border-b px-6 py-3'>
-        <div className='flex items-center gap-3'>
+      <div className='inset-divider flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2.5 sm:px-6 sm:py-3'>
+        <div className='flex items-center gap-2'>
+          {/* 与文件页一致：用文字按钮全选，选中态由行背景色表达 */}
+          {fileList.length > 0 && (
+            <Button
+              variant='ghost'
+              size='sm'
+              className='text-muted-foreground hover:text-foreground'
+              onClick={() => handleSelectAll(!isAllPageSelected)}
+            >
+              {isAllPageSelected
+                ? t('index.deselectAll')
+                : t('index.selectAll')}
+            </Button>
+          )}
           <span className='text-sm text-muted-foreground'>
             {selectedIds.length > 0
               ? t('recycle.selectedHint', { count: selectedIds.length })
@@ -457,7 +477,8 @@ export default function RecycleBinView() {
         </div>
       </div>
 
-      <div className='flex-1 overflow-hidden'>
+      {/* 顶部留白放这层：滚动容器内不留 pt，粘性表头才能一上来就贴住分隔线 */}
+      <div className='flex-1 overflow-hidden pt-3 sm:pt-6'>
         <div className='flex h-full min-h-0 flex-col'>
           {loading ? (
             <div className='flex h-full items-center justify-center'>
@@ -481,12 +502,18 @@ export default function RecycleBinView() {
             </div>
           ) : (
             <>
-              <div className='min-h-0 flex-1 overflow-auto px-6 pt-6'>
+              <div className='min-h-0 flex-1 overflow-auto px-3 pb-3 sm:px-6 sm:pb-6'>
                 <div className='rounded-md border'>
-                  <Table>
-                    <TableHeader>
+                  {/* 窄屏不压缩列宽，改为横向滚动保留全部列；
+                      containerClassName 必须清掉自带的 overflow-auto，否则它就成了粘性表头最近的滚动祖先 */}
+                  <Table
+                    className='min-w-[40rem]'
+                    containerClassName='overflow-visible'
+                  >
+                    {/* sticky 加在 th 而非 thead（Firefox 不支持 table-section 级 sticky），不画表头底线 */}
+                    <TableHeader className='[&_tr]:border-0 [&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-background'>
                       {table.getHeaderGroups().map((headerGroup) => (
-                        <TableRow key={headerGroup.id} className='bg-muted/50'>
+                        <TableRow key={headerGroup.id}>
                           {headerGroup.headers.map((header) => (
                             <TableHead
                               key={header.id}
@@ -508,32 +535,75 @@ export default function RecycleBinView() {
                     </TableHeader>
                     <TableBody>
                       {table.getRowModel().rows.length > 0 ? (
-                        table.getRowModel().rows.map((row) => (
-                          <TableRow
-                            key={row.id}
-                            className={cn(
-                              'group transition-colors',
-                              selectedIds.includes(row.original.id) &&
-                                'bg-primary/5'
-                            )}
-                          >
-                            {row.getVisibleCells().map((cell) => (
-                              <TableCell
-                                key={cell.id}
-                                onClick={
-                                  cell.column.id === 'select' ||
-                                  cell.column.id === 'actions'
-                                    ? (e) => e.stopPropagation()
-                                    : undefined
+                        table.getRowModel().rows.map((row, rowIndex) => (
+                          <ContextMenu key={row.id}>
+                            <ContextMenuTrigger asChild>
+                              <TableRow
+                                className={cn(
+                                  'group border-b-0 transition-colors',
+                                  'hover:bg-primary/[0.06]',
+                                  selectedIds.includes(row.original.id) &&
+                                    'bg-primary/[0.08]'
+                                )}
+                                onClick={(e) =>
+                                  handleRowClick(rowIndex, row.original.id, e)
                                 }
                               >
-                                {flexRender(
-                                  cell.column.columnDef.cell,
-                                  cell.getContext()
-                                )}
-                              </TableCell>
-                            ))}
-                          </TableRow>
+                                {row.getVisibleCells().map((cell) => (
+                                  <TableCell
+                                    key={cell.id}
+                                    className={cn(
+                                      // 操作列只在触屏出现：鼠标端靠右键，与文件页一致
+                                      cell.column.id === 'actions' &&
+                                        'hoverable:hidden'
+                                    )}
+                                    onClick={
+                                      cell.column.id === 'actions'
+                                        ? (e) => e.stopPropagation()
+                                        : undefined
+                                    }
+                                  >
+                                    {flexRender(
+                                      cell.column.columnDef.cell,
+                                      cell.getContext()
+                                    )}
+                                  </TableCell>
+                                ))}
+                              </TableRow>
+                            </ContextMenuTrigger>
+                            <ContextMenuContent>
+                              {canRestore && (
+                                <ContextMenuItem
+                                  onClick={() =>
+                                    handleRestoreSingle(
+                                      row.original.id,
+                                      row.original.displayName
+                                    )
+                                  }
+                                >
+                                  <Undo2 className='size-4' />
+                                  {t('recycle.menuRestore')}
+                                </ContextMenuItem>
+                              )}
+                              {canRestore && canDelete && (
+                                <ContextMenuSeparator />
+                              )}
+                              {canDelete && (
+                                <ContextMenuItem
+                                  className='text-destructive focus:text-destructive'
+                                  onClick={() =>
+                                    handleDeleteSingle(
+                                      row.original.id,
+                                      row.original.displayName
+                                    )
+                                  }
+                                >
+                                  <Trash2 className='size-4' />
+                                  {t('recycle.menuDeleteForever')}
+                                </ContextMenuItem>
+                              )}
+                            </ContextMenuContent>
+                          </ContextMenu>
                         ))
                       ) : (
                         <TableRow>
@@ -549,7 +619,8 @@ export default function RecycleBinView() {
                   </Table>
                 </div>
               </div>
-              <div className='shrink-0 border-t px-6 py-3'>
+              {/* 分页组件靠名为 content 的容器查询做窄屏折叠，此处必须提供容器 */}
+              <div className='@container/content shrink-0 border-t px-3 py-3 sm:px-6'>
                 <DataTablePagination table={table} />
               </div>
             </>

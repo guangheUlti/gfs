@@ -34,11 +34,6 @@ public class StorageConfig {
     private String platformIdentifier;
 
     /**
-     * 所属工作空间ID
-     */
-    private String workspaceId;
-
-    /**
      * 配置属性（JSON映射）
      * 不同平台的配置属性不同，通过 Map 灵活存储
      */
@@ -185,10 +180,6 @@ public class StorageConfig {
             throw new StorageOperationException("平台标识符不能为空");
         }
 
-        if (!platformIdentifier.equals(StorageUtils.LOCAL_PLATFORM_IDENTIFIER) && (workspaceId == null || workspaceId.isBlank())) {
-            throw new StorageOperationException("工作空间ID不能为空");
-        }
-
         if (properties == null || properties.isEmpty()) {
             throw new StorageOperationException(
                     String.format("配置属性不能为空: configId=%s, platform=%s",
@@ -203,10 +194,9 @@ public class StorageConfig {
      * @return 配置摘要字符串
      */
     public String getSummary() {
-        return String.format("[configId=%s, platform=%s, workspaceId=%s, isLocal=%s, enabled=%s]",
+        return String.format("[configId=%s, platform=%s, isLocal=%s, enabled=%s]",
                 configId,
                 platformIdentifier,
-                workspaceId,
                 isLocal(),
                 enabled);
     }

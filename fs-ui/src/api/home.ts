@@ -32,3 +32,22 @@ export function getHomeInfo(params?: {
 }) {
   return request.get<HomeInfo>('/apis/home/info', { params })
 }
+
+/** 存储容量轮询间隔（毫秒）：磁盘容量变化很慢，比首页概览更宽松 */
+export const STORAGE_CAPACITY_REFETCH_INTERVAL_MS = 120_000
+
+/** 对应 StorageCapacityVO：总量 = 存储底座剩余可写空间 + 本系统已存文件占用 */
+export interface StorageCapacity {
+  /** 已使用字节数，即本系统已存文件占用 */
+  usedBytes: number | null
+  /** 剩余可写字节数；容量不可知时为 null */
+  availableBytes: number | null
+  /** 总字节数（剩余可写 + 已使用）；容量不可知时为 null */
+  totalBytes: number | null
+  /** 对象存储无本地磁盘概念时为 false，此时只展示已使用量 */
+  capacityKnown: boolean | null
+}
+
+export function getStorageCapacity() {
+  return request.get<StorageCapacity>('/apis/home/storage/capacity')
+}

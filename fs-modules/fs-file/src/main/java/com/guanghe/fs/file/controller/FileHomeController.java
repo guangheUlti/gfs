@@ -2,6 +2,7 @@ package com.guanghe.fs.file.controller;
 
 import com.guanghe.fs.file.domain.qry.FileHomeUsedBytesQry;
 import com.guanghe.fs.file.domain.vo.FileHomeVO;
+import com.guanghe.fs.file.domain.vo.StorageCapacityVO;
 import com.guanghe.fs.file.service.FileHomeService;
 import com.guanghe.fs.framework.common.domain.Result;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,5 +29,13 @@ public class FileHomeController {
     public Result<FileHomeVO> getHomes(FileHomeUsedBytesQry qry) {
         FileHomeVO homeVO = fileHomeService.getFileHomes(qry);
         return Result.ok(homeVO);
+    }
+
+    @GetMapping("/storage/capacity")
+    @Operation(summary = "查询存储容量",
+            description = "已使用量与总容量（总量 = 存储底座剩余可写空间 + 已存文件占用）。"
+                    + "对象存储无本地磁盘概念时 capacityKnown 为 false、totalBytes 为 null，前端只展示已使用量")
+    public Result<StorageCapacityVO> getStorageCapacity() {
+        return Result.ok(fileHomeService.getStorageCapacity());
     }
 }

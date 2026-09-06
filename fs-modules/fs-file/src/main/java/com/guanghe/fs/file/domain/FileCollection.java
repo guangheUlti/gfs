@@ -21,8 +21,6 @@ public class FileCollection extends BaseEntity {
 
     private String userId;
 
-    private String workspaceId;
-
     private String targetFolderId;
 
     private String storagePlatformSettingId;

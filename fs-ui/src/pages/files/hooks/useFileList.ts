@@ -11,7 +11,7 @@ import type {
   FileType,
   BreadcrumbItem,
 } from '@/types/file'
-import { useSearchParams, useNavigate, useParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { getFileList, getFolderPath } from '@/api/file'
 import { useToolbarSearch } from '@/hooks/useToolbarSearch'
 
@@ -33,7 +33,6 @@ function mergeFileRecords(prev: FileItem[], incoming: FileItem[]): FileItem[] {
 export function useFileList() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { slug } = useParams<{ slug: string }>()
 
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -240,9 +239,9 @@ export function useFileList() {
       const params = new URLSearchParams(searchParams)
       params.set('parentId', folderId)
       params.set('viewMode', viewModeParam)
-      navigate(`/w/${slug}/files?${params.toString()}`)
+      navigate(`/files?${params.toString()}`)
     },
-    [searchParams, navigate, slug]
+    [searchParams, navigate]
   )
 
   const navigateToFolder = useCallback(
@@ -253,9 +252,9 @@ export function useFileList() {
       } else {
         params.set('parentId', folderId)
       }
-      navigate(`/w/${slug}/files?${params.toString()}`)
+      navigate(`/files?${params.toString()}`)
     },
-    [searchParams, navigate, slug]
+    [searchParams, navigate]
   )
 
   return {

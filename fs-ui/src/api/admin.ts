@@ -2,8 +2,7 @@ import { request } from './request'
 import type { OnlineUser, PendingUser } from '@/types/user'
 
 /**
- * 系统级管理 API（跨工作空间的全局操作，仅系统管理员可用）
- * 工作空间级的成员管理和邀请已迁移到 workspaceApi
+ * 系统级管理 API（全局操作，仅系统管理员可用）
  */
 export const adminApi = {
   /** 待审核用户列表（新注册需管理员审核） */

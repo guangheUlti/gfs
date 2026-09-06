@@ -38,7 +38,8 @@ export function ShareFileGridView({
   }
 
   return (
-    <div className='p-4'>
+    // 外层滚动区已有内边距，窄屏不再叠加，给卡片让出宽度
+    <div className='p-0 sm:p-4'>
       <div className='grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-4'>
         {fileList.map((file) => (
           <div
@@ -53,7 +54,7 @@ export function ShareFileGridView({
             {/* 更多操作 */}
             {!file.isDir &&
               (hasPreviewPermission() || hasDownloadPermission()) && (
-                <div className='absolute top-2 right-2 z-10 opacity-0 transition-opacity group-hover:opacity-100'>
+                <div className='absolute top-2 right-2 z-10 opacity-100 transition-opacity hoverable:opacity-0 hoverable:group-hover:opacity-100'>
                   <DropdownMenu modal={false}>
                     <DropdownMenuTrigger
                       asChild

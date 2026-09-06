@@ -1,35 +1,18 @@
 import { type ChangeEvent, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import {
-  RefreshCw,
-  Plus,
-  ArrowUpAZ,
-  ArrowDownAZ,
-  Search,
-} from 'lucide-react'
+import { RefreshCw, Plus, Search } from 'lucide-react'
 import { getUserStorageSettings } from '@/api/storage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { RequirePermission } from '@/components/require-permission'
-import { SidebarTrigger } from '@/components/ui/sidebar'
 import { AddStorageModal } from './components/AddStorageModal'
 import { StorageSettingCard } from './components/StorageSettingCard'
 
 export default function StoragePage() {
   const { t } = useTranslation('storage')
   const { t: tc } = useTranslation('common')
-  const { slug } = useParams<{ slug: string }>()
   const [searchTerm, setSearchTerm] = useState('')
-  const [sort, setSort] = useState<'asc' | 'desc'>('asc')
   const [addModalVisible, setAddModalVisible] = useState(false)
 
   const {
@@ -37,17 +20,15 @@ export default function StoragePage() {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ['userStorageSettings', slug],
+    queryKey: ['userStorageSettings'],
     queryFn: getUserStorageSettings,
     staleTime: 30_000,
   })
 
-  // 过滤和排序配置
+  // 过滤配置，按平台名称升序保持列表稳定
   const filteredSettings = userSettings
     .sort((a, b) =>
-      sort === 'asc'
-        ? a.storagePlatform.name.localeCompare(b.storagePlatform.name)
-        : b.storagePlatform.name.localeCompare(a.storagePlatform.name)
+      a.storagePlatform.name.localeCompare(b.storagePlatform.name)
     )
     .filter((s) => {
       if (!searchTerm) return true
@@ -63,39 +44,43 @@ export default function StoragePage() {
     setSearchTerm(e.target.value)
   }
 
-  const handleSortChange = (value: 'asc' | 'desc') => {
-    setSort(value)
-  }
-
   return (
     <div className='flex h-full flex-col'>
-      {/* 顶部工具栏 */}
-      <div className='flex items-center gap-4 border-b px-6 py-4'>
-        <SidebarTrigger className='md:hidden' />
-
+      {/* 顶部工具栏：窄屏时标题独占一行，搜索与按钮同处第二行 */}
+      <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 py-3 sm:px-6 sm:py-4'>
         {/* 标题 */}
-        <div className='min-w-0 flex-1'>
+        <div className='w-full min-w-0 sm:w-auto sm:flex-1'>
           <h2 className='text-xl font-semibold tracking-tight'>
             {t('page.title')}
           </h2>
         </div>
 
         {/* 右侧工具栏 */}
-        <div className='flex items-center gap-2'>
-          <div className='relative'>
+        <div className='flex w-full items-center gap-2 sm:w-auto'>
+          <div className='relative min-w-0 flex-1 sm:w-[250px] sm:flex-none'>
             <Search className='absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
             <Input
               placeholder={t('page.searchPlaceholder')}
-              className='h-9 w-[250px] pl-10'
+              className='h-9 w-full pl-10'
               value={searchTerm}
               onChange={handleSearch}
             />
           </div>
-          <Button variant='outline' size='sm' onClick={() => refetch()}>
+          <Button
+            variant='outline'
+            size='icon'
+            className='shrink-0'
+            onClick={() => refetch()}
+            aria-label={tc('refresh')}
+          >
             <RefreshCw className='h-4 w-4' />
           </Button>
           <RequirePermission code='storage:manage'>
-            <Button size='sm' onClick={() => setAddModalVisible(true)}>
+            <Button
+              size='sm'
+              className='shrink-0'
+              onClick={() => setAddModalVisible(true)}
+            >
               <Plus className='mr-1.5 h-4 w-4' />
               {t('page.add')}
             </Button>
@@ -104,14 +89,14 @@ export default function StoragePage() {
       </div>
 
       {/* 次级工具栏：统计信息 */}
-      <div className='flex items-center justify-between border-b px-6 py-3'>
+      <div className='inset-divider flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 sm:px-6 sm:py-3'>
         <span className='text-sm text-muted-foreground'>
           {tc('listTotalItems', { count: filteredSettings.length })}
         </span>
       </div>
 
       {/* 主内容区域 */}
-      <div className='flex-1 overflow-auto p-6'>
+      <div className='flex-1 overflow-auto p-3 sm:p-6'>
         {isLoading ? (
           <div className='flex h-64 items-center justify-center'>
             <p className='text-muted-foreground'>{tc('loading')}</p>
@@ -131,7 +116,7 @@ export default function StoragePage() {
             <p className='text-muted-foreground'>{t('page.noMatch')}</p>
           </div>
         ) : (
-          <ul className='faded-bottom no-scrollbar grid grid-cols-2 gap-4 overflow-auto pb-16 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'>
+          <ul className='faded-bottom no-scrollbar grid grid-cols-1 gap-4 overflow-auto pb-16 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'>
             {filteredSettings.map((setting) => (
               <StorageSettingCard
                 key={setting.id}

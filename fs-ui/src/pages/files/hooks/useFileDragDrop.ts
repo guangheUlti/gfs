@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { hasExternalFiles } from '@/utils/data-transfer'
 import type { FileItem } from '@/types/file'
 
 export interface DragDropState {
@@ -63,15 +64,16 @@ export function useFileDragDrop(
           align-items: center;
           gap: 12px;
           padding: 12px 16px;
-          background: hsl(var(--accent));
+          background: var(--accent);
+          color: var(--accent-foreground);
           border-radius: 8px;
           opacity: 0.95;
           pointer-events: none;
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         `
 
-        // 只提取图标和文件名
-        const nameCell = clone.querySelectorAll('td')[1] // 第二列是文件名
+        // 只提取图标和文件名。按属性而非列序号定位，避免以后增删列时抓错单元格
+        const nameCell = clone.querySelector('[data-file-name-cell]')
         if (nameCell) {
           const iconElement = nameCell.querySelector('div > div:first-child')
           const nameElement = nameCell.querySelector('span')
@@ -85,7 +87,7 @@ export function useFileDragDrop(
             const clonedName = nameElement.cloneNode(true) as HTMLElement
             clonedName.style.cssText = `
               font-size: 14px;
-              color: hsl(var(--foreground));
+              color: var(--accent-foreground);
               white-space: nowrap;
             `
             wrapper.appendChild(clonedName)
@@ -210,6 +212,9 @@ export function useFileDragDrop(
    */
   const handleDragEnter = useCallback(
     (e: React.DragEvent, targetFolder: FileItem) => {
+      // 系统文件拖入（上传）由容器级 handler 统一处理：不拦截事件让它冒泡，页内移动逻辑不掺和
+      if (hasExternalFiles(e)) return
+
       e.preventDefault()
       e.stopPropagation()
 
@@ -234,6 +239,8 @@ export function useFileDragDrop(
    */
   const handleDragOver = useCallback(
     (e: React.DragEvent, targetFolder: FileItem) => {
+      if (hasExternalFiles(e)) return
+
       e.preventDefault()
       e.stopPropagation()
 
@@ -250,6 +257,8 @@ export function useFileDragDrop(
    */
   const handleDragLeave = useCallback(
     (e: React.DragEvent, targetFolder: FileItem) => {
+      if (hasExternalFiles(e)) return
+
       e.preventDefault()
       e.stopPropagation()
 
@@ -281,6 +290,8 @@ export function useFileDragDrop(
    */
   const handleDrop = useCallback(
     async (e: React.DragEvent, targetFolder: FileItem) => {
+      if (hasExternalFiles(e)) return
+
       e.preventDefault()
       e.stopPropagation()
 

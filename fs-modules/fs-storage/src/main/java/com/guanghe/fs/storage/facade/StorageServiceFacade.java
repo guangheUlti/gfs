@@ -1,7 +1,6 @@
 package com.guanghe.fs.storage.facade;
 
 import cn.hutool.core.util.StrUtil;
-import com.guanghe.fs.framework.common.context.WorkspaceContext;
 import com.guanghe.fs.framework.common.exception.BusinessException;
 import com.guanghe.fs.framework.common.exception.StorageConfigException;
 import com.guanghe.fs.framework.common.utils.I18nUtils;
@@ -134,10 +133,6 @@ public class StorageServiceFacade {
         if (settings.getEnabled() == 0) {
             throw new BusinessException(I18nUtils.getMessage("storage.config.disabled", new Object[]{configId}));
         }
-        String workspaceId = WorkspaceContext.getWorkspaceId();
-        if (workspaceId != null && !workspaceId.equals(settings.getWorkspaceId())) {
-            throw new BusinessException(I18nUtils.getMessage("storage.config.no.permission"));
-        }
 
         // 构建配置对象
         return buildStorageConfig(settings);
@@ -182,7 +177,6 @@ public class StorageServiceFacade {
         return StorageConfig.builder()
                 .configId(setting.getId())
                 .platformIdentifier(setting.getPlatformIdentifier())
-                .workspaceId(setting.getWorkspaceId())
                 .properties(properties)
                 .enabled(setting.getEnabled() != null && setting.getEnabled() == 1)
                 .remark(setting.getRemark())

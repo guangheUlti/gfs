@@ -2,8 +2,8 @@
   "sidebar": {
     "userPlaceholder": "User",
     "groups": {
-      "main": "Main",
-      "common": "Common"
+      "files": "Files",
+      "system": "System"
     },
     "nav": {
       "allFiles": "Files",
@@ -12,33 +12,17 @@
       "favorites": "Favorites",
       "recents": "History",
       "shares": "Shares",
-      "recycle": "Trash"
+      "recycle": "Trash",
+      "settings": "Settings"
     },
-    "storageUsed": "Storage used"
-  },
-  "workspaceSwitcher": {
-    "switchToast": "Switched to \"{{name}}\"",
-    "switchFailed": "Failed to switch workspace",
-    "selectWorkspace": "Select workspace",
-    "memberCount": "{{count}} members",
-    "settings": "Settings",
-    "inviteMembers": "Invite members",
-    "sectionTitle": "Workspaces",
-    "current": "Current",
-    "createWorkspace": "Create workspace"
+    "storage": {
+      "title": "Storage",
+      "usedOfTotal": "{{used}} used of {{total}}",
+      "usedOnly": "{{used}} used"
+    }
   },
   "navUser": {
-    "accountSettings": "Account settings",
     "logout": "Log out"
-  },
-  "breadcrumb": {
-    "home": "Home",
-    "allFiles": "All files",
-    "transfer": "Transfer",
-    "storage": "Storage",
-    "settings": "Settings",
-    "appearance": "Appearance",
-    "transferSettings": "Transfer settings"
   },
   "header": {
     "lightMode": "Light mode",

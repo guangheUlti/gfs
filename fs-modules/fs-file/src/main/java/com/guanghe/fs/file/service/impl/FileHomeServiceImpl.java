@@ -8,12 +8,15 @@ import com.guanghe.fs.file.domain.qry.FileQry;
 import com.guanghe.fs.file.domain.vo.FileHomeUsedBytesVO;
 import com.guanghe.fs.file.domain.vo.FileHomeVO;
 import com.guanghe.fs.file.domain.vo.FileVO;
+import com.guanghe.fs.file.domain.vo.StorageCapacityVO;
 import com.guanghe.fs.file.service.FileHomeService;
 import com.guanghe.fs.file.service.FileInfoService;
-import com.guanghe.fs.framework.common.context.WorkspaceContext;
 import com.guanghe.fs.framework.common.domain.PageResult;
+import com.guanghe.fs.storage.facade.StorageServiceFacade;
+import com.guanghe.fs.storage.plugin.core.IStorageOperationService;
 import com.guanghe.fs.storage.plugin.core.context.StoragePlatformContextHolder;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -29,11 +32,14 @@ import java.util.stream.Collectors;
 
 import static com.guanghe.fs.file.domain.table.FileInfoTableDef.FILE_INFO;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FileHomeServiceImpl implements FileHomeService {
 
     private final FileInfoService fileInfoService;
+
+    private final StorageServiceFacade storageServiceFacade;
 
     @Override
     public FileHomeVO getFileHomes(FileHomeUsedBytesQry qry) {
@@ -53,8 +59,33 @@ public class FileHomeServiceImpl implements FileHomeService {
         return fileHomeVO;
     }
 
+    @Override
+    public StorageCapacityVO getStorageCapacity() {
+        Long used = fileInfoService.calculateUsedStorage();
+        StorageCapacityVO vo = new StorageCapacityVO();
+        vo.setUsedBytes(used == null ? 0L : used);
+
+        Long available = null;
+        try {
+            IStorageOperationService storageService = storageServiceFacade.getCurrentStorageService();
+            available = storageService == null ? null : storageService.getAvailableSpace();
+        } catch (Exception e) {
+            // 取不到容量不能影响页面渲染，降级为只展示已使用量
+            log.warn("获取存储剩余容量失败，按容量不可知处理: {}", e.getMessage());
+        }
+
+        if (available == null) {
+            vo.setCapacityKnown(false);
+            return vo;
+        }
+        vo.setCapacityKnown(true);
+        vo.setAvailableBytes(available);
+        // 总量 = 剩余可写空间 + 已存文件占用
+        vo.setTotalBytes(available + vo.getUsedBytes());
+        return vo;
+    }
+
     public List<FileHomeUsedBytesVO> getFileHomeUsedBytes(FileHomeUsedBytesQry qry) {
-        String workspaceId = WorkspaceContext.getWorkspaceId();
         String storageId = StoragePlatformContextHolder.getConfigId();
 
         LocalDateTime now = LocalDateTime.now();
@@ -63,11 +94,15 @@ public class FileHomeServiceImpl implements FileHomeService {
 
         QueryWrapper queryWrapper = QueryWrapper.create()
                 .select(FILE_INFO.UPLOAD_TIME, FILE_INFO.SIZE)
-                .where(FILE_INFO.WORKSPACE_ID.eq(workspaceId))
-                .and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.eq(storageId))
-                .and(FILE_INFO.IS_DIR.eq(false))
+                .where(FILE_INFO.IS_DIR.eq(false))
                 .and(FILE_INFO.IS_DELETED.eq(false))
                 .and(FILE_INFO.UPLOAD_TIME.between(startTime, endTime));
+        // 本地存储的 configId 为 null，需用 IS NULL 匹配
+        if (storageId == null || storageId.isBlank()) {
+            queryWrapper.and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.isNull());
+        } else {
+            queryWrapper.and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.eq(storageId));
+        }
 
         List<FileInfo> files = fileInfoService.list(queryWrapper);
         if (CollUtil.isEmpty(files)) {

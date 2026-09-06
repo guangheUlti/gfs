@@ -41,7 +41,8 @@ export function ShareFileListView({
 
   return (
     <div className='flex-1 overflow-auto'>
-      <Table>
+      {/* 窄屏下不压缩列宽，改为表格内部横向滚动，保留全部列 */}
+      <Table className='min-w-[36rem]'>
         <TableHeader>
           <TableRow className='bg-muted/50'>
             <TableHead className='font-medium text-muted-foreground'>
@@ -89,7 +90,7 @@ export function ShareFileListView({
                 {formatFileTime(file.updateTime)}
               </TableCell>
               <TableCell onClick={(e) => e.stopPropagation()}>
-                <div className='flex items-center justify-center gap-1 opacity-0 transition-opacity group-hover:opacity-100'>
+                <div className='flex items-center justify-center gap-1 opacity-100 transition-opacity hoverable:opacity-0 hoverable:group-hover:opacity-100'>
                   {!file.isDir && hasPreviewPermission() && (
                     <Button
                       variant='ghost'

@@ -1,4 +1,4 @@
-import { useState, useEffect, type RefObject } from 'react'
+import { useState, useEffect, useRef, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { FileItem, SortOrder } from '@/types/file'
 import {
@@ -9,6 +9,7 @@ import {
   Trash2,
   Edit,
   Eye,
+  FilePen,
   Info,
   Loader2,
 } from 'lucide-react'
@@ -16,7 +17,6 @@ import { cn } from '@/lib/utils'
 import { formatFileListDisplayTime, formatFileSize } from '@/utils/format'
 import { usePermission } from '@/hooks/use-permission'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -69,6 +69,7 @@ interface FileListViewProps {
   onMoveFiles: (fileIds: string[], targetDirId: string) => Promise<void>
   onFavorite: (file: FileItem | FileItem[]) => void
   onPreview: (file: FileItem) => void
+  onEdit?: (file: FileItem) => void
   onDetail: (file: FileItem) => void
   onDragStateChange?: (
     dropTargetName: string | null,
@@ -77,6 +78,8 @@ interface FileListViewProps {
   onBatchShare?: (files: FileItem[]) => void
   onBatchMove?: (files: FileItem[]) => void
   onBatchDelete?: (files: FileItem[]) => void
+  /** 触屏多选模式：点击即切换选中，无需 Ctrl 键 */
+  selectMode?: boolean
   hasMore?: boolean
   loadingMore?: boolean
   onLoadMore?: () => void
@@ -88,7 +91,6 @@ export function FileListView({
   selectedKeys,
   onSelectionChange,
   onFileClick,
-  onSortChange,
   onDownload,
   onShare,
   onDelete,
@@ -97,11 +99,13 @@ export function FileListView({
   onMoveFiles,
   onFavorite,
   onPreview,
+  onEdit,
   onDetail,
   onDragStateChange,
   onBatchShare,
   onBatchMove,
   onBatchDelete,
+  selectMode = false,
   hasMore = false,
   loadingMore = false,
   onLoadMore,
@@ -136,41 +140,50 @@ export function FileListView({
     onDragStateChange,
   ])
 
-  const handleSelectChange = (fileId: string, checked: boolean) => {
-    if (checked) {
-      onSelectionChange([...selectedKeys, fileId])
-    } else {
-      onSelectionChange(selectedKeys.filter((id) => id !== fileId))
-    }
+  /** 上一次普通点击的行号，Shift 范围选以它为起点 */
+  const lastClickedIndexRef = useRef<number | null>(null)
+
+  const toggleOne = (id: string) => {
+    onSelectionChange(
+      selectedKeys.includes(id)
+        ? selectedKeys.filter((k) => k !== id)
+        : [...selectedKeys, id]
+    )
   }
 
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      onSelectionChange(fileList.map((f) => f.id))
-    } else {
-      onSelectionChange([])
-    }
-  }
-
-  const handleRowClick = (file: FileItem, event: React.MouseEvent) => {
-    const isMultiSelect = event.ctrlKey || event.metaKey
-    const newSelectedKeys = [...selectedKeys]
-    const isCurrentlySelected = selectedKeys.includes(file.id)
-
-    if (isMultiSelect) {
-      // CTRL + Click: 切换当前项状态
-      if (isCurrentlySelected) {
-        const index = newSelectedKeys.indexOf(file.id)
-        if (index > -1) newSelectedKeys.splice(index, 1)
-      } else {
-        newSelectedKeys.push(file.id)
-      }
-    } else {
-      // 普通左键点击: 仅选中当前项
-      newSelectedKeys.splice(0, newSelectedKeys.length, file.id)
+  const handleRowClick = (
+    file: FileItem,
+    event: React.MouseEvent,
+    index: number
+  ) => {
+    // 触屏多选模式：点一下就是选中/取消选中，选中态由行背景色表示
+    if (selectMode) {
+      toggleOne(file.id)
+      lastClickedIndexRef.current = index
+      return
     }
 
-    onSelectionChange(newSelectedKeys)
+    // Shift + 点击：从上次点击的位置到当前位置做范围选
+    if (event.shiftKey && lastClickedIndexRef.current !== null) {
+      event.preventDefault()
+      const [from, to] = [lastClickedIndexRef.current, index].sort(
+        (a, b) => a - b
+      )
+      const rangeIds = fileList.slice(from, to + 1).map((f) => f.id)
+      onSelectionChange(Array.from(new Set([...selectedKeys, ...rangeIds])))
+      return
+    }
+
+    // Ctrl/Cmd + 点击：切换当前项状态
+    if (event.ctrlKey || event.metaKey) {
+      toggleOne(file.id)
+      lastClickedIndexRef.current = index
+      return
+    }
+
+    // 普通左键点击：仅选中当前项
+    onSelectionChange([file.id])
+    lastClickedIndexRef.current = index
   }
 
   const handleDoubleClick = (file: FileItem) => {
@@ -181,41 +194,47 @@ export function FileListView({
     }
   }
 
-  const isAllSelected =
-    fileList.length > 0 && selectedKeys.length === fileList.length
-
   const showNoMoreHint =
     !hasMore && !loadingMore && fileList.length > 0
 
   return (
     <div className='min-w-0'>
-      <div className='overflow-hidden rounded-xl bg-background'>
-        <Table>
-          <TableHeader className='[&_tr]:border-0'>
+      {/* 不用 overflow-hidden：那会另建一个剪裁容器，把 sticky 表头锁死在本块内。背面背景同色，圆角本来就看不出来 */}
+      <div className='rounded-xl bg-background'>
+        {/*
+          三列弹性铺满：table-fixed 让列宽完全由表头决定，
+          大小/时间列用 em 定宽（随表头响应式字号 text-xs→text-sm 同步缩放，
+          比例关系在手机/电脑上一致），名称列吃掉剩余宽度铺满整行，
+          任何视口下都不产生表格内部横向滚动。
+        */}
+        {/* containerClassName 必须清掉自带的 overflow-auto，否则它就成了表头最近的滚动祖先 */}
+        <Table className='table-fixed' containerClassName='overflow-visible'>
+          {/*
+            粘性表头：sticky 加在 th 而不是 thead，因为 Firefox 不支持 table-section 级 sticky。
+            最近的滚动祖先是页面里那个 h-full overflow-auto 容器，所以只有文件行在滚动。
+            不画表头底线，靠 th 自身不透明背景在滚动时遮住下方行完成分层。
+          */}
+          <TableHeader className='[&_tr]:border-0 [&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-background'>
             <TableRow className='border-0 hover:bg-transparent'>
-              <TableHead className='text-muted-foreground h-[48px] w-12 px-3'>
-                <Checkbox
-                  checked={isAllSelected}
-                  onCheckedChange={handleSelectAll}
-                  aria-label={t('list.ariaSelectAll')}
-                />
-              </TableHead>
-              <TableHead className='text-muted-foreground h-[48px] px-4 text-left text-sm font-medium'>
+              <TableHead className='text-muted-foreground h-[48px] px-2 text-left text-xs font-medium sm:px-4 sm:text-sm'>
                 {t('table.colName')}
               </TableHead>
-              <TableHead className='text-muted-foreground h-[48px] w-[7.5rem] px-4 text-left text-sm font-medium'>
+              {/* em 宽度按最长内容 1023.99 GB 设计，随响应式字号缩放 */}
+              <TableHead className='text-muted-foreground h-[48px] w-[9em] px-2 text-left text-xs font-medium sm:px-4 sm:text-sm'>
                 {t('table.colSize')}
               </TableHead>
-              <TableHead className='text-muted-foreground h-[48px] min-w-[11rem] px-4 text-left text-sm font-medium'>
+              {/* 恒定 16 字符 yyyy-MM-dd HH:mm，9.3em 文本 + 列内边距 */}
+              <TableHead className='text-muted-foreground h-[48px] w-[11.5em] px-2 text-left text-xs font-medium sm:px-4 sm:text-sm'>
                 {t('table.colModified')}
               </TableHead>
-              <TableHead className='text-muted-foreground h-[48px] w-14 px-2 text-right text-sm font-medium'>
+              {/* 行尾操作列只在触屏设备上出现：鼠标端靠右键菜单 */}
+              <TableHead className='text-muted-foreground h-[48px] w-10 px-1 text-right text-xs font-medium hoverable:hidden sm:text-sm'>
                 <span className='sr-only'>{t('list.ariaMore')}</span>
               </TableHead>
             </TableRow>
           </TableHeader>
         <TableBody>
-          {fileList.map((file) => {
+          {fileList.map((file, index) => {
             const isSelected = selectedKeys.includes(file.id)
             const isDragging = dragState.draggedItems.some(
               (f) => f.id === file.id
@@ -249,21 +268,13 @@ export function FileListView({
                     onDragOver={(e) => canWrite && handleDragOver(e, file)}
                     onDragLeave={(e) => canWrite && handleDragLeave(e, file)}
                     onDrop={(e) => canWrite && handleDrop(e, file)}
-                    onClick={(e) => handleRowClick(file, e)}
+                    onClick={(e) => handleRowClick(file, e, index)}
                     onDoubleClick={() => handleDoubleClick(file)}
                   >
                     <TableCell
-                      className='min-h-[48px] align-middle px-3 py-1.5'
-                      onClick={(e) => e.stopPropagation()}
+                      data-file-name-cell
+                      className='min-h-[48px] align-middle px-2 py-1.5 sm:px-4'
                     >
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={(checked) =>
-                          handleSelectChange(file.id, checked as boolean)
-                        }
-                      />
-                    </TableCell>
-                    <TableCell className='min-h-[48px] align-middle px-4 py-1.5'>
                       <div className='flex min-w-0 items-center gap-2'>
                         <div className='flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/40'>
                           {file.thumbnailUrl ? (
@@ -295,7 +306,7 @@ export function FileListView({
                     </TableCell>
                     <TableCell
                       className={cn(
-                        'min-h-[48px] align-middle px-4 py-1.5 text-sm tabular-nums text-muted-foreground transition-colors',
+                        'min-h-[48px] align-middle px-2 py-1.5 text-xs tabular-nums whitespace-nowrap text-muted-foreground transition-colors sm:px-4 sm:text-sm',
                         'group-hover:text-primary'
                       )}
                     >
@@ -303,14 +314,14 @@ export function FileListView({
                     </TableCell>
                     <TableCell
                       className={cn(
-                        'min-h-[48px] align-middle px-4 py-1.5 text-sm tabular-nums text-muted-foreground transition-colors',
+                        'min-h-[48px] align-middle px-2 py-1.5 text-xs tabular-nums whitespace-nowrap text-muted-foreground transition-colors sm:px-4 sm:text-sm',
                         'group-hover:text-primary'
                       )}
                     >
                       {formatFileListDisplayTime(file.updateTime)}
                     </TableCell>
                     <TableCell
-                      className='min-h-[48px] align-middle px-2 py-1.5 text-right'
+                      className='min-h-[48px] align-middle px-1 py-1.5 text-right hoverable:hidden'
                       onClick={(e) => e.stopPropagation()}
                     >
                       <DropdownMenu
@@ -345,6 +356,17 @@ export function FileListView({
                             >
                               <Eye className='size-4' />
                               {t('rowMenu.preview')}
+                            </DropdownMenuItem>
+                          )}
+                          {!file.isDir && canWrite && onEdit && file.suffix?.toLowerCase() === 'txt' && (
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onEdit(file)
+                              }}
+                            >
+                              <FilePen className='size-4' />
+                              {t('rowMenu.edit')}
                             </DropdownMenuItem>
                           )}
                           {canShare && (
@@ -522,6 +544,17 @@ export function FileListView({
                             {t('rowMenu.preview')}
                           </ContextMenuItem>
                         </>
+                      )}
+                      {!file.isDir && canWrite && onEdit && file.suffix?.toLowerCase() === 'txt' && (
+                        <ContextMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onEdit(file)
+                          }}
+                        >
+                          <FilePen className='mr-2 h-4 w-4' />
+                          {t('rowMenu.edit')}
+                        </ContextMenuItem>
                       )}
                       {canShare && (
                         <ContextMenuItem

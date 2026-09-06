@@ -18,7 +18,10 @@
     "viewOther": "Other",
     "selectedCount": "{{count}} selected",
     "totalCount": "{{total}} items",
-    "ariaSelectAll": "Select all",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all",
+    "select": "Select",
+    "done": "Done",
     "ariaGrid": "Grid view",
     "ariaList": "List view",
     "toastNoDownload": "Nothing to download",
@@ -28,7 +31,8 @@
     "emptyDesc": "Upload or create a folder to get started",
     "uploadFile": "Upload",
     "newFolder": "New folder",
-    "uploadFolder": "Upload folder",
+    "newTextFile": "New text file",
+    "fileActions": "Create",
     "refresh": "Refresh",
     "noMore": "No more items"
   },
@@ -39,6 +43,7 @@
   },
   "rowMenu": {
     "preview": "Preview",
+    "edit": "Edit",
     "share": "Share",
     "favorite": "Add to favorites",
     "unfavorite": "Remove from favorites",
@@ -49,10 +54,11 @@
     "trash": "Move to trash"
   },
   "breadcrumb": {
-    "allFiles": "All files"
+    "allFiles": "Files"
   },
   "toolbar": {
-    "searchPlaceholder": "Search"
+    "searchPlaceholder": "Search file name",
+    "search": "Search"
   },
   "bulk": {
     "ariaBar": "Bulk actions",
@@ -71,7 +77,6 @@
     "loading": "Loading"
   },
   "list": {
-    "ariaSelectAll": "Select all",
     "ariaMore": "More",
     "favorite": "Favorite",
     "unfavorite": "Unfavorite",
@@ -89,6 +94,21 @@
     "placeholder": "Folder name",
     "cancel": "Cancel",
     "confirm": "OK"
+  },
+"createText": {
+    "title": "New text file",
+    "placeholder": "File name",
+    "cancel": "Cancel",
+    "confirm": "OK"
+  },
+  "textEditor": {
+    "description": "Edit plain text content online",
+    "unsaved": "(unsaved)",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saveOk": "Saved",
+    "saveFail": "Save failed",
+    "loadFail": "Failed to read file content"
   },
   "rename": {
     "title": "Rename",
@@ -145,15 +165,13 @@
     "btnCopied": "Copied"
   },
   "upload": {
-    "toastMax": "Up to 10 files per batch",
-    "pickFolder": "Choose a folder to upload",
-    "pickFile": "Choose files to upload",
-    "titleFolder": "Upload folder",
+    "dropZoneHint": "Drop to upload to the current folder",
+    "pickFile": "Choose files or folders to upload",
     "titleFile": "Upload files",
-    "dropFolder": "Click or drag a folder here",
-    "dropFile": "Click or drag files here",
-    "hintFolder": "Whole folder with structure",
-    "hintFile": "Multiple files, up to 10 per batch",
+    "dropFile": "Click or drag files or folders here",
+    "hintFile": "Select multiple files or a whole folder; directory structure is preserved",
+    "chooseFile": "Choose files",
+    "chooseFolder": "Choose folder",
     "addToList": "Add to upload queue"
   },
   "fileDetail": {
@@ -192,8 +210,6 @@
     "codeLabel": "Code",
     "validityLabel": "Valid until",
     "permanent": "Never",
-    "ariaSelectAll": "Select page",
-    "ariaSelectRow": "Select {{name}}",
     "ariaMore": "More",
     "bulkBar": "Bulk share actions",
     "ariaCancelShare": "Cancel share",
@@ -242,8 +258,6 @@
     "colSize": "Size",
     "colDeleted": "Deleted",
     "colActions": "Actions",
-    "ariaSelectAll": "Select page",
-    "ariaSelectRow": "Select {{name}}",
     "ariaMore": "More",
     "bulkBar": "Trash bulk actions",
     "ariaRestore": "Restore",
@@ -274,6 +288,10 @@
   "operations": {
     "mkdirOk": "Folder created",
     "mkdirFail": "Could not create folder",
+    "createTextOk": "Text file created",
+    "createTextFail": "Could not create text file",
+    "saveTextOk": "Text saved",
+    "saveTextFail": "Could not save text",
     "renameOk": "Renamed",
     "renameFail": "Rename failed",
     "moveOk": "Moved",
@@ -287,7 +305,6 @@
     "unfavOk": "Removed from favorites",
     "favFail": "Could not favorite",
     "unfavFail": "Could not unfavorite",
-    "uploadFolderAdded": "Folder added to upload queue",
     "uploadFileAdded": "Files added to upload queue",
     "uploadCheckProgress": "Check transfer panel for progress"
   },
@@ -299,6 +316,18 @@
     "done": "Done · {{count}} item(s)",
     "failed": "Upload failed",
     "toastFileComplete": "File \"{{name}}\" uploaded",
-    "toastFileFailed": "File \"{{name}}\" failed: {{message}}"
+    "toastFileFailed": "File \"{{name}}\" failed: {{message}}",
+    "preparing": "Preparing...",
+    "checking": "Verifying...",
+    "remaining": "{{time}} left",
+    "paused": "Paused",
+    "processing": "Processing...",
+    "completed": "Uploaded",
+    "cancelled": "Cancelled",
+    "empty": "Nothing here",
+    "collapse": "Collapse",
+    "pauseAll": "Pause all",
+    "resumeAll": "Resume",
+    "cancelAll": "Cancel all"
   }
 }

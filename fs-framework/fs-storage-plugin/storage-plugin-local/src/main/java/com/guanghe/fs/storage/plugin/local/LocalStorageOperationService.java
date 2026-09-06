@@ -423,6 +423,19 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
         }
     }
 
+    @Override
+    public Long getAvailableSpace() {
+        if (basePath == null || basePath.isBlank()) {
+            return null;
+        }
+        File baseDir = new File(basePath);
+        // 目录不存在时 getUsableSpace() 同样返回 0，无法与「磁盘已满」区分，故按容量不可知处理
+        if (!baseDir.exists()) {
+            return null;
+        }
+        return baseDir.getUsableSpace();
+    }
+
     /**
      * 获取临时目录路径
      */

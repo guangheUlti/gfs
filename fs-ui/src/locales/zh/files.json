@@ -18,7 +18,10 @@
     "viewOther": "其它",
     "selectedCount": "已选 {{count}} 项",
     "totalCount": "共 {{total}} 项",
-    "ariaSelectAll": "全选",
+    "selectAll": "全选",
+    "deselectAll": "取消全选",
+    "select": "选择",
+    "done": "完成",
     "ariaGrid": "网格视图",
     "ariaList": "列表视图",
     "toastNoDownload": "没有可下载的文件",
@@ -28,7 +31,8 @@
     "emptyDesc": "上传文件或创建文件夹开始使用",
     "uploadFile": "上传文件",
     "newFolder": "新建文件夹",
-    "uploadFolder": "上传文件夹",
+    "newTextFile": "新建纯文本",
+    "fileActions": "新建",
     "refresh": "刷新",
     "noMore": "没有更多了"
   },
@@ -39,6 +43,7 @@
   },
   "rowMenu": {
     "preview": "预览",
+    "edit": "编辑",
     "share": "分享",
     "favorite": "收藏",
     "unfavorite": "取消收藏",
@@ -49,10 +54,11 @@
     "trash": "放入回收站"
   },
   "breadcrumb": {
-    "allFiles": "全部文件"
+    "allFiles": "文件"
   },
   "toolbar": {
-    "searchPlaceholder": "搜索"
+    "searchPlaceholder": "搜索文件名",
+    "search": "搜索"
   },
   "bulk": {
     "ariaBar": "文件列表批量操作",
@@ -71,7 +77,6 @@
     "loading": "加载中"
   },
   "list": {
-    "ariaSelectAll": "全选",
     "ariaMore": "更多操作",
     "favorite": "收藏",
     "unfavorite": "取消收藏",
@@ -89,6 +94,21 @@
     "placeholder": "请输入文件夹名称",
     "cancel": "取消",
     "confirm": "确认"
+  },
+"createText": {
+    "title": "新建纯文本",
+    "placeholder": "请输入文件名",
+    "cancel": "取消",
+    "confirm": "确认"
+  },
+  "textEditor": {
+    "description": "在线编辑纯文本内容",
+    "unsaved": "（未保存）",
+    "save": "保存",
+    "cancel": "取消",
+    "saveOk": "保存成功",
+    "saveFail": "保存失败",
+    "loadFail": "读取文件内容失败"
   },
   "rename": {
     "title": "重命名",
@@ -145,15 +165,13 @@
     "btnCopied": "已复制"
   },
   "upload": {
-    "toastMax": "单次最多上传 10 个文件",
-    "pickFolder": "请选择要上传的文件夹",
-    "pickFile": "请选择要上传的文件",
-    "titleFolder": "上传文件夹",
+    "dropZoneHint": "松开鼠标，上传到当前文件夹",
+    "pickFile": "请先选择要上传的文件或文件夹",
     "titleFile": "上传文件",
-    "dropFolder": "点击或拖拽文件夹到此处上传",
-    "dropFile": "点击或拖拽文件到此处上传",
-    "hintFolder": "支持上传整个文件夹，保留目录结构",
-    "hintFile": "支持同时上传多个文件，单次最多 10 个",
+    "dropFile": "点击或拖拽文件 / 文件夹到此处上传",
+    "hintFile": "支持多选文件或整个文件夹，上传时保留目录结构",
+    "chooseFile": "选择文件",
+    "chooseFolder": "选择文件夹",
     "addToList": "添加到上传列表"
   },
   "fileDetail": {
@@ -192,8 +210,6 @@
     "codeLabel": "提取码",
     "validityLabel": "有效期",
     "permanent": "永久有效",
-    "ariaSelectAll": "全选当前页",
-    "ariaSelectRow": "选择 {{name}}",
     "ariaMore": "更多操作",
     "bulkBar": "我的分享批量操作",
     "ariaCancelShare": "取消分享",
@@ -242,8 +258,6 @@
     "colSize": "大小",
     "colDeleted": "删除时间",
     "colActions": "操作",
-    "ariaSelectAll": "全选当前页",
-    "ariaSelectRow": "选择 {{name}}",
     "ariaMore": "更多操作",
     "bulkBar": "回收站批量操作",
     "ariaRestore": "还原",
@@ -274,6 +288,10 @@
   "operations": {
     "mkdirOk": "文件夹创建成功",
     "mkdirFail": "创建文件夹失败",
+    "createTextOk": "文本文件创建成功",
+    "createTextFail": "创建文本文件失败",
+    "saveTextOk": "文本已保存",
+    "saveTextFail": "保存文本失败",
     "renameOk": "重命名成功",
     "renameFail": "重命名失败",
     "moveOk": "移动成功",
@@ -287,7 +305,6 @@
     "unfavOk": "取消收藏成功",
     "favFail": "收藏失败",
     "unfavFail": "取消收藏失败",
-    "uploadFolderAdded": "文件夹已添加到传输列表",
     "uploadFileAdded": "文件已添加到传输列表",
     "uploadCheckProgress": "可前往传输列表查看上传进度"
   },
@@ -299,6 +316,18 @@
     "done": "上传完成 · 共 {{count}} 项",
     "failed": "上传失败",
     "toastFileComplete": "文件 \"{{name}}\" 上传完成",
-    "toastFileFailed": "文件 \"{{name}}\" 上传失败：{{message}}"
+    "toastFileFailed": "文件 \"{{name}}\" 上传失败：{{message}}",
+    "preparing": "准备中...",
+    "checking": "校验文件...",
+    "remaining": "剩余 {{time}}",
+    "paused": "已暂停",
+    "processing": "正在处理...",
+    "completed": "上传完成",
+    "cancelled": "已取消",
+    "empty": "没有更多内容了",
+    "collapse": "收起",
+    "pauseAll": "全部暂停",
+    "resumeAll": "继续上传",
+    "cancelAll": "全部取消"
   }
 }

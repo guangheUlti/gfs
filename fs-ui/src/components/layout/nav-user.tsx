@@ -1,20 +1,13 @@
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/contexts/auth-context'
-import {
-  RiExpandUpDownLine,
-  RiLogoutBoxLine,
-  RiSettings3Line,
-} from '@remixicon/react'
+import { RiLogoutBoxLine } from '@remixicon/react'
 import { useNavigate } from 'react-router-dom'
-import { useSettingsModal } from '@/contexts/settings-modal-context'
 import { getAvatarFallback } from '@/utils/avatar'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -27,7 +20,6 @@ import {
 interface NavUserProps {
   user: {
     name: string
-    email: string
     avatar: string
   }
 }
@@ -35,17 +27,12 @@ interface NavUserProps {
 export function NavUser({ user }: NavUserProps) {
   const { t } = useTranslation('layout')
   const navigate = useNavigate()
-  const { openSettings } = useSettingsModal()
   const { logout } = useAuth()
-  const { isMobile, state } = useSidebar()
+  const { state } = useSidebar()
 
   const handleLogout = () => {
     logout()
     navigate('/login')
-  }
-
-  const handleSettings = () => {
-    openSettings('profile')
   }
 
   const avatarFallback = getAvatarFallback(user.name)
@@ -66,42 +53,18 @@ export function NavUser({ user }: NavUserProps) {
                 </AvatarFallback>
               </Avatar>
               {state === 'expanded' && (
-                <>
-                  <div className='grid flex-1 text-start text-sm leading-tight'>
-                    <span className='truncate font-semibold'>{user.name}</span>
-                    <span className='truncate text-xs'>{user.email}</span>
-                  </div>
-                  <RiExpandUpDownLine className='ms-auto size-4' />
-                </>
+                <span className='truncate text-sm font-semibold'>
+                  {user.name}
+                </span>
               )}
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className='w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg'
-            side={isMobile ? 'bottom' : 'right'}
-            align='end'
+            className='w-(--radix-dropdown-menu-trigger-width) rounded-lg'
+            side='bottom'
             sideOffset={4}
           >
-            <DropdownMenuLabel className='p-0 font-normal'>
-              <div className='flex items-center gap-2 px-1 py-1.5 text-start text-sm'>
-                <Avatar className='h-8 w-8 rounded-lg'>
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className='rounded-lg bg-sidebar-accent font-medium text-sidebar-accent-foreground'>
-                    {avatarFallback}
-                  </AvatarFallback>
-                </Avatar>
-                <div className='grid flex-1 text-start text-sm leading-tight'>
-                  <span className='truncate font-semibold'>{user.name}</span>
-                  <span className='truncate text-xs'>{user.email}</span>
-                </div>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSettings}>
-              <RiSettings3Line className='mr-2 h-4 w-4' />
-              <span>{t('navUser.accountSettings')}</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
+            {/* 只留退出登录：头像/用户名已在触发器上，账户设置移到了侧栏「系统」分组 */}
             <DropdownMenuItem
               onClick={handleLogout}
               className='text-red-600 focus:text-red-600'

@@ -65,7 +65,6 @@ export function ShareModal({
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
-  const [copiedCode, setCopiedCode] = useState(false)
 
   const sharingFiles = file ? [file] : files
   const isBatchShare = sharingFiles.length > 1
@@ -194,20 +193,6 @@ export function ShareModal({
     }
   }
 
-  // 复制提取码
-  const handleCopyCode = async () => {
-    try {
-      await navigator.clipboard.writeText(shareCode)
-      setCopiedCode(true)
-      setTimeout(() => {
-        setCopiedCode(false)
-      }, 2000)
-      toast.success(t('common.copied'))
-    } catch (error) {
-      toast.error(t('common.copyFailed'))
-    }
-  }
-
   // 处理确认按钮点击
   const handleOk = async () => {
     if (!shareLink) {
@@ -230,7 +215,6 @@ export function ShareModal({
       setTimeout(() => {
         resetForm()
         setCopiedLink(false)
-        setCopiedCode(false)
       }, 300)
     }
   }, [open])

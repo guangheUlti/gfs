@@ -25,7 +25,6 @@ import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.file.service.FileShareItemService;
 import com.guanghe.fs.file.service.FileShareService;
 import com.guanghe.fs.file.service.FileTransferTaskService;
-import com.guanghe.fs.framework.common.context.WorkspaceContext;
 import com.guanghe.fs.framework.common.domain.PageResult;
 import com.guanghe.fs.framework.common.exception.BusinessException;
 import com.guanghe.fs.framework.common.utils.I18nUtils;
@@ -78,14 +77,14 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
 
     @Override
     public PageResult<FileShareVO> getPages(FileShareQry qry) {
-        String workspaceId = WorkspaceContext.getWorkspaceId();
+        String userId = StpUtil.getLoginIdAsString();
         int page = qry.getPage() == null ? 1 : qry.getPage();
         int pageSize = qry.getPageSize() == null ? 10 : qry.getPageSize();
 
         Page<FileShare> p = new Page<>(page, pageSize);
 
         QueryWrapper wrapper = new QueryWrapper();
-        wrapper.where(FILE_SHARE.WORKSPACE_ID.eq(workspaceId));
+        wrapper.where(FILE_SHARE.USER_ID.eq(userId));
 
         if (StringUtils.isNotEmpty(qry.getKeyword())) {
             String keyword = "%" + qry.getKeyword().trim() + "%";
@@ -108,10 +107,10 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
     @Override
 //    @Cacheable(value = CACHE_NAME, key = "#shareId", unless = "#result == null", sync = true)
     public FileShareVO getDetail(String shareId) {
-        String workspaceId = WorkspaceContext.getWorkspaceId();
+        String userId = StpUtil.getLoginIdAsString();
         FileShare share = this.getOne(new QueryWrapper()
                 .where(FILE_SHARE.ID.eq(shareId))
-                .and(FILE_SHARE.WORKSPACE_ID.eq(workspaceId)));
+                .and(FILE_SHARE.USER_ID.eq(userId)));
         if (share == null) {
             throw new BusinessException(I18nUtils.getMessage("share.not.exist"));
         }
@@ -135,10 +134,8 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
     @Transactional(rollbackFor = Exception.class)
     public FileShareVO createShare(CreateShareCmd cmd) {
         String userId = StpUtil.getLoginIdAsString();
-        String workspaceId = WorkspaceContext.getWorkspaceId();
         FileShare share = new FileShare();
         share.setUserId(userId);
-        share.setWorkspaceId(workspaceId);
         share.setViewCount(0);
         share.setDownloadCount(0);
 
@@ -225,10 +222,10 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
         if (CollUtil.isEmpty(ids)) {
             return;
         }
-        String workspaceId = WorkspaceContext.getWorkspaceId();
+        String userId = StpUtil.getLoginIdAsString();
         List<String> authorizedIds = this.list(new QueryWrapper()
                         .where(FILE_SHARE.ID.in(ids))
-                        .and(FILE_SHARE.WORKSPACE_ID.eq(workspaceId)))
+                        .and(FILE_SHARE.USER_ID.eq(userId)))
                 .stream()
                 .map(FileShare::getId)
                 .toList();
@@ -242,8 +239,8 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void cancelAllShares() {
-        String workspaceId = WorkspaceContext.getWorkspaceId();
-        List<FileShare> shareIds = this.list(new QueryWrapper().where(FILE_SHARE.WORKSPACE_ID.eq(workspaceId)));
+        String userId = StpUtil.getLoginIdAsString();
+        List<FileShare> shareIds = this.list(new QueryWrapper().where(FILE_SHARE.USER_ID.eq(userId)));
         List<String> shareIdList = shareIds.stream().map(FileShare::getId).toList();
         this.cancelShares(shareIdList);
     }
@@ -304,7 +301,7 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
 
             fileInfos = fileInfoService.list(new QueryWrapper()
                     .where(FILE_INFO.PARENT_ID.eq(parentId))
-                    .and(FILE_INFO.WORKSPACE_ID.eq(fileShare.getWorkspaceId()))
+                    .and(FILE_INFO.USER_ID.eq(fileShare.getUserId()))
                     .and(FILE_INFO.IS_DELETED.eq(false))
                     .orderBy(FILE_INFO.IS_DIR.desc(), FILE_INFO.UPDATE_TIME.desc()));
         } else {
@@ -313,7 +310,7 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
             } else {
                 fileInfos = fileInfoService.list(new QueryWrapper()
                         .where(FILE_INFO.ID.in(shareFileIds))
-                        .and(FILE_INFO.WORKSPACE_ID.eq(fileShare.getWorkspaceId()))
+                        .and(FILE_INFO.USER_ID.eq(fileShare.getUserId()))
                         .and(FILE_INFO.IS_DELETED.eq(false)));
             }
         }
@@ -399,7 +396,7 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
     private FileInfo getShareAccessibleFile(FileShare share, List<String> shareFileIds, String fileId) {
         FileInfo target = fileInfoService.getOne(new QueryWrapper()
                 .where(FILE_INFO.ID.eq(fileId))
-                .and(FILE_INFO.WORKSPACE_ID.eq(share.getWorkspaceId()))
+                .and(FILE_INFO.USER_ID.eq(share.getUserId()))
                 .and(FILE_INFO.IS_DELETED.eq(false)));
         FileInfo current = target;
         Set<String> visited = new HashSet<>();
@@ -413,7 +410,7 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
             }
             current = fileInfoService.getOne(new QueryWrapper()
                     .where(FILE_INFO.ID.eq(current.getParentId()))
-                    .and(FILE_INFO.WORKSPACE_ID.eq(share.getWorkspaceId()))
+                    .and(FILE_INFO.USER_ID.eq(share.getUserId()))
                     .and(FILE_INFO.IS_DELETED.eq(false)));
         }
 

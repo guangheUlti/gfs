@@ -91,7 +91,6 @@ public class FileCollectionUploadServiceImpl implements FileCollectionUploadServ
         FileTransferTask task = new FileTransferTask();
         task.setTaskId(IdUtil.fastSimpleUUID());
         task.setUserId(collection.getUserId());
-        task.setWorkspaceId(collection.getWorkspaceId());
         task.setCollectionId(collectionId);
         task.setCollectionSubmissionId(submissionId);
         task.setParentId(submission.getFolderId());
@@ -345,7 +344,6 @@ public class FileCollectionUploadServiceImpl implements FileCollectionUploadServ
                 task.getCollectionId(), task.getCollectionSubmissionId(), task.getFileSize());
         FileCollectionSubmission submission = authorized.context().getSubmission();
         operationLogService.recordSuccessAs(
-                task.getWorkspaceId(),
                 "collection:" + submission.getId(),
                 submission.getSubmitterName(),
                 OperationType.COLLECTION_UPLOAD,
@@ -361,7 +359,7 @@ public class FileCollectionUploadServiceImpl implements FileCollectionUploadServ
     private FileInfo buildFileInfo(FileTransferTask task, String objectKey) {
         LocalDateTime now = LocalDateTime.now();
         String displayName = fileInfoService.generateUniqueName(
-                task.getWorkspaceId(), task.getParentId(), task.getFileName(),
+                task.getUserId(), task.getParentId(), task.getFileName(),
                 false, null, task.getStoragePlatformSettingId());
         FileInfo fileInfo = new FileInfo();
         fileInfo.setId(IdUtil.fastSimpleUUID());
@@ -373,7 +371,6 @@ public class FileCollectionUploadServiceImpl implements FileCollectionUploadServ
         fileInfo.setMimeType(task.getMimeType());
         fileInfo.setIsDir(false);
         fileInfo.setParentId(task.getParentId());
-        fileInfo.setWorkspaceId(task.getWorkspaceId());
         fileInfo.setUserId(task.getUserId());
         fileInfo.setContentMd5(task.getFileMd5());
         fileInfo.setStoragePlatformSettingId(task.getStoragePlatformSettingId());
@@ -390,7 +387,7 @@ public class FileCollectionUploadServiceImpl implements FileCollectionUploadServ
         FileTransferTask task = getTask(taskId);
         if (!Objects.equals(task.getCollectionId(), collectionId)
                 || !Objects.equals(task.getCollectionSubmissionId(), submissionId)
-                || !Objects.equals(task.getWorkspaceId(), context.getCollection().getWorkspaceId())
+                || !Objects.equals(task.getUserId(), context.getCollection().getUserId())
                 || !Objects.equals(task.getParentId(), context.getSubmission().getFolderId())) {
             throw new BusinessException(403, "无权访问该上传任务");
         }

@@ -4,8 +4,10 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.guanghe.fs.file.domain.FileInfo;
 import com.guanghe.fs.file.domain.dto.CopyFileCmd;
 import com.guanghe.fs.file.domain.dto.CreateDirectoryCmd;
+import com.guanghe.fs.file.domain.dto.CreateTextFileCmd;
 import com.guanghe.fs.file.domain.dto.MoveFileCmd;
 import com.guanghe.fs.file.domain.dto.RenameFileCmd;
+import com.guanghe.fs.file.domain.dto.UpdateTextContentCmd;
 import com.guanghe.fs.file.domain.qry.FileQry;
 import com.guanghe.fs.file.domain.qry.FileRecycleQry;
 import com.guanghe.fs.file.domain.vo.FileDetailVO;
@@ -114,6 +116,46 @@ public class FileController {
                 "父目录: " + (fileInfo.getParentId() == null ? "根目录" : fileInfo.getParentId())
         );
         return Result.ok(fileInfo);
+    }
+
+    @PostMapping("/text")
+    @Operation(summary = "新建纯文本文件", description = "在指定目录下新建 .txt 文本文件")
+    @SaCheckPermission("file:write")
+    public Result<?> createTextFile(@RequestBody @Validated CreateTextFileCmd cmd) {
+        FileInfo fileInfo = fileInfoService.createTextFile(cmd);
+        operationLogService.recordSuccess(
+                OperationType.CREATE_TEXT,
+                "新建纯文本",
+                "FILE",
+                fileInfo.getId(),
+                fileInfo.getDisplayName(),
+                "父目录: " + (fileInfo.getParentId() == null ? "根目录" : fileInfo.getParentId())
+        );
+        // 与 copies 一致，不返回完整实体，避免暴露对象存储键等内部字段
+        return Result.ok();
+    }
+
+    @GetMapping("/{fileId}/content")
+    @Operation(summary = "读取文本内容", description = "读取 .txt 文件的内容用于在线编辑")
+    public Result<String> readTextContent(@PathVariable String fileId) {
+        return Result.ok(fileInfoService.readTextContent(fileId));
+    }
+
+    @PutMapping("/{fileId}/content")
+    @Operation(summary = "保存文本内容", description = "保存在线编辑后的 .txt 文件内容")
+    @SaCheckPermission("file:write")
+    public Result<?> updateTextContent(@PathVariable String fileId,
+                                       @RequestBody @Validated UpdateTextContentCmd cmd) {
+        fileInfoService.updateTextContent(fileId, cmd);
+        operationLogService.recordSuccess(
+                OperationType.EDIT_TEXT,
+                "在线编辑文本",
+                "FILE",
+                fileId,
+                fileInfoService.getAuthorizedFile(fileId).getDisplayName(),
+                null
+        );
+        return Result.ok();
     }
 
     @PutMapping("/{fileId}/rename")

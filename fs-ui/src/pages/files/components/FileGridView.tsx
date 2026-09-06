@@ -1,4 +1,4 @@
-import { useState, useEffect, type RefObject } from 'react'
+import { useState, useEffect, useRef, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { FileItem } from '@/types/file'
 import {
@@ -10,11 +10,12 @@ import {
   Trash2,
   Edit,
   Eye,
+  FilePen,
   Info,
   Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { formatTime } from '@/utils/format'
+import { formatFileListDisplayTime } from '@/utils/format'
 import { usePermission } from '@/hooks/use-permission'
 import { Button } from '@/components/ui/button'
 import {
@@ -48,6 +49,7 @@ interface FileGridViewProps {
   onMoveFiles: (fileIds: string[], targetDirId: string) => Promise<void>
   onFavorite: (file: FileItem | FileItem[]) => void
   onPreview: (file: FileItem) => void
+  onEdit?: (file: FileItem) => void
   onDetail: (file: FileItem) => void
   onDragStateChange?: (
     dropTargetName: string | null,
@@ -56,6 +58,8 @@ interface FileGridViewProps {
   onBatchShare?: (files: FileItem[]) => void
   onBatchMove?: (files: FileItem[]) => void
   onBatchDelete?: (files: FileItem[]) => void
+  /** 触屏多选模式：点击即切换选中，无需 Ctrl 键 */
+  selectMode?: boolean
   hasMore?: boolean
   loadingMore?: boolean
   onLoadMore?: () => void
@@ -76,11 +80,13 @@ export function FileGridView({
   onMoveFiles,
   onFavorite,
   onPreview,
+  onEdit,
   onDetail,
   onDragStateChange,
   onBatchShare,
   onBatchMove,
   onBatchDelete,
+  selectMode = false,
   hasMore = false,
   loadingMore = false,
   onLoadMore,
@@ -119,25 +125,50 @@ export function FileGridView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragState.dropTargetName, dragState.draggedItems.length])
 
-  const handleItemClick = (file: FileItem, event: React.MouseEvent) => {
-    const isMultiSelect = event.ctrlKey || event.metaKey
-    const newSelectedKeys = [...selectedKeys]
-    const isCurrentlySelected = selectedKeys.includes(file.id)
+  /** 上一次普通点击的卡片序号，Shift 范围选以它为起点 */
+  const lastClickedIndexRef = useRef<number | null>(null)
 
-    if (isMultiSelect) {
-      // CTRL + Click: 切换当前项状态
-      if (isCurrentlySelected) {
-        const index = newSelectedKeys.indexOf(file.id)
-        if (index > -1) newSelectedKeys.splice(index, 1)
-      } else {
-        newSelectedKeys.push(file.id)
-      }
-    } else {
-      // 普通左键点击: 仅选中当前项
-      newSelectedKeys.splice(0, newSelectedKeys.length, file.id)
+  const toggleOne = (id: string) => {
+    onSelectionChange(
+      selectedSet.has(id)
+        ? selectedKeys.filter((k) => k !== id)
+        : [...selectedKeys, id]
+    )
+  }
+
+  const handleItemClick = (
+    file: FileItem,
+    event: React.MouseEvent,
+    index: number
+  ) => {
+    // 触屏多选模式：点一下就是选中/取消选中，选中态由卡片背景色表达
+    if (selectMode) {
+      toggleOne(file.id)
+      lastClickedIndexRef.current = index
+      return
     }
 
-    onSelectionChange(newSelectedKeys)
+    // Shift + 点击：从上次点击的位置到当前位置做范围选
+    if (event.shiftKey && lastClickedIndexRef.current !== null) {
+      event.preventDefault()
+      const [from, to] = [lastClickedIndexRef.current, index].sort(
+        (a, b) => a - b
+      )
+      const rangeIds = fileList.slice(from, to + 1).map((f) => f.id)
+      onSelectionChange(Array.from(new Set([...selectedKeys, ...rangeIds])))
+      return
+    }
+
+    // Ctrl/Cmd + 点击：切换当前项状态
+    if (event.ctrlKey || event.metaKey) {
+      toggleOne(file.id)
+      lastClickedIndexRef.current = index
+      return
+    }
+
+    // 普通左键点击：仅选中当前项
+    onSelectionChange([file.id])
+    lastClickedIndexRef.current = index
   }
 
   const handleDoubleClick = (file: FileItem) => {
@@ -153,10 +184,11 @@ export function FileGridView({
     !hasMore && !loadingMore && fileList.length > 0
 
   return (
-    <div className='p-4'>
+    // 外层滚动区已有内边距，窄屏不再叠加，给卡片让出宽度
+    <div className='p-0 sm:p-4'>
       <div className='relative'>
         <div className='grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-4'>
-        {fileList.map((file) => {
+        {fileList.map((file, index) => {
           const isSelected = selectedSet.has(file.id)
           const isDragging = dragState.draggedItems.some(
             (f) => f.id === file.id
@@ -183,7 +215,7 @@ export function FileGridView({
                   onDragOver={(e) => canWrite && handleDragOver(e, file)}
                   onDragLeave={(e) => canWrite && handleDragLeave(e, file)}
                   onDrop={(e) => canWrite && handleDrop(e, file)}
-                  onClick={(e) => handleItemClick(file, e)}
+                  onClick={(e) => handleItemClick(file, e, index)}
                   onDoubleClick={() => handleDoubleClick(file)}
                 >
                   {/* 更多操作 */}
@@ -192,7 +224,7 @@ export function FileGridView({
                       'absolute top-2 right-2 z-10 transition-opacity',
                       openMenuId === file.id
                         ? 'opacity-100'
-                        : 'opacity-0 group-hover:opacity-100'
+                        : 'opacity-100 hoverable:opacity-0 hoverable:group-hover:opacity-100'
                     )}
                     style={{ visibility: isSelected ? 'hidden' : 'visible' }}
                   >
@@ -228,6 +260,17 @@ export function FileGridView({
                               {t('rowMenu.preview')}
                             </DropdownMenuItem>
                           </>
+                        )}
+                        {!file.isDir && canWrite && onEdit && file.suffix?.toLowerCase() === 'txt' && (
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onEdit(file)
+                            }}
+                          >
+                            <FilePen className='mr-2 h-4 w-4' />
+                            {t('rowMenu.edit')}
+                          </DropdownMenuItem>
                         )}
                         {canShare && (
                           <DropdownMenuItem
@@ -357,9 +400,9 @@ export function FileGridView({
                     {file.displayName}
                   </div>
 
-                  {/* 修改时间 */}
-                  <div className='text-xs text-muted-foreground'>
-                    {formatTime(file.updateTime)}
+                  {/* 修改时间：与列表视图同一套固定格式，不让网格出现「今天」而列表出现日期 */}
+                  <div className='text-xs tabular-nums whitespace-nowrap text-muted-foreground'>
+                    {formatFileListDisplayTime(file.updateTime)}
                   </div>
                 </div>
               </ContextMenuTrigger>
@@ -447,6 +490,17 @@ export function FileGridView({
                           {t('rowMenu.preview')}
                         </ContextMenuItem>
                       </>
+                    )}
+                    {!file.isDir && canWrite && onEdit && file.suffix?.toLowerCase() === 'txt' && (
+                      <ContextMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onEdit(file)
+                        }}
+                      >
+                        <FilePen className='mr-2 h-4 w-4' />
+                        {t('rowMenu.edit')}
+                      </ContextMenuItem>
                     )}
                     {canShare && (
                       <ContextMenuItem

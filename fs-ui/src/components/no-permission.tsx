@@ -1,12 +1,11 @@
 import { ShieldX } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 
 export function NoPermission() {
   const { t } = useTranslation('settings')
   const navigate = useNavigate()
-  const { slug } = useParams<{ slug: string }>()
 
   return (
     <div className='flex h-[60vh] flex-col items-center justify-center gap-4'>
@@ -17,7 +16,7 @@ export function NoPermission() {
       </p>
       <Button
         variant='outline'
-        onClick={() => navigate(slug ? `/w/${slug}/` : '/')}
+        onClick={() => navigate('/files')}
       >
         {t('noAccess.backHome')}
       </Button>

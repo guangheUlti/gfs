@@ -3,7 +3,6 @@ package com.guanghe.fs.file.controller;
 import com.guanghe.fs.file.preview.PreviewService;
 import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.framework.common.constant.RedisKey;
-import com.guanghe.fs.framework.common.context.WorkspaceContext;
 import com.guanghe.fs.framework.common.domain.Result;
 import com.guanghe.fs.framework.common.utils.I18nUtils;
 import com.guanghe.fs.framework.redis.repository.RedisRepository;
@@ -41,11 +40,6 @@ public class FilePreviewController {
         redisRepository.setExpire(
                 RedisKey.getPreviewTokenKey(token),
                 fileId,
-                RedisKey.PREVIEW_TOKEN_EXPIRE
-        );
-        redisRepository.setExpire(
-                RedisKey.getPreviewWorkspaceKey(token),
-                WorkspaceContext.getWorkspaceId(),
                 RedisKey.PREVIEW_TOKEN_EXPIRE
         );
         return Result.ok(token);

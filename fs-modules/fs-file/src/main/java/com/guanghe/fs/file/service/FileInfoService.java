@@ -3,8 +3,10 @@ package com.guanghe.fs.file.service;
 import com.guanghe.fs.file.domain.FileInfo;
 import com.guanghe.fs.file.domain.dto.CreateDirectoryCmd;
 import com.guanghe.fs.file.domain.dto.CopyFileCmd;
+import com.guanghe.fs.file.domain.dto.CreateTextFileCmd;
 import com.guanghe.fs.file.domain.dto.MoveFileCmd;
 import com.guanghe.fs.file.domain.dto.RenameFileCmd;
+import com.guanghe.fs.file.domain.dto.UpdateTextContentCmd;
 import com.guanghe.fs.file.domain.qry.FileQry;
 import com.mybatisflex.core.service.IService;
 import com.guanghe.fs.file.domain.vo.FileDetailVO;
@@ -23,7 +25,7 @@ import java.util.List;
 public interface FileInfoService extends IService<FileInfo> {
 
     /**
-     * 获取当前工作空间内可访问的文件。
+     * 获取当前登录用户可访问的文件。
      */
     FileInfo getAuthorizedFile(String fileId);
 
@@ -61,6 +63,30 @@ public interface FileInfoService extends IService<FileInfo> {
     FileInfo createDirectory(CreateDirectoryCmd cmd);
 
     /**
+     * 新建纯文本文件（.txt）
+     *
+     * @param cmd 新建文本请求参数
+     * @return 新建的文件记录
+     */
+    FileInfo createTextFile(CreateTextFileCmd cmd);
+
+    /**
+     * 读取文本文件内容
+     *
+     * @param fileId 文件ID
+     * @return 文本内容
+     */
+    String readTextContent(String fileId);
+
+    /**
+     * 更新文本文件内容（生成/复用新物理对象后切换引用）
+     *
+     * @param fileId 文件ID
+     * @param cmd    更新文本请求参数
+     */
+    void updateTextContent(String fileId, UpdateTextContentCmd cmd);
+
+    /**
      * 生成唯一的文件名（处理重名冲突）
      * <p>
      * - 如果不存在重名：返回原名称
@@ -74,7 +100,7 @@ public interface FileInfoService extends IService<FileInfo> {
      * @param storagePlatformSettingId 存储平台设置ID
      * @return 唯一的文件名
      */
-    String generateUniqueName(String workspaceId, String parentId,
+    String generateUniqueName(String userId, String parentId,
                               String desiredName, Boolean isDir,
                               String excludeFileId, String storagePlatformSettingId);
 
@@ -116,9 +142,9 @@ public interface FileInfoService extends IService<FileInfo> {
     PageResult<FileVO> getList(FileQry qry);
 
     /**
-     * 计算已使用的存储空间
+     * 计算当前存储平台已使用的存储空间（全系统口径，不区分用户）
      *
-     * @return
+     * @return 已使用字节数
      */
     Long calculateUsedStorage();
 

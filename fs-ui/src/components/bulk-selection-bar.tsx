@@ -22,6 +22,8 @@ export type BulkSelectionBarProps = {
   selectionSuffix?: string
   /** 选中变化时读屏播报 */
   getAnnouncement?: (count: number) => string
+  /** 追加到浮层根元素的类名，可覆盖默认的 bottom 偏移 */
+  className?: string
 }
 
 export function BulkSelectionBar({
@@ -31,6 +33,7 @@ export function BulkSelectionBar({
   ariaLabel,
   selectionSuffix,
   getAnnouncement,
+  className,
 }: BulkSelectionBarProps) {
   const { t } = useTranslation('common')
   const label = ariaLabel ?? t('bulkSelection.defaultToolbarName')
@@ -127,9 +130,11 @@ export function BulkSelectionBar({
         tabIndex={-1}
         onKeyDown={handleKeyDown}
         className={cn(
-          'fixed bottom-6 left-1/2 z-50 isolate -translate-x-1/2',
-          'rounded-xl border border-input bg-background px-3 py-2 shadow-xs',
-          'flex items-center gap-3',
+          'fixed bottom-4 left-1/2 z-50 isolate -translate-x-1/2 sm:bottom-6',
+          className,
+          // 窄屏下限宽，避免浮出视口后被 html 的 overflow-x-hidden 裁掉
+          'max-w-[calc(100vw-1rem)] rounded-xl border border-input bg-background px-3 py-2 shadow-xs',
+          'flex items-center gap-2 sm:gap-3',
           'transition-all delay-100 duration-300 ease-out hover:scale-105',
           'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
         )}
@@ -175,7 +180,10 @@ export function BulkSelectionBar({
 
         <Separator orientation='vertical' className='h-5' aria-hidden />
 
-        <div className='flex items-center gap-1.5'>{children}</div>
+        {/* 按钮都是 shrink-0，极窄屏下改为内部横向滑动而不是撑破浮条 */}
+        <div className='no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto sm:gap-1.5'>
+          {children}
+        </div>
       </div>
     </>
   )

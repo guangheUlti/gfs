@@ -1,7 +1,6 @@
 import dayjs from 'dayjs'
 
 import type { HomeUsedBytesUnit } from '@/api/home'
-import i18n from '@/i18n'
 
 export const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 B'
@@ -16,6 +15,22 @@ const compactZh = (value: number) =>
     notation: 'compact',
     maximumFractionDigits: 2,
   }).format(value)
+
+const GB_BYTES = 1024 ** 3
+const TB_BYTES = 1024 ** 4
+
+/**
+ * 存储容量文案：≥ 1TB 按 T 显示，否则按 G 显示，统一保留 1 位小数。
+ * 不再细分 B/KB/MB，避开侧边栏出现「0.00 B」这类无信息量的文案。
+ */
+export function formatCapacityBytes(bytes: number | null | undefined): string {
+  if (bytes === null || bytes === undefined || !Number.isFinite(bytes)) {
+    return '—'
+  }
+  if (bytes < 0) return '—'
+  if (bytes >= TB_BYTES) return `${(bytes / TB_BYTES).toFixed(1)} TB`
+  return `${(bytes / GB_BYTES).toFixed(1)} GB`
+}
 
 /**
  * 与首页存储图表纵轴/Tooltip 一致：万级及以上 KB/MB/GB 均用紧凑（如 2.16万）；
@@ -71,67 +86,22 @@ export const formatFileTime = (date: string | number | Date): string => {
 }
 
 /**
- * 格式化时间
- * 规则：
- * - 今天：显示"今天 HH:mm"
- * - 非今天：显示"YYYY/MM/DD HH:mm"
- *
- * @param dateStr 日期字符串或时间戳
- * @returns 格式化后的时间字符串
- */
-export function formatTime(dateStr: string | number | Date): string {
-  const date = new Date(dateStr)
-  const now = new Date()
-
-  // 获取小时和分钟
-  const hours = date.getHours().toString().padStart(2, '0')
-  const minutes = date.getMinutes().toString().padStart(2, '0')
-  const timeStr = `${hours}:${minutes}`
-
-  // 判断是否是今天
-  const isToday =
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate()
-
-  if (isToday) {
-    return i18n.t('common:format.todayTime', { time: timeStr })
-  }
-
-  // 非今天，显示完整日期 YYYY/MM/DD HH:mm
-  const year = date.getFullYear()
-  const month = (date.getMonth() + 1).toString().padStart(2, '0')
-  const day = date.getDate().toString().padStart(2, '0')
-
-  return `${year}/${month}/${day} ${timeStr}`
-}
-
-/**
- * 文件列表行：日期与时间用「 | 」分隔，风格接近常见网盘列表
+ * 文件列表行：固定 yyyy-MM-dd HH:mm，显示到分钟。
+ * 这里刻意不做「今天」这类相对表述——列表按时间排序时绝对日期更好比对，
+ * 且列宽恒定（16 字符），窄屏不会因为文案长度变化而抖动。
  */
 export function formatFileListDisplayTime(
   dateStr: string | number | Date
 ): string {
   const date = new Date(dateStr)
-  const now = new Date()
-  const hours = date.getHours().toString().padStart(2, '0')
-  const minutes = date.getMinutes().toString().padStart(2, '0')
-  const timeStr = `${hours}:${minutes}`
-
-  const isToday =
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate()
-
-  if (isToday) {
-    return i18n.t('common:format.todayListRow', { time: timeStr })
-  }
 
   const year = date.getFullYear()
   const month = (date.getMonth() + 1).toString().padStart(2, '0')
   const day = date.getDate().toString().padStart(2, '0')
+  const hours = date.getHours().toString().padStart(2, '0')
+  const minutes = date.getMinutes().toString().padStart(2, '0')
 
-  return `${year}/${month}/${day} | ${timeStr}`
+  return `${year}-${month}-${day} ${hours}:${minutes}`
 }
 
 export const formatDuration = (seconds: number): string => {

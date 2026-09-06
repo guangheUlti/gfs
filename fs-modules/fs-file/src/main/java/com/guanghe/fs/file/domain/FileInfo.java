@@ -69,11 +69,6 @@ public class FileInfo implements Serializable {
     private String parentId;
 
     /**
-     * 所属工作空间ID
-     */
-    private String workspaceId;
-
-    /**
      * 用户ID
      */
     private String userId;

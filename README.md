@@ -130,7 +130,7 @@ mvn clean install -DskipTests
 
    ```bash
    # mysql
-   mysql -u root -p gfs < sql/mysql/gfs-new.sql
+   mysql -u root -p gfs < sql/mysql/gfs.sql
    ```
 
    ```bash

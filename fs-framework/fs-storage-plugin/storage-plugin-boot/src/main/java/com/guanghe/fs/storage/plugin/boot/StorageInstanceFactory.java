@@ -40,10 +40,9 @@ public class StorageInstanceFactory {
         try {
             IStorageOperationService instance = prototype.createConfiguredInstance(config);
 
-            log.info("创建存储实例成功: configId={}, platform={}, workspaceId={}",
+            log.info("创建存储实例成功: configId={}, platform={}",
                     config.getConfigId(),
-                    config.getPlatformIdentifier(),
-                    config.getWorkspaceId());
+                    config.getPlatformIdentifier());
 
             return instance;
 

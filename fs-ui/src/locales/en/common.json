@@ -1,10 +1,5 @@
 {
   "loading": "Loading…",
-  "workspaceListError": "Could not load workspaces",
-  "refreshOrRelogin": "Refresh the page or sign in again",
-  "workspaceLoadError": "Failed to load workspace. Please try again.",
-  "retry": "Retry",
-  "backHome": "Back to home",
   "notFound": {
     "title": "Sorry, this page does not exist",
     "back": "Back to home"
@@ -27,30 +22,7 @@
     "networkError": "Network error. Check your connection."
   },
   "listTotalItems": "{{count}} items",
-  "searchShortcut": "Quick search…",
-  "commandMenu": {
-    "title": "Search files",
-    "placeholderAll": "Search all files, type keywords…",
-    "placeholderScoped": "Type keywords…",
-    "clear": "Clear",
-    "closeAria": "Close",
-    "typeHeading": "File type (optional)",
-    "types": {
-      "image": "Image",
-      "video": "Video",
-      "folder": "Folder",
-      "document": "Document",
-      "audio": "Audio"
-    },
-    "footerAllDefault": "Searches all files by default. Pick a type, enter keywords, then press Enter.",
-    "footerAllWithKeyword": "Press Enter to search across all files.",
-    "footerScopedNoKeyword": "Enter keywords for this type, then press Enter to search.",
-    "footerScopedWithKeyword": "Press Enter to search on the Files page."
-  },
-  "format": {
-    "todayTime": "Today {{time}}",
-    "todayListRow": "Today | {{time}}"
-  },
+  "refresh": "Refresh",
   "preview": {
     "popupBlocked": "Pop-up was blocked. Allow pop-ups and try again.",
     "tokenFailed": "Could not get preview token. Try again later."

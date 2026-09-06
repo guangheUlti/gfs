@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, memo } from 'react'
+import { useState, useEffect, useCallback, useRef, memo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { readDataTransferFiles, type FileWithPath } from '@/utils/data-transfer'
 import { useTransferStore } from '@/store/transfer'
 import { Upload, X, FileIcon, FolderUp } from 'lucide-react'
 import { toast } from 'sonner'
@@ -22,11 +23,6 @@ interface UploadModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   parentId?: string
-  isDirectoryMode?: boolean
-}
-
-interface FileWithPath extends File {
-  webkitRelativePath: string
 }
 
 // 单个文件 item，memo 避免无关重渲染
@@ -70,14 +66,14 @@ export default function UploadModal({
   open,
   onOpenChange,
   parentId,
-  isDirectoryMode = false,
 }: UploadModalProps) {
   const { t } = useTranslation('files')
   const [fileList, setFileList] = useState<FileWithPath[]>([])
   const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const folderInputRef = useRef<HTMLInputElement>(null)
 
-  const { startUploadSession, createTask, createTasksWithDirectory } =
-    useTransferStore()
+  const { startUploadSession, createTasksWithDirectory } = useTransferStore()
 
   useEffect(() => {
     if (!open) {
@@ -85,20 +81,15 @@ export default function UploadModal({
     }
   }, [open])
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []) as FileWithPath[]
+  const appendFiles = useCallback((files: FileWithPath[]) => {
+    if (files.length === 0) return
+    setFileList((prev) => [...prev, ...files])
+  }, [])
 
-    if (isDirectoryMode) {
-      // 目录模式：不限制数量
-      setFileList([...fileList, ...files])
-    } else {
-      // 文件模式：限制 10 个
-      if (files.length + fileList.length > 10) {
-        toast.warning(t('upload.toastMax'))
-        return
-      }
-      setFileList([...fileList, ...files])
-    }
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    appendFiles(Array.from(e.target.files || []) as FileWithPath[])
+    // 清空 value，重复选择同一批文件也能再次触发 onChange
+    e.target.value = ''
   }
 
   const handleRemoveFile = useCallback((index: number) => {
@@ -115,134 +106,70 @@ export default function UploadModal({
     setIsDragging(false)
   }, [])
 
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault()
+      setIsDragging(false)
 
-    const items = Array.from(e.dataTransfer.items)
-    const files: FileWithPath[] = []
-
-    // 递归读取文件夹，并行处理同级 entries
-    const readEntry = (entry: any, path = ''): Promise<void> => {
-      if (entry.isFile) {
-        return new Promise((resolve) => {
-          entry.file((file: File) => {
-            // 直接复用原始 File 对象，避免重新构造 blob
-            Object.defineProperty(file, 'webkitRelativePath', {
-              value: path + file.name,
-              writable: false,
-              configurable: true,
-            })
-            files.push(file as FileWithPath)
-            resolve()
-          })
-        })
-      } else if (entry.isDirectory) {
-        const dirReader = entry.createReader()
-        return new Promise((resolve) => {
-          dirReader.readEntries(async (entries: any[]) => {
-            // 并行处理同级子项
-            await Promise.all(
-              entries.map((childEntry) =>
-                readEntry(childEntry, path + entry.name + '/')
-              )
-            )
-            resolve()
-          })
-        })
-      }
-      return Promise.resolve()
-    }
-
-    // 并行处理所有顶层拖拽项
-    const entries = items
-      .map((item) => item.webkitGetAsEntry?.())
-      .filter(Boolean)
-
-    if (entries.length > 0) {
-      await Promise.all(entries.map((entry) => readEntry(entry)))
-      if (files.length > 0) {
-        setFileList((prev) => [...prev, ...files])
-        return
-      }
-    }
-
-    // fallback：使用传统方式
-    const fallbackFiles = Array.from(e.dataTransfer.files) as FileWithPath[]
-    if (!isDirectoryMode && fallbackFiles.length > 0) {
-      setFileList((prev) => {
-        if (!isDirectoryMode && fallbackFiles.length + prev.length > 10) {
-          toast.warning(t('upload.toastMax'))
-          return prev
-        }
-        return [...prev, ...fallbackFiles]
-      })
-    }
-  }, [isDirectoryMode, t])
+      const files = await readDataTransferFiles(e.dataTransfer)
+      appendFiles(files)
+    },
+    [appendFiles]
+  )
 
   const handleSubmit = async () => {
     if (fileList.length === 0) {
-      toast.warning(
-        isDirectoryMode ? t('upload.pickFolder') : t('upload.pickFile')
-      )
+      toast.warning(t('upload.pickFile'))
       return
     }
 
-    // 开始新的上传批次
     startUploadSession()
-
-    if (isDirectoryMode) {
-      // 目录模式：解析目录结构并上传
+    try {
+      // 混合输入安全：无相对路径的文件落到当前目录，带路径的按目录结构创建
       await createTasksWithDirectory(fileList, parentId)
-    } else {
-      // 文件模式：直接上传
-      await Promise.all(fileList.map((file) => createTask(file, parentId)))
+    } catch {
+      // 大小/深度等超限由 transfer store 内部 toast 提示，弹窗保持打开
+      return
     }
 
-    // 关闭弹窗
     onOpenChange(false)
-
-    // 显示通知
-    toast.success(
-      isDirectoryMode
-        ? t('operations.uploadFolderAdded')
-        : t('operations.uploadFileAdded'),
-      {
-        description: t('operations.uploadCheckProgress'),
-      }
-    )
+    toast.success(t('operations.uploadFileAdded'), {
+      description: t('operations.uploadCheckProgress'),
+    })
   }
 
-  // 获取显示的文件名
-  const getDisplayName = (file: FileWithPath) => {
-    if (isDirectoryMode && file.webkitRelativePath) {
-      return file.webkitRelativePath
-    }
-    return file.name
-  }
+  // 拖入的文件夹显示完整相对路径，顶层文件只显示文件名
+  const getDisplayName = (file: FileWithPath) =>
+    file.webkitRelativePath && file.webkitRelativePath !== file.name
+      ? file.webkitRelativePath
+      : file.name
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className='max-w-xl'>
         <DialogHeader>
-          <DialogTitle>
-            {isDirectoryMode ? t('upload.titleFolder') : t('upload.titleFile')}
-          </DialogTitle>
+          <DialogTitle>{t('upload.titleFile')}</DialogTitle>
         </DialogHeader>
 
         <div className='py-4'>
+          {/* 浏览器限制一个选择器无法同时选文件和文件夹，用两个 input 分别触发 */}
           <input
+            ref={fileInputRef}
             type='file'
-            multiple={!isDirectoryMode}
-            {...(isDirectoryMode ? { webkitdirectory: '', directory: '' } : {})}
+            multiple
             onChange={handleFileChange}
             className='hidden'
-            id='file-upload'
+          />
+          <input
+            ref={folderInputRef}
+            type='file'
+            {...{ webkitdirectory: '', directory: '' }}
+            onChange={handleFileChange}
+            className='hidden'
           />
 
-          <label
-            htmlFor='file-upload'
-            className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-10 transition-colors ${
+          <div
+            className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 transition-colors ${
               isDragging
                 ? 'border-primary bg-primary/5'
                 : 'border-border hover:border-primary hover:bg-accent'
@@ -250,23 +177,39 @@ export default function UploadModal({
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
           >
-            {isDirectoryMode ? (
-              <FolderUp className='mb-4 h-12 w-12 text-primary' />
-            ) : (
-              <Upload className='mb-4 h-12 w-12 text-primary' />
-            )}
+            <Upload className='mb-4 h-12 w-12 text-primary' />
             <div className='text-base font-medium text-foreground'>
-              {isDirectoryMode
-                ? t('upload.dropFolder')
-                : t('upload.dropFile')}
+              {t('upload.dropFile')}
             </div>
             <div className='mt-2 text-sm text-muted-foreground'>
-              {isDirectoryMode
-                ? t('upload.hintFolder')
-                : t('upload.hintFile')}
+              {t('upload.hintFile')}
             </div>
-          </label>
+            {/* 阻止冒泡：按钮自己触发对应选择器，不落到整区点击 */}
+            <div
+              className='mt-4 flex gap-2'
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Button
+                type='button'
+                size='sm'
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className='h-4 w-4' />
+                {t('upload.chooseFile')}
+              </Button>
+              <Button
+                type='button'
+                size='sm'
+                variant='outline'
+                onClick={() => folderInputRef.current?.click()}
+              >
+                <FolderUp className='h-4 w-4' />
+                {t('upload.chooseFolder')}
+              </Button>
+            </div>
+          </div>
 
           {fileList.length > 0 && (
             <TooltipProvider>

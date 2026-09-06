@@ -11,9 +11,6 @@ export type SettingsTab =
   | 'profile'
   | 'appearance'
   | 'transfer'
-  | 'workspace'
-  | 'members'
-  | 'roles'
   | 'user-approval'
   | 'login-management'
 

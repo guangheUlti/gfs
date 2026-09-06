@@ -5,16 +5,15 @@ import {
   List,
   LayoutGrid,
   FileText,
+  FilePlus,
   Upload,
   FolderPlus,
-  FolderUp,
   RefreshCw,
 } from 'lucide-react'
-import { useSearchParams, useNavigate, useParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { NoPermission } from '@/components/no-permission'
 import {
   ContextMenu,
@@ -32,7 +31,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
-import { SidebarTrigger } from '@/components/ui/sidebar'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   Toolbar,
@@ -40,6 +38,8 @@ import {
   FileGridView,
   FileListView,
   CreateFolderModal,
+  CreateTextModal,
+  TextEditorModal,
   RenameModal,
   MoveModal,
   ShareModal,
@@ -51,8 +51,10 @@ import {
 } from './components'
 import UploadModal from './components/UploadModal'
 import UploadPanel from './components/UploadPanel'
+import { useExternalFileDrop } from './hooks/useExternalFileDrop'
 import { useFileList } from './hooks/useFileList'
 import { useFileOperations } from './hooks/useFileOperations'
+import { useMarqueeSelection } from './hooks/useMarqueeSelection'
 
 type ViewMode = 'list' | 'grid'
 
@@ -61,20 +63,21 @@ export default function FilesPage() {
   const { t: tc } = useTranslation('common')
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { slug } = useParams<{ slug: string }>()
   const { hasPermission } = usePermission()
 
-  // 视图模式
+  // 视图模式：默认列表
   const [viewMode, setViewMode] = useState<ViewMode>(
-    (searchParams.get('viewMode') as ViewMode) || 'grid'
+    (searchParams.get('viewMode') as ViewMode) || 'list'
   )
 
   // 选中的文件
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
 
+  // 触屏多选模式：进入后点文件即切换选中，退出时保留已选（方便接着批量操作）
+  const [selectMode, setSelectMode] = useState(false)
+
   // 上传弹窗状态
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
-  const [uploadDirectoryMode, setUploadDirectoryMode] = useState(false)
 
   // 拖拽状态
   const [dragTargetName, setDragTargetName] = useState<string | null>(null)
@@ -91,10 +94,18 @@ export default function FilesPage() {
     setSelectedKeys([])
   }
 
+  // 鼠标框选：仅从列表空白处起拖，拖出的矩形实时决定选中项
+  const { marqueeRect, onMarqueePointerDown, shouldSuppressClick } =
+    useMarqueeSelection({
+      containerRef: fileScrollAreaRef,
+      enabled: !fileList.loading && fileList.fileList.length > 0,
+      onChange: setSelectedKeys,
+    })
+
   const operations = useFileOperations(fileList.refresh, clearSelection, () => {
     // 在特殊视图中创建文件夹后，返回全部文件页面
     if (isFavoritesView || isRecentsView || isTypeFilter || isDirFilter) {
-      navigate(`/w/${slug}/files?viewMode=${viewMode}`)
+      navigate(`/files?viewMode=${viewMode}`)
     }
   }, fileList.updateFileItems)
 
@@ -107,9 +118,18 @@ export default function FilesPage() {
   const isRecycleBin = viewType === 'recycle'
   const isSharesView = viewType === 'shares'
   const isTypeFilter = !!fileType
+  // 全部文件视图：上传/新建文件夹这类目录级操作只在这里有意义，筛选/收藏/历史视图不提供
+  const isAllFilesView =
+    !isFavoritesView && !isRecentsView && !isTypeFilter && !isDirFilter
   const canRead = hasPermission('file:read')
   const canWrite = hasPermission('file:write')
   const canShare = hasPermission('file:share')
+
+  // 操作系统文件/文件夹拖入上传：仅全部文件视图且有写权限时启用
+  const externalDrop = useExternalFileDrop({
+    enabled: canWrite && isAllFilesView,
+    parentId: fileList.currentParentId,
+  })
 
   const specialViewTitle = useMemo(() => {
     if (isFavoritesView) return t('index.viewFavorites')
@@ -140,9 +160,10 @@ export default function FilesPage() {
    */
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // ESC 键取消多选
-      if (e.key === 'Escape' && selectedKeys.length > 0) {
-        clearSelection()
+      // ESC 键退出多选模式并取消选中
+      if (e.key === 'Escape') {
+        if (selectedKeys.length > 0) clearSelection()
+        if (selectMode) setSelectMode(false)
       }
 
       // F2 键重命名（仅当选中单个文件时）
@@ -159,13 +180,14 @@ export default function FilesPage() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedKeys, fileList.fileList, canWrite])
+  }, [selectedKeys, fileList.fileList, canWrite, selectMode])
 
   /**
-   * 当目录变化时清空选中状态
+   * 当目录变化时清空选中状态并退出多选模式
    */
   useEffect(() => {
     clearSelection()
+    setSelectMode(false)
   }, [fileList.currentParentId, viewType, fileType, isDirFilter])
 
   /**
@@ -194,16 +216,6 @@ export default function FilesPage() {
    */
   const handleOpenUploadModal = () => {
     if (!canWrite) return
-    setUploadDirectoryMode(false)
-    setUploadModalOpen(true)
-  }
-
-  /**
-   * 打开上传文件夹弹窗
-   */
-  const handleOpenUploadDirectoryModal = () => {
-    if (!canWrite) return
-    setUploadDirectoryMode(true)
     setUploadModalOpen(true)
   }
 
@@ -218,7 +230,7 @@ export default function FilesPage() {
       // 如果是在特殊视图中，进入文件夹后清除筛选参数，回到全部文件
       if (isFavoritesView || isRecentsView || isTypeFilter || isDirFilter) {
         // 使用 navigate 跳转到全部文件视图
-        navigate(`/w/${slug}/files?parentId=${file.id}&viewMode=${viewMode}`)
+        navigate(`/files?parentId=${file.id}&viewMode=${viewMode}`)
       } else {
         fileList.enterFolder(file.id, viewMode)
       }
@@ -317,12 +329,10 @@ export default function FilesPage() {
 
   return (
     <div className='flex h-full flex-col'>
-      {/* 现代化顶部工具栏 */}
-      <div className='flex items-center gap-4 border-b px-6 py-4'>
-        <SidebarTrigger className='md:hidden' />
-
+      {/* 顶部工具栏：窄屏时标题与工具栏各占一行，分隔线两端内缩与内容对齐 */}
+      <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 py-3 sm:px-6 sm:py-4'>
         {/* 面包屑导航 */}
-        <div className='min-w-0 flex-1'>
+        <div className='w-full min-w-0 sm:w-auto sm:flex-1'>
           <FileBreadcrumb
             breadcrumbPath={fileList.breadcrumbPath}
             customTitle={
@@ -341,51 +351,34 @@ export default function FilesPage() {
           onSearchChange={fileList.setSearchInput}
           onSearch={fileList.commitSearch}
           onUpload={handleOpenUploadModal}
-          onUploadDirectory={handleOpenUploadDirectoryModal}
           onCreateFolder={operations.openCreateFolderModal}
+          onCreateText={operations.openCreateTextModal}
           onRefresh={fileList.refresh}
-          hideActions={false}
+          hideActions={!isAllFilesView}
+          selectMode={selectMode}
+          onToggleSelectMode={
+            fileList.fileList.length > 0
+              ? () => setSelectMode((v) => !v)
+              : undefined
+          }
         />
       </div>
 
-      {/* 次级工具栏：统计信息和视图切换 */}
-      <div className='flex items-center justify-between border-b px-6 py-3'>
-        <div className='flex items-center gap-3'>
-          {viewMode === 'grid' && fileList.fileList.length > 0 && (
-            <Checkbox
-              checked={isAllSelected}
-              onCheckedChange={handleSelectAll}
-              aria-label={t('index.ariaSelectAll')}
-            />
-          )}
-          <span className='text-sm text-muted-foreground'>
-            {selectedKeys.length > 0
-              ? t('index.selectedCount', { count: selectedKeys.length })
-              : t('index.totalCount', { total: fileList.total })}
-          </span>
-        </div>
-        <ToggleGroup
-          type='single'
-          value={viewMode}
-          onValueChange={(value) => value && setViewMode(value as ViewMode)}
-        >
-          <ToggleGroupItem value='grid' aria-label={t('index.ariaGrid')} size='sm'>
-            <LayoutGrid className='h-4 w-4' />
-          </ToggleGroupItem>
-          <ToggleGroupItem value='list' aria-label={t('index.ariaList')} size='sm'>
-            <List className='h-4 w-4' />
-          </ToggleGroupItem>
-        </ToggleGroup>
-      </div>
-
-      {/* 主内容区域 */}
-      <div className='flex-1 overflow-hidden'>
+      {/* 主内容区域：顶部留白放在这一层而不是滚动容器里，表头才能一上来就贴住工具栏、没有上浮行程 */}
+      <div className='relative flex-1 overflow-hidden pt-3 sm:pt-6'>
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div
               ref={fileScrollAreaRef}
-              className='h-full overflow-auto p-6'
+              className='h-full overflow-x-hidden overflow-y-auto px-3 pb-3 sm:px-6 sm:pb-6'
+              onPointerDown={onMarqueePointerDown}
+              onDragEnter={externalDrop.handleDragEnter}
+              onDragOver={externalDrop.handleDragOver}
+              onDragLeave={externalDrop.handleDragLeave}
+              onDrop={externalDrop.handleDrop}
               onClick={(e) => {
+                // 框选刚松手时浏览器会补发一次 click，别让它把选中清掉
+                if (shouldSuppressClick()) return
                 const tgt = e.target as HTMLElement
                 if (tgt.closest('[data-file-id]')) return
                 if (tgt.closest('thead')) return
@@ -409,13 +402,13 @@ export default function FilesPage() {
                         {t('index.emptyDesc')}
                       </EmptyDescription>
                     </EmptyHeader>
-                    {!fileList.searchKeyword && (
+                    {!fileList.searchKeyword && isAllFilesView && (
                       <EmptyContent>
                         <div className='flex gap-2'>
                           {canWrite && (
                             <Button size='sm' onClick={handleOpenUploadModal}>
-                            <Upload className='mr-2 h-4 w-4' />
-                            {t('index.uploadFile')}
+                              <Upload className='mr-2 h-4 w-4' />
+                              {t('index.uploadFile')}
                             </Button>
                           )}
                           {canWrite && (
@@ -434,7 +427,8 @@ export default function FilesPage() {
                   </Empty>
                 </div>
               ) : (
-                <div className='h-full min-h-0'>
+                /* 不撑满高度：内容不足时强撑到 100% 会因亚像素取整虚报溢出，白得一个滚动条 */
+                <div className='min-h-0'>
                   {viewMode === 'grid' ? (
                     <FileGridView
                       fileList={fileList.fileList}
@@ -449,11 +443,13 @@ export default function FilesPage() {
                       onMoveFiles={handleMoveFiles}
                       onFavorite={operations.handleFavorite}
                       onPreview={operations.openPreview}
+                      onEdit={operations.openTextEditor}
                       onDetail={operations.openDetail}
                       onDragStateChange={handleDragStateChange}
                       onBatchShare={handleBatchShare}
                       onBatchMove={handleBatchMove}
                       onBatchDelete={handleBatchDelete}
+                      selectMode={selectMode}
                       hasMore={fileList.hasMore}
                       loadingMore={fileList.loadingMore}
                       onLoadMore={fileList.loadMore}
@@ -474,11 +470,13 @@ export default function FilesPage() {
                       onMoveFiles={handleMoveFiles}
                       onFavorite={operations.handleFavorite}
                       onPreview={operations.openPreview}
+                      onEdit={operations.openTextEditor}
                       onDetail={operations.openDetail}
                       onDragStateChange={handleDragStateChange}
                       onBatchShare={handleBatchShare}
                       onBatchMove={handleBatchMove}
                       onBatchDelete={handleBatchDelete}
+                      selectMode={selectMode}
                       hasMore={fileList.hasMore}
                       loadingMore={fileList.loadingMore}
                       onLoadMore={fileList.loadMore}
@@ -497,15 +495,15 @@ export default function FilesPage() {
               </ContextMenuItem>
             )}
             {canWrite && (
-              <ContextMenuItem onClick={handleOpenUploadModal}>
-                <Upload className='mr-2 h-4 w-4' />
-                {t('index.uploadFile')}
+              <ContextMenuItem onClick={operations.openCreateTextModal}>
+                <FilePlus className='mr-2 h-4 w-4' />
+                {t('index.newTextFile')}
               </ContextMenuItem>
             )}
             {canWrite && (
-              <ContextMenuItem onClick={handleOpenUploadDirectoryModal}>
-                <FolderUp className='mr-2 h-4 w-4' />
-                {t('index.uploadFolder')}
+              <ContextMenuItem onClick={handleOpenUploadModal}>
+                <Upload className='mr-2 h-4 w-4' />
+                {t('index.uploadFile')}
               </ContextMenuItem>
             )}
             {canWrite && (
@@ -517,6 +515,52 @@ export default function FilesPage() {
             </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
+
+        {/* 系统文件拖入提示：drop 才真正入队，此层只做视觉且不拦截指针 */}
+        {externalDrop.isDragging && (
+          <div className='pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-xl border-2 border-dashed border-primary bg-primary/10'>
+            <div className='flex flex-col items-center gap-2 rounded-lg bg-background/85 px-6 py-4 backdrop-blur-sm'>
+              <Upload className='h-8 w-8 text-primary' />
+              <span className='text-sm font-medium'>
+                {t('upload.dropZoneHint')}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 底部状态栏：全选、统计信息和视图切换，置于文件区最下方（无分隔线） */}
+      <div className='flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2.5 sm:px-6'>
+        <div className='flex items-center gap-2'>
+          {/* 用文字按钮而非复选框：选中态已由行/卡片背景色表达 */}
+          {fileList.fileList.length > 0 && (
+            <Button
+              variant='ghost'
+              size='sm'
+              className='text-muted-foreground hover:text-foreground'
+              onClick={() => handleSelectAll(!isAllSelected)}
+            >
+              {isAllSelected ? t('index.deselectAll') : t('index.selectAll')}
+            </Button>
+          )}
+          <span className='text-sm text-muted-foreground'>
+            {selectedKeys.length > 0
+              ? t('index.selectedCount', { count: selectedKeys.length })
+              : t('index.totalCount', { total: fileList.total })}
+          </span>
+        </div>
+        <ToggleGroup
+          type='single'
+          value={viewMode}
+          onValueChange={(value) => value && setViewMode(value as ViewMode)}
+        >
+          <ToggleGroupItem value='list' aria-label={t('index.ariaList')} size='sm'>
+            <List className='h-4 w-4' />
+          </ToggleGroupItem>
+          <ToggleGroupItem value='grid' aria-label={t('index.ariaGrid')} size='sm'>
+            <LayoutGrid className='h-4 w-4' />
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
       {/* 拖拽移动提示：fixed 底部，避免插入文档流导致布局抖动 */}
@@ -524,7 +568,7 @@ export default function FilesPage() {
         <div
           className={cn(
             'pointer-events-none fixed left-1/2 z-[90] -translate-x-1/2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 shadow-md dark:border-blue-900 dark:bg-blue-950/40',
-            selectedKeys.length > 0 ? 'bottom-24' : 'bottom-6'
+            selectedKeys.length > 0 ? 'bottom-28' : 'bottom-16'
           )}
           role='status'
           aria-live='polite'
@@ -552,6 +596,19 @@ export default function FilesPage() {
         </div>
       )}
 
+      {/* 框选矩形：视口坐标 + fixed，与命中测试用的 getBoundingClientRect 同源 */}
+      {marqueeRect && (
+        <div
+          className='pointer-events-none fixed z-[80] rounded-sm border border-primary/40 bg-primary/10'
+          style={{
+            top: marqueeRect.top,
+            left: marqueeRect.left,
+            width: marqueeRect.width,
+            height: marqueeRect.height,
+          }}
+        />
+      )}
+
       <FileBulkSelectionBar
         selectedCount={selectedKeys.length}
         hasUnfavorited={hasUnfavorited}
@@ -569,7 +626,6 @@ export default function FilesPage() {
         open={uploadModalOpen}
         onOpenChange={setUploadModalOpen}
         parentId={fileList.currentParentId}
-        isDirectoryMode={uploadDirectoryMode}
       />
 
       {/* 上传进度面板 */}
@@ -581,6 +637,20 @@ export default function FilesPage() {
         onOpenChange={operations.setCreateFolderModalVisible}
         parentId={fileList.currentParentId}
         onConfirm={operations.handleCreateFolder}
+      />
+
+      <CreateTextModal
+        open={operations.createTextModalVisible}
+        onOpenChange={operations.setCreateTextModalVisible}
+        parentId={fileList.currentParentId}
+        onConfirm={operations.handleCreateText}
+      />
+
+      <TextEditorModal
+        open={operations.textEditorVisible}
+        onOpenChange={operations.setTextEditorVisible}
+        file={operations.editingTextFile}
+        onSuccess={fileList.refresh}
       />
 
       <RenameModal

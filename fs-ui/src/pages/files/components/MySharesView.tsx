@@ -32,7 +32,7 @@ import {
   getShareAccessRecords,
 } from '@/api/share'
 import { cn } from '@/lib/utils'
-import { formatTime, formatFileTime } from '@/utils/format'
+import { formatFileListDisplayTime, formatFileTime } from '@/utils/format'
 import { usePermission } from '@/hooks/use-permission'
 import {
   AlertDialog,
@@ -46,7 +46,13 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
 import {
   Dialog,
   DialogClose,
@@ -97,14 +103,14 @@ import { Toolbar } from './Toolbar'
 import { DataTablePagination } from '@/components/data-table'
 
 const SHARE_TABLE_HEAD: Record<string, string> = {
-  select: 'w-12',
   shareName: '',
   expireTime: 'w-36',
   viewCount: 'w-28 text-center',
   downloadCount: 'w-28 text-center',
   scope: 'w-32 text-center',
   createdAt: 'w-44',
-  actions: 'w-48 text-center',
+  // 行尾操作列只在触屏出现，鼠标端靠右键菜单；表头用 sr-only 占位
+  actions: 'w-10 px-1 text-right hoverable:hidden',
 }
 
 export function MySharesView() {
@@ -119,6 +125,8 @@ export function MySharesView() {
   const [shareList, setShareList] = useState<ShareItem[]>([])
   const [total, setTotal] = useState(0)
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
+  // 触屏多选模式：无 Ctrl/右键，进入后点行即切换选中
+  const [selectMode, setSelectMode] = useState(false)
   const { searchInput, setSearchInput, searchKeyword, commitSearch } =
     useToolbarSearch('keyword')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 })
@@ -375,20 +383,56 @@ export function MySharesView() {
 
   // 全选/取消全选：仅作用于当前页，与其它页已选项合并（跨页保留）
   const handleSelectAll = (checked: boolean) => {
-    const pageIds = shareList.map((s) => s.id)
+    const ids = shareList.map((s) => s.id)
     setSelectedKeys((prev) => {
       if (checked) {
-        return [...new Set([...prev, ...pageIds])]
+        return [...new Set([...prev, ...ids])]
       }
-      return prev.filter((id) => !pageIds.includes(id))
+      return prev.filter((id) => !ids.includes(id))
     })
   }
 
-  // ESC 键取消选择
+  /** 上一次普通点击的行号，Shift 范围选以它为起点（与文件列表同款交互） */
+  const lastClickedIndexRef = useRef<number | null>(null)
+
+  const handleRowClick = (
+    rowIndex: number,
+    id: string,
+    event: React.MouseEvent
+  ) => {
+    if (selectMode) {
+      setSelectedKeys((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      )
+      lastClickedIndexRef.current = rowIndex
+      return
+    }
+    if (event.shiftKey && lastClickedIndexRef.current !== null) {
+      event.preventDefault()
+      const [from, to] = [lastClickedIndexRef.current, rowIndex].sort(
+        (a, b) => a - b
+      )
+      const rangeIds = shareList.slice(from, to + 1).map((s) => s.id)
+      setSelectedKeys((prev) => Array.from(new Set([...prev, ...rangeIds])))
+      return
+    }
+    if (event.ctrlKey || event.metaKey) {
+      setSelectedKeys((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      )
+      lastClickedIndexRef.current = rowIndex
+      return
+    }
+    setSelectedKeys([id])
+    lastClickedIndexRef.current = rowIndex
+  }
+
+  // ESC 键取消选择并退出多选模式
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && selectedKeys.length > 0) {
         setSelectedKeys([])
+        setSelectMode(false)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -408,51 +452,11 @@ export function MySharesView() {
   }, [searchKeyword, pagination.pageIndex, pagination.pageSize, fetchSharePage])
 
   const pageIds = shareList.map((s) => s.id)
-  const selectedOnPageCount = pageIds.filter((id) =>
-    selectedKeys.includes(id)
-  ).length
   const isAllPageSelected =
-    pageIds.length > 0 && selectedOnPageCount === pageIds.length
-  const isSomePageSelected =
-    selectedOnPageCount > 0 && !isAllPageSelected
+    pageIds.length > 0 && pageIds.every((id) => selectedKeys.includes(id))
 
   const columns = useMemo<ColumnDef<ShareItem>[]>(
     () => [
-      {
-        id: 'select',
-        header: () => (
-          <Checkbox
-            checked={
-              isAllPageSelected
-                ? true
-                : isSomePageSelected
-                  ? 'indeterminate'
-                  : false
-            }
-            onCheckedChange={handleSelectAll}
-            aria-label={t('myShares.ariaSelectAll')}
-          />
-        ),
-        cell: ({ row }) => (
-          <Checkbox
-            checked={selectedKeys.includes(row.original.id)}
-            onCheckedChange={(checked) => {
-              const id = row.original.id
-              setSelectedKeys((prev) => {
-                if (checked) {
-                  return prev.includes(id) ? prev : [...prev, id]
-                }
-                return prev.filter((x) => x !== id)
-              })
-            }}
-            aria-label={t('myShares.ariaSelectRow', {
-              name: row.original.shareName,
-            })}
-          />
-        ),
-        enableSorting: false,
-        size: 48,
-      },
       {
         accessorKey: 'shareName',
         header: t('myShares.colName'),
@@ -549,18 +553,14 @@ export function MySharesView() {
         accessorKey: 'createdAt',
         header: t('myShares.colCreated'),
         cell: ({ row }) => (
-          <span className='text-sm text-muted-foreground'>
-            {formatTime(row.original.createdAt)}
+          <span className='text-sm tabular-nums whitespace-nowrap text-muted-foreground'>
+            {formatFileListDisplayTime(row.original.createdAt)}
           </span>
         ),
       },
       {
         id: 'actions',
-        header: () => (
-          <span className='block w-full text-center'>
-            {t('myShares.colActions')}
-          </span>
-        ),
+        header: () => <span className='sr-only'>{t('myShares.colActions')}</span>,
         cell: ({ row }) => {
           const share = row.original
           return (
@@ -640,13 +640,10 @@ export function MySharesView() {
     [
       canCancelShare,
       shareList,
-      selectedKeys,
       t,
       formatExpireTime,
       formatScopeText,
       isExpired,
-      isAllPageSelected,
-      isSomePageSelected,
     ]
   )
 
@@ -670,40 +667,60 @@ export function MySharesView() {
 
   return (
     <div className='flex h-full flex-col'>
-      {/* 顶部工具栏 */}
-      <div className='flex items-center gap-4 border-b px-6 py-4'>
-        <div className='min-w-0 flex-1'>
+      {/* 顶部工具栏：窄屏时标题独占一行，搜索与清空按钮同处第二行 */}
+      <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 py-3 sm:px-6 sm:py-4'>
+        <div className='w-full min-w-0 sm:w-auto sm:flex-1'>
           <FileBreadcrumb
             breadcrumbPath={[]}
             customTitle={t('myShares.title')}
             onNavigate={() => {}}
           />
         </div>
-        <Toolbar
-          searchKeyword={searchInput}
-          onSearchChange={setSearchInput}
-          onSearch={commitSearch}
-          onUpload={() => {}}
-          onCreateFolder={() => {}}
-          onRefresh={handleRefresh}
-          hideActions={true}
-        />
-        {canClearShares && (
-          <Button
-            variant='destructive'
-            size='sm'
-            disabled={total === 0}
-            onClick={handleClearAllShares}
-          >
-            <Trash2 className='mr-2 h-4 w-4' />
-            {t('myShares.clearAllButton')}
-          </Button>
-        )}
+        <div className='flex w-full items-center gap-2 sm:w-auto'>
+          <Toolbar
+            searchKeyword={searchInput}
+            onSearchChange={setSearchInput}
+            onSearch={commitSearch}
+            onUpload={() => {}}
+            onCreateFolder={() => {}}
+            onRefresh={handleRefresh}
+            hideActions={true}
+            selectMode={selectMode}
+            onToggleSelectMode={
+              shareList.length > 0 ? () => setSelectMode((v) => !v) : undefined
+            }
+          />
+          {canClearShares && (
+            <Button
+              variant='destructive'
+              size='sm'
+              className='shrink-0'
+              disabled={total === 0}
+              onClick={handleClearAllShares}
+            >
+              <Trash2 className='mr-2 h-4 w-4' />
+              {t('myShares.clearAllButton')}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* 次级工具栏：统计信息 */}
-      <div className='flex items-center justify-between border-b px-6 py-3'>
-        <div className='flex items-center gap-3'>
+      <div className='inset-divider flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2.5 sm:px-6 sm:py-3'>
+        <div className='flex items-center gap-2'>
+          {/* 与文件页一致：用文字按钮全选，选中态由行背景色表达 */}
+          {shareList.length > 0 && (
+            <Button
+              variant='ghost'
+              size='sm'
+              className='text-muted-foreground hover:text-foreground'
+              onClick={() => handleSelectAll(!isAllPageSelected)}
+            >
+              {isAllPageSelected
+                ? t('index.deselectAll')
+                : t('index.selectAll')}
+            </Button>
+          )}
           <span className='text-sm text-muted-foreground'>
             {selectedKeys.length > 0
               ? t('myShares.selectedHint', { count: selectedKeys.length })
@@ -712,8 +729,8 @@ export function MySharesView() {
         </div>
       </div>
 
-      {/* 主内容区域 */}
-      <div className='flex-1 overflow-hidden'>
+      {/* 顶部留白放这层：滚动容器内不留 pt，粘性表头才能一上来就贴住分隔线 */}
+      <div className='flex-1 overflow-hidden pt-3 sm:pt-6'>
         <div className='flex h-full min-h-0 flex-col'>
           {loading ? (
             <div className='flex h-full items-center justify-center'>
@@ -737,12 +754,18 @@ export function MySharesView() {
             </div>
           ) : (
             <>
-              <div className='min-h-0 flex-1 overflow-auto px-6 pt-6'>
+              <div className='min-h-0 flex-1 overflow-auto px-3 pb-3 sm:px-6 sm:pb-6'>
                 <div className='rounded-md border'>
-                  <Table>
-                    <TableHeader>
+                  {/* 窄屏不压缩列宽，改为横向滚动保留全部列；
+                      containerClassName 必须清掉自带的 overflow-auto，否则它就成了粘性表头最近的滚动祖先 */}
+                  <Table
+                    className='min-w-[60rem]'
+                    containerClassName='overflow-visible'
+                  >
+                    {/* sticky 加在 th 而非 thead（Firefox 不支持 table-section 级 sticky），不画表头底线 */}
+                    <TableHeader className='[&_tr]:border-0 [&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-background'>
                       {table.getHeaderGroups().map((headerGroup) => (
-                        <TableRow key={headerGroup.id} className='bg-muted/50'>
+                        <TableRow key={headerGroup.id}>
                           {headerGroup.headers.map((header) => (
                             <TableHead
                               key={header.id}
@@ -764,32 +787,79 @@ export function MySharesView() {
                     </TableHeader>
                     <TableBody>
                       {table.getRowModel().rows.length > 0 ? (
-                        table.getRowModel().rows.map((row) => (
-                          <TableRow
-                            key={row.id}
-                            className={cn(
-                              'group',
-                              selectedKeys.includes(row.original.id) &&
-                                'bg-primary/5'
-                            )}
-                          >
-                            {row.getVisibleCells().map((cell) => (
-                              <TableCell
-                                key={cell.id}
-                                onClick={
-                                  cell.column.id === 'select' ||
-                                  cell.column.id === 'actions'
-                                    ? (e) => e.stopPropagation()
-                                    : undefined
+                        table.getRowModel().rows.map((row, rowIndex) => (
+                          <ContextMenu key={row.id}>
+                            <ContextMenuTrigger asChild>
+                              <TableRow
+                                className={cn(
+                                  'group border-b-0 transition-colors',
+                                  'hover:bg-primary/[0.06]',
+                                  selectedKeys.includes(row.original.id) &&
+                                    'bg-primary/[0.08]'
+                                )}
+                                onClick={(e) =>
+                                  handleRowClick(rowIndex, row.original.id, e)
                                 }
                               >
-                                {flexRender(
-                                  cell.column.columnDef.cell,
-                                  cell.getContext()
-                                )}
-                              </TableCell>
-                            ))}
-                          </TableRow>
+                                {row.getVisibleCells().map((cell) => (
+                                  <TableCell
+                                    key={cell.id}
+                                    className={cn(
+                                      // 操作列只在触屏出现：鼠标端靠右键，与文件页一致
+                                      cell.column.id === 'actions' &&
+                                        'hoverable:hidden'
+                                    )}
+                                    onClick={
+                                      cell.column.id === 'actions'
+                                        ? (e) => e.stopPropagation()
+                                        : undefined
+                                    }
+                                  >
+                                    {flexRender(
+                                      cell.column.columnDef.cell,
+                                      cell.getContext()
+                                    )}
+                                  </TableCell>
+                                ))}
+                              </TableRow>
+                            </ContextMenuTrigger>
+                            <ContextMenuContent>
+                              <ContextMenuItem
+                                onClick={() => handleQuickCopy(row.original)}
+                              >
+                                <Copy className='size-4' />
+                                {t('myShares.quickCopy')}
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                onClick={() => handleViewShare(row.original)}
+                              >
+                                <Eye className='size-4' />
+                                {t('myShares.viewDetail')}
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                onClick={() =>
+                                  handleViewAccessRecords(row.original)
+                                }
+                              >
+                                <FileText className='size-4' />
+                                {t('myShares.accessRecordsMenu')}
+                              </ContextMenuItem>
+                              {canCancelShare && (
+                                <>
+                                  <ContextMenuSeparator />
+                                  <ContextMenuItem
+                                    className='text-destructive focus:text-destructive'
+                                    onClick={() =>
+                                      handleCancelShare(row.original)
+                                    }
+                                  >
+                                    <RouteOff className='size-4' />
+                                    {t('myShares.cancelShareMenu')}
+                                  </ContextMenuItem>
+                                </>
+                              )}
+                            </ContextMenuContent>
+                          </ContextMenu>
                         ))
                       ) : (
                         <TableRow>
@@ -805,7 +875,8 @@ export function MySharesView() {
                   </Table>
                 </div>
               </div>
-              <div className='shrink-0 border-t px-6 py-3'>
+              {/* 分页组件靠名为 content 的容器查询做窄屏折叠，此处必须提供容器 */}
+              <div className='@container/content shrink-0 border-t px-3 py-3 sm:px-6'>
                 <DataTablePagination table={table} />
               </div>
             </>

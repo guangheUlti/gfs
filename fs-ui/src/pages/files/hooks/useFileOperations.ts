@@ -7,11 +7,12 @@ import {
   renameFile,
   moveFiles,
   createFolder,
+  createTextFile,
+  updateTextContent,
   favoriteFile,
   unfavoriteFile,
 } from '@/api/file'
 import { openFilePreviewWithToken } from '@/utils/preview'
-import { getCurrentWorkspaceId } from '@/store/workspace'
 
 export function useFileOperations(
   refreshCallback: () => void,
@@ -23,6 +24,8 @@ export function useFileOperations(
   // 模态框状态
   const [createFolderModalVisible, setCreateFolderModalVisible] =
     useState(false)
+  const [createTextModalVisible, setCreateTextModalVisible] = useState(false)
+  const [textEditorVisible, setTextEditorVisible] = useState(false)
   const [renameModalVisible, setRenameModalVisible] = useState(false)
   const [moveModalVisible, setMoveModalVisible] = useState(false)
   const [shareModalVisible, setShareModalVisible] = useState(false)
@@ -37,6 +40,8 @@ export function useFileOperations(
   const [sharingFiles, setSharingFiles] = useState<FileItem[]>([])
   const [deletingFiles, setDeletingFiles] = useState<FileItem[]>([])
   const [detailFile, setDetailFile] = useState<FileItem | null>(null)
+  // 正在在线编辑的文本文件
+  const [editingTextFile, setEditingTextFile] = useState<FileItem | null>(null)
 
   /**
    * 打开创建文件夹弹窗
@@ -61,6 +66,57 @@ export function useFileOperations(
       }
     },
     [refreshCallback, onCreateFolderSuccess, t]
+  )
+
+  /**
+   * 打开新建纯文本弹窗
+   */
+  const openCreateTextModal = useCallback(() => {
+    setCreateTextModalVisible(true)
+  }, [])
+
+  /**
+   * 新建纯文本文件
+   */
+  const handleCreateText = useCallback(
+    async (fileName: string, parentId?: string) => {
+      try {
+        await createTextFile({ fileName, parentId })
+        toast.success(t('operations.createTextOk'))
+        setCreateTextModalVisible(false)
+        onCreateFolderSuccess?.()
+        refreshCallback()
+      } catch (error) {
+        toast.error(t('operations.createTextFail'))
+      }
+    },
+    [refreshCallback, onCreateFolderSuccess, t]
+  )
+
+  /**
+   * 打开文本在线编辑弹窗（仅 .txt）
+   */
+  const openTextEditor = useCallback((file: FileItem) => {
+    setEditingTextFile(file)
+    setTextEditorVisible(true)
+  }, [])
+
+  /**
+   * 保存文本编辑内容
+   */
+  const handleSaveText = useCallback(
+    async (fileId: string, content: string) => {
+      try {
+        await updateTextContent(fileId, content)
+        toast.success(t('operations.saveTextOk'))
+        setTextEditorVisible(false)
+        setEditingTextFile(null)
+        refreshCallback()
+      } catch (error) {
+        toast.error(t('operations.saveTextFail'))
+      }
+    },
+    [refreshCallback, t]
   )
 
   /**
@@ -191,18 +247,14 @@ export function useFileOperations(
     const token =
       localStorage.getItem('accessToken') ||
       sessionStorage.getItem('accessToken')
-    const workspaceId = getCurrentWorkspaceId()
 
     // 使用延迟下载避免浏览器阻止多个下载
     fileArray.forEach((file, index) => {
       setTimeout(() => {
-        // 构建下载链接，将 token 和 workspaceId 放到 URL 参数中
+        // 构建下载链接，浏览器直接下载带不了请求头，把 token 放到 URL 参数中
         const params = new URLSearchParams()
         params.set('Authorization', `Bearer ${token}`)
-        if (workspaceId) {
-          params.set('X-Workspace-Id', workspaceId)
-        }
-        
+
         const downloadUrl = `${import.meta.env.VITE_API_BASE_URL}/apis/transfer/download/${file.id}?${params.toString()}`
 
         const link = document.createElement('a')
@@ -273,6 +325,10 @@ export function useFileOperations(
     // 模态框状态
     createFolderModalVisible,
     setCreateFolderModalVisible,
+    createTextModalVisible,
+    setCreateTextModalVisible,
+    textEditorVisible,
+    setTextEditorVisible,
     renameModalVisible,
     setRenameModalVisible,
     moveModalVisible,
@@ -292,10 +348,15 @@ export function useFileOperations(
     sharingFiles,
     deletingFiles,
     detailFile,
+    editingTextFile,
 
     // 操作方法
     openCreateFolderModal,
     handleCreateFolder,
+    openCreateTextModal,
+    handleCreateText,
+    openTextEditor,
+    handleSaveText,
     openRenameModal,
     handleRename,
     openMoveModal,

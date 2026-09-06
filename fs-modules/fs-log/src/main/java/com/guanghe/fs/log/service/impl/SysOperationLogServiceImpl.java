@@ -5,7 +5,6 @@ import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
-import com.guanghe.fs.framework.common.context.WorkspaceContext;
 import com.guanghe.fs.framework.common.domain.PageResult;
 import com.guanghe.fs.framework.common.utils.IpUtils;
 import com.guanghe.fs.log.domain.SysOperationLog;
@@ -40,13 +39,12 @@ public class SysOperationLogServiceImpl
 
     @Override
     public PageResult<SysOperationLogVO> getPages(OperationLogPageQry qry) {
-        String workspaceId = WorkspaceContext.getWorkspaceId();
         int pageNumber = qry.getPage() == null ? 1 : qry.getPage();
         int pageSize = qry.getPageSize() == null ? 20 : qry.getPageSize();
         Page<SysOperationLog> page = new Page<>(pageNumber, pageSize);
 
-        QueryWrapper wrapper = new QueryWrapper()
-                .where(SYS_OPERATION_LOG.WORKSPACE_ID.eq(workspaceId));
+        // 日志接口已由 log:read 权限限定为系统管理员可见，无需再按归属过滤
+        QueryWrapper wrapper = new QueryWrapper();
 
         if (StrUtil.isNotBlank(qry.getKeyword())) {
             String keyword = "%" + qry.getKeyword().trim() + "%";
@@ -81,25 +79,12 @@ public class SysOperationLogServiceImpl
                               String targetId,
                               String targetName,
                               String detail) {
-        record(WorkspaceContext.getWorkspaceId(), operationType, operationName,
+        record(operationType, operationName,
                 targetType, targetId, targetName, detail, STATUS_SUCCESS, null, null, null);
     }
 
     @Override
-    public void recordSuccess(String workspaceId,
-                              String operationType,
-                              String operationName,
-                              String targetType,
-                              String targetId,
-                              String targetName,
-                              String detail) {
-        record(workspaceId, operationType, operationName,
-                targetType, targetId, targetName, detail, STATUS_SUCCESS, null, null, null);
-    }
-
-    @Override
-    public void recordSuccessAs(String workspaceId,
-                                String operatorId,
+    public void recordSuccessAs(String operatorId,
                                 String operatorName,
                                 String operationType,
                                 String operationName,
@@ -107,7 +92,7 @@ public class SysOperationLogServiceImpl
                                 String targetId,
                                 String targetName,
                                 String detail) {
-        record(workspaceId, operationType, operationName,
+        record(operationType, operationName,
                 targetType, targetId, targetName, detail, STATUS_SUCCESS, null,
                 operatorId, operatorName);
     }
@@ -120,12 +105,11 @@ public class SysOperationLogServiceImpl
                               String targetName,
                               String detail,
                               String errorMessage) {
-        record(WorkspaceContext.getWorkspaceId(), operationType, operationName,
+        record(operationType, operationName,
                 targetType, targetId, targetName, detail, STATUS_FAILURE, errorMessage, null, null);
     }
 
-    private void record(String workspaceId,
-                        String operationType,
+    private void record(String operationType,
                         String operationName,
                         String targetType,
                         String targetId,
@@ -146,7 +130,6 @@ public class SysOperationLogServiceImpl
                 Object username = StpUtil.getSession().get("username");
                 operationLog.setOperatorName(username == null ? operatorId : String.valueOf(username));
             }
-            operationLog.setWorkspaceId(workspaceId);
             operationLog.setOperationType(trim(operationType, 64));
             operationLog.setOperationName(trim(operationName, 128));
             operationLog.setTargetType(trim(targetType, 32));

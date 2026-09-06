@@ -35,11 +35,6 @@ public class StorageSettingUserVO implements Serializable {
     private Integer enabled;
 
     /**
-     * 所属工作空间ID
-     */
-    private String workspaceId;
-
-    /**
      * 备注
      */
     private String remark;

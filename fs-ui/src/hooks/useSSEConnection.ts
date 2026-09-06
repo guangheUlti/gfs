@@ -1,25 +1,21 @@
 import { useEffect, useRef } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { useTransferStore } from '@/store/transfer'
-import { useWorkspaceStore } from '@/store/workspace'
 
 /**
  * SSE 连接 Hook
- * 自动管理 SSE 连接的生命周期
- * 需要认证且工作空间已激活后才初始化
+ * 自动管理 SSE 连接的生命周期，登录后即初始化（以用户为维度）
  */
 export function useSSEConnection() {
   const { user, isAuthenticated } = useAuth()
   const { initSSE, disconnectSSE, sseConnected } = useTransferStore()
-  const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId)
-  const currentRole = useWorkspaceStore((s) => s.currentRole)
   const isInitializedRef = useRef(false)
   const contextRef = useRef<string | null>(null)
 
   useEffect(() => {
-    const contextKey = `${user?.id}:${currentWorkspaceId}`
+    const contextKey = user?.id ?? null
 
-    if (isAuthenticated && user?.id && currentWorkspaceId && currentRole) {
+    if (isAuthenticated && contextKey) {
       if (isInitializedRef.current && contextRef.current === contextKey) {
         return
       }
@@ -28,7 +24,7 @@ export function useSSEConnection() {
         disconnectSSE()
       }
 
-      initSSE(user.id)
+      initSSE(contextKey)
       isInitializedRef.current = true
       contextRef.current = contextKey
     }
@@ -40,7 +36,7 @@ export function useSSEConnection() {
         contextRef.current = null
       }
     }
-  }, [isAuthenticated, user?.id, currentWorkspaceId, currentRole])
+  }, [isAuthenticated, user?.id])
 
   return { sseConnected }
 }

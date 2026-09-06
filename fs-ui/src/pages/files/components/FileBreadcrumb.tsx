@@ -33,7 +33,8 @@ export function FileBreadcrumb({
   }
 
   return (
-    <div className='py-3'>
+    // 窄屏下外层已有内边距，不再叠加，避免标题行过高
+    <div className='py-0 sm:py-3'>
       <Breadcrumb>
         <BreadcrumbList>
           {/* 根目录 */}

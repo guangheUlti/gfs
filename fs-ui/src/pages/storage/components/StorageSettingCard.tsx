@@ -17,7 +17,6 @@ import {
   toggleStorageSetting,
   updateStorageSetting,
 } from '@/api/storage'
-import { usePermission } from '@/hooks/use-permission'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -65,8 +64,6 @@ export function StorageSettingCard({
   const [editErrors, setEditErrors] = useState<Record<string, string>>({})
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [copiedConfig, setCopiedConfig] = useState(false)
-  const { hasPermission } = usePermission()
-  const canManageStorage = hasPermission('storage:manage')
 
   const schemes: ConfigScheme[] = JSON.parse(
     setting.storagePlatform.configScheme

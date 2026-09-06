@@ -10,12 +10,13 @@ import lombok.Data;
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
- * 用户VO信息，用于展示用户信息（不含权限，权限从工作空间接口获取）
+ * 用户VO信息，用于展示用户信息（含用户级权限编码，供前端做界面级门控）
  *
  * @Author: guangheUlti
- * @Date: 2024/10/16 15:28
+ * @Date: 2024-10-16 15:28
  */
 @Data
 @AutoMapper(target = SysUser.class)
@@ -60,4 +61,7 @@ public class SysUserVO implements Serializable {
 
     @Schema(description = "是否系统管理员")
     private Boolean isSuperAdmin;
+
+    @Schema(description = "权限编码列表")
+    private List<String> permissions;
 }

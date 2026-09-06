@@ -38,6 +38,7 @@
     "totalFiles": "{{count}} file(s)",
     "listView": "List view",
     "gridView": "Grid view",
+    "refresh": "Refresh",
     "empty": "No files",
     "footer": "End of list"
   },

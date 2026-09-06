@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { FileItem, BreadcrumbItem } from '@/types/file'
 import { getFileDetail } from '@/api/file'
-import { formatFileSize, formatTime } from '@/utils/format'
+import { formatFileSize, formatFileListDisplayTime } from '@/utils/format'
 import {
   Dialog,
   DialogContent,
@@ -81,11 +81,11 @@ export function FileDetailModal({
     { label: '文件名', value: displayFile.displayName },
     { label: '大小', value: formatSizeDisplay() },
     { label: '文件位置', value: formatFileLocation() },
-    { label: '上传时间', value: formatTime(displayFile.uploadTime) },
+    { label: '上传时间', value: formatFileListDisplayTime(displayFile.uploadTime) },
     {
       label: '最后访问时间',
       value: displayFile.lastAccessTime
-        ? formatTime(displayFile.lastAccessTime)
+        ? formatFileListDisplayTime(displayFile.lastAccessTime)
         : '-',
     },
   ]

@@ -68,7 +68,6 @@ const getStatusColor = (
 
 export default function TransferTable({
   tasks,
-  loading,
   showActions = false,
   showCompleteTime = false,
   onPause,
@@ -108,7 +107,8 @@ export default function TransferTable({
 
   return (
     <div className='overflow-hidden rounded-xl border border-border/60'>
-      <Table>
+      {/* 窄屏下不压缩列宽，改为表格内部横向滚动，保留全部列 */}
+      <Table className='min-w-[56rem]'>
         <TableHeader className='bg-muted/30 [&_tr]:border-border/60'>
           <TableRow className='border-border/60 hover:bg-transparent'>
             <TableHead className='text-muted-foreground h-11 px-4 font-medium'>

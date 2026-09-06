@@ -14,12 +14,12 @@ import com.guanghe.fs.system.domain.dto.*;
 import com.guanghe.fs.system.domain.vo.PendingUserVO;
 import com.guanghe.fs.system.domain.vo.SysUserVO;
 import com.guanghe.fs.system.mapper.SysUserMapper;
+import com.guanghe.fs.system.constant.UserPermissions;
 import com.guanghe.fs.system.constant.UserStatus;
 import com.guanghe.fs.system.auth.PasswordHashService;
 import com.guanghe.fs.system.auth.LoginGuardService;
 import com.guanghe.fs.system.service.SysUserService;
 import com.guanghe.fs.system.service.SysUserTransferSettingService;
-import com.guanghe.fs.system.service.SysWorkspaceInvitationService;
 import io.github.linpeilie.Converter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -53,8 +53,6 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
 
     private final SysUserTransferSettingService userTransferSettingService;
 
-    private final SysWorkspaceInvitationService workspaceInvitationService;
-
     private final StoragePluginManager pluginManager;
 
     private final PasswordHashService passwordHashService;
@@ -81,7 +79,10 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
             // 设置用户是否已设置密码
             userVO.setIsSetPassword(user.getPassword() != null);
             // 是否系统管理员（用户名与配置一致）
-            userVO.setIsSuperAdmin(user.getUsername() != null && user.getUsername().equals(superAdminUsername));
+            boolean superAdmin = user.getUsername() != null && user.getUsername().equals(superAdminUsername);
+            userVO.setIsSuperAdmin(superAdmin);
+            // 用户级权限，与 StpInterfaceImpl 的鉴权口径保持一致
+            userVO.setPermissions(UserPermissions.of(superAdmin));
         }
         return userVO;
     }
@@ -111,11 +112,6 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
 
             // 初始化用户传输配置
             userTransferSettingService.initUserTransferSetting(user.getId());
-
-            // 处理邀请令牌
-            if (cmd.getInviteToken() != null && !cmd.getInviteToken().isBlank()) {
-                workspaceInvitationService.acceptInvitation(cmd.getInviteToken(), user.getId());
-            }
         } catch (BusinessException e) {
             loginGuardService.recordRegisterFailure();
             throw e;

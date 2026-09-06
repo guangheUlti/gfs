@@ -145,6 +145,18 @@ public interface IStorageOperationService extends Closeable {
     void abortMultipartUpload(String objectKey, String uploadId);
 
     /**
+     * 获取存储底座当前可写入的剩余字节数。
+     * <p>
+     * 仅本地磁盘类存储有确定答案；对象存储（OSS/S3 等）无本地磁盘概念，
+     * 沿用默认实现返回 null，表示容量不可知。
+     *
+     * @return 剩余可用字节数，容量不可知时返回 null
+     */
+    default Long getAvailableSpace() {
+        return null;
+    }
+
+    /**
      * 关闭资源
      */
     @Override

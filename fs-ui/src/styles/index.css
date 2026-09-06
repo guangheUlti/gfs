@@ -4,6 +4,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * 仅在真正支持悬停的设备（鼠标 / 触控板）上生效。
+ * 触屏设备没有 hover，靠 group-hover 揭示的操作按钮会永远不可见，
+ * 因此这类样式要写成：默认常显 + hoverable:隐藏 + hoverable:group-hover:显示。
+ */
+@custom-variant hoverable (@media (hover: hover));
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -56,6 +63,16 @@
 
 @utility faded-bottom {
   @apply after:pointer-events-none after:absolute after:start-0 after:bottom-0 after:hidden after:h-32 after:w-full after:rounded-b-2xl after:bg-[linear-gradient(180deg,transparent_10%,var(--background)_70%)] md:after:block;
+}
+
+/*
+ * 工具栏底部分隔线：两端内缩，与容器的 px-3 / sm:px-6 内边距对齐，
+ * 而不是横贯整屏。直接替代 border-b 用在已带同款内边距的横向工具栏上。
+ * 伪元素带 border-border，因为 base 层的 `*` 选择器匹配不到 ::after，
+ * 不显式指定的话线会落到 currentColor 上。
+ */
+@utility inset-divider {
+  @apply relative after:absolute after:inset-x-3 after:bottom-0 after:border-b after:border-border sm:after:inset-x-6;
 }
 
 /* styles.css */

@@ -26,7 +26,6 @@ import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.file.service.FileObjectReferenceService;
 import com.guanghe.fs.file.service.FileTransferTaskService;
 import com.guanghe.fs.file.enums.TransferTaskStatus;
-import com.guanghe.fs.framework.common.context.WorkspaceContext;
 import com.guanghe.fs.framework.common.exception.BusinessException;
 import com.guanghe.fs.framework.common.exception.StorageOperationException;
 import com.guanghe.fs.framework.common.utils.ErrorMessageUtils;
@@ -117,11 +116,9 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     @Override
     public List<FileTransferTaskVO> getTransferFiles(TransferFilesQry qry) {
         String userId = StpUtil.getLoginIdAsString();
-        String workspaceId = WorkspaceContext.getWorkspaceId();
         String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
         QueryWrapper queryWrapper = new QueryWrapper();
         queryWrapper.where(FILE_TRANSFER_TASK.USER_ID.eq(userId)
-                .and(FILE_TRANSFER_TASK.WORKSPACE_ID.eq(workspaceId))
                 // 公开文件收集上传由专用页面管理，不能混入普通传输列表。
                 .and(FILE_TRANSFER_TASK.COLLECTION_ID.isNull())
                 .and(FILE_TRANSFER_TASK.COLLECTION_SUBMISSION_ID.isNull()));
@@ -258,7 +255,6 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     @Transactional(rollbackFor = Exception.class)
     public String initUpload(InitUploadCmd cmd) {
         String userId = StpUtil.getLoginIdAsString();
-        String workspaceId = WorkspaceContext.getWorkspaceId();
         String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
         try {
             String taskId = IdUtil.fastSimpleUUID();
@@ -266,7 +262,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             String tempFileName = IdUtil.fastSimpleUUID() + "." + suffix;
             String objectKey = FileUtils.generateObjectKey(userId, tempFileName);
             String displayName = fileInfoService.generateUniqueName(
-                    workspaceId,
+                    userId,
                     cmd.getParentId(),
                     cmd.getFileName(),
                     false,
@@ -276,7 +272,6 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             FileTransferTask task = new FileTransferTask();
             task.setTaskId(taskId);
             task.setUserId(userId);
-            task.setWorkspaceId(workspaceId);
             task.setParentId(cmd.getParentId());
             task.setFileName(displayName);
             task.setFileSize(cmd.getFileSize());
@@ -406,7 +401,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             String fileId = IdUtil.fastSimpleUUID();
             LocalDateTime now = LocalDateTime.now();
             String displayName = fileInfoService.generateUniqueName(
-                    task.getWorkspaceId(),
+                    task.getUserId(),
                     task.getParentId(),
                     task.getFileName(),
                     false,
@@ -423,7 +418,6 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             newFileInfo.setMimeType(task.getMimeType());
             newFileInfo.setIsDir(false);
             newFileInfo.setParentId(task.getParentId());
-            newFileInfo.setWorkspaceId(task.getWorkspaceId());
             newFileInfo.setUserId(task.getUserId());
             newFileInfo.setContentMd5(fileMd5);
             newFileInfo.setStoragePlatformSettingId(task.getStoragePlatformSettingId());
@@ -434,7 +428,6 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             fileInfoService.save(newFileInfo);
 
             operationLogService.recordSuccessAs(
-                    task.getWorkspaceId(),
                     task.getUserId(),
                     resolveOperatorName(task.getUserId()),
                     OperationType.UPLOAD,
@@ -893,7 +886,6 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             this.updateById(task);
 
             operationLogService.recordSuccessAs(
-                    task.getWorkspaceId(),
                     task.getUserId(),
                     resolveOperatorName(task.getUserId()),
                     OperationType.UPLOAD,
@@ -939,7 +931,6 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
         fileInfo.setMimeType(task.getMimeType());
         fileInfo.setIsDir(false);
         fileInfo.setParentId(task.getParentId());
-        fileInfo.setWorkspaceId(task.getWorkspaceId());
         fileInfo.setUserId(task.getUserId());
         fileInfo.setContentMd5(task.getFileMd5());
         fileInfo.setStoragePlatformSettingId(task.getStoragePlatformSettingId());
@@ -982,8 +973,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
         }
         FileTransferTask task = getTaskFromCacheOrDB(taskId);
         String userId = StpUtil.getLoginIdAsString();
-        String workspaceId = WorkspaceContext.getWorkspaceId();
-        if (!Objects.equals(userId, task.getUserId()) || !Objects.equals(workspaceId, task.getWorkspaceId())) {
+        if (!Objects.equals(userId, task.getUserId())) {
             throw new BusinessException(I18nUtils.getMessage("file.no.permission.download"));
         }
         return task;
@@ -1093,7 +1083,6 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     @Override
     public void clearTransfers() {
         String userId = StpUtil.getLoginIdAsString();
-        String workspaceId = WorkspaceContext.getWorkspaceId();
         String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
 
         QueryWrapper queryWrapper = new QueryWrapper();
@@ -1102,7 +1091,6 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                         TransferTaskStatus.failed,
                         TransferTaskStatus.canceled))
                 .and(FILE_TRANSFER_TASK.USER_ID.eq(userId))
-                .and(FILE_TRANSFER_TASK.WORKSPACE_ID.eq(workspaceId))
                 // 文件收集任务由收集记录管理，不能被普通传输页清理。
                 .and(FILE_TRANSFER_TASK.COLLECTION_ID.isNull())
                 .and(FILE_TRANSFER_TASK.COLLECTION_SUBMISSION_ID.isNull());
@@ -1149,12 +1137,12 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
 
     @Override
     public FileDownloadVO downloadFile(String fileId) {
-        String workspaceId = WorkspaceContext.getWorkspaceId();
+        String userId = StpUtil.getLoginIdAsString();
         FileInfo fileInfo = fileInfoService.getById(fileId);
         if (fileInfo == null) {
             throw new BusinessException(I18nUtils.getMessage("file.download.failed.not.exist"));
         }
-        if (!workspaceId.equals(fileInfo.getWorkspaceId())) {
+        if (!userId.equals(fileInfo.getUserId())) {
             throw new BusinessException(I18nUtils.getMessage("file.no.permission.download"));
         }
         if (Boolean.TRUE.equals(fileInfo.getIsDir())) {
@@ -1178,10 +1166,9 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
         cleanupExpiredFolderDownloadTasks();
 
         String userId = StpUtil.getLoginIdAsString();
-        String workspaceId = WorkspaceContext.getWorkspaceId();
         String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
 
-        FolderDownloadTask existingTask = findReusableFolderDownloadTask(userId, workspaceId, folderId);
+        FolderDownloadTask existingTask = findReusableFolderDownloadTask(userId, folderId);
         if (existingTask != null) {
             return toFolderDownloadTaskVO(existingTask);
         }
@@ -1190,14 +1177,13 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
         if (folderInfo == null || !Boolean.TRUE.equals(folderInfo.getIsDir()) || Boolean.TRUE.equals(folderInfo.getIsDeleted())) {
             throw new BusinessException("文件夹不存在");
         }
-        if (!workspaceId.equals(folderInfo.getWorkspaceId())) {
+        if (!userId.equals(folderInfo.getUserId())) {
             throw new BusinessException(I18nUtils.getMessage("file.no.permission.download"));
         }
 
         FolderDownloadTask task = new FolderDownloadTask();
         task.taskId = IdUtil.fastSimpleUUID();
         task.userId = userId;
-        task.workspaceId = workspaceId;
         task.storagePlatformSettingId = storagePlatformSettingId;
         task.folderId = folderInfo.getId();
         task.folderName = folderInfo.getDisplayName();
@@ -1290,10 +1276,9 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
         }
     }
 
-    private FolderDownloadTask findReusableFolderDownloadTask(String userId, String workspaceId, String folderId) {
+    private FolderDownloadTask findReusableFolderDownloadTask(String userId, String folderId) {
         return folderDownloadTasks.values().stream()
                 .filter(task -> userId.equals(task.userId)
-                        && workspaceId.equals(task.workspaceId)
                         && folderId.equals(task.folderId)
                         && ("queued".equals(task.status)
                         || "scanning".equals(task.status)
@@ -1311,8 +1296,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
         }
 
         String userId = StpUtil.getLoginIdAsString();
-        String workspaceId = WorkspaceContext.getWorkspaceId();
-        if (!userId.equals(task.userId) || !workspaceId.equals(task.workspaceId)) {
+        if (!userId.equals(task.userId)) {
             throw new BusinessException(I18nUtils.getMessage("file.no.permission.download"));
         }
         return task;
@@ -1881,7 +1865,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     private List<FileInfo> listDirectoryChildren(FileInfo dirInfo) {
         QueryWrapper queryWrapper = new QueryWrapper();
         queryWrapper.where(FILE_INFO.PARENT_ID.eq(dirInfo.getId())
-                .and(FILE_INFO.WORKSPACE_ID.eq(dirInfo.getWorkspaceId()))
+                .and(FILE_INFO.USER_ID.eq(dirInfo.getUserId()))
                 .and(FILE_INFO.IS_DELETED.eq(false)));
         if (StringUtils.isEmpty(dirInfo.getStoragePlatformSettingId())) {
             queryWrapper.and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.isNull());
@@ -1978,7 +1962,6 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     private static class FolderDownloadTask {
         private String taskId;
         private String userId;
-        private String workspaceId;
         private String storagePlatformSettingId;
         private String folderId;
         private String folderName;
@@ -2022,7 +2005,6 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     @Transactional(rollbackFor = Exception.class)
     public InitDownloadResultVO initDownload(InitDownloadCmd cmd) {
         String userId = StpUtil.getLoginIdAsString();
-        String workspaceId = WorkspaceContext.getWorkspaceId();
         String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
         String taskId = null;
 
@@ -2034,14 +2016,14 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
 
             QueryWrapper queryWrapper = new QueryWrapper();
             queryWrapper.where(FILE_TRANSFER_TASK.USER_ID.eq(userId)
-                    .and(FILE_TRANSFER_TASK.WORKSPACE_ID.eq(workspaceId))
                     .and(FILE_TRANSFER_TASK.TASK_TYPE.eq(TransferTaskType.download))
-                    .and(FILE_TRANSFER_TASK.STORAGE_PLATFORM_SETTING_ID.eq(storagePlatformSettingId))
                     .and(FILE_TRANSFER_TASK.STATUS.in(
                             TransferTaskStatus.initialized,
                             TransferTaskStatus.downloading,
                             TransferTaskStatus.paused
                     )));
+            // 本地存储的 configId 为 null，需走 IS NULL 分支，否则并发数统计恒为 0
+            applyStorageScope(queryWrapper, storagePlatformSettingId);
             long currentDownloadCount = this.count(queryWrapper);
 
             if (currentDownloadCount >= maxConcurrentDownloads) {
@@ -2070,7 +2052,6 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             FileTransferTask task = new FileTransferTask();
             task.setTaskId(taskId);
             task.setUserId(userId);
-            task.setWorkspaceId(workspaceId);
             task.setParentId(fileInfo.getParentId());
             task.setFileName(fileInfo.getDisplayName());
             task.setFileSize(fileInfo.getSize());

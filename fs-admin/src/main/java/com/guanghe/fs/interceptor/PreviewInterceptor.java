@@ -1,7 +1,6 @@
 package com.guanghe.fs.interceptor;
 
 import com.guanghe.fs.framework.common.constant.RedisKey;
-import com.guanghe.fs.framework.common.context.WorkspaceContext;
 import com.guanghe.fs.framework.redis.repository.RedisRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -45,13 +44,6 @@ public class PreviewInterceptor implements HandlerInterceptor {
             return false;
         }
 
-        Object workspaceId = repository.get(RedisKey.getPreviewWorkspaceKey(token));
-        if (workspaceId == null || String.valueOf(workspaceId).isBlank()) {
-            handleFailure(request, response, uri);
-            return false;
-        }
-        WorkspaceContext.setWorkspaceId(String.valueOf(workspaceId));
-        
         // 验证 token 对应的资源
         String cacheValue = String.valueOf(cached);
         
@@ -83,11 +75,6 @@ public class PreviewInterceptor implements HandlerInterceptor {
         
         handleFailure(request, response, uri);
         return false;
-    }
-
-    @Override
-    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
-        WorkspaceContext.clear();
     }
 
     private void handleFailure(HttpServletRequest request, HttpServletResponse response, String uri) throws Exception {

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler'
-import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import {
   Tooltip,
@@ -11,7 +10,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { useTheme } from '@/components/theme-provider'
-import { Search } from '@/components/search'
 
 type HeaderProps = React.HTMLAttributes<HTMLElement> & {
   fixed?: boolean
@@ -60,11 +58,7 @@ export function Header({ className, fixed, children, ...props }: HeaderProps) {
         )}
       >
         <div className='flex min-w-0 flex-1 items-center gap-3'>
-          <div className='flex shrink-0 items-center gap-2'>
-            <SidebarTrigger className='-ml-1' />
-            <Separator orientation='vertical' className='h-4' />
-          </div>
-          <Search />
+          <SidebarTrigger className='-ml-1 shrink-0' />
           <div className='min-w-0 flex-1'>{children}</div>
         </div>
         <div className='flex shrink-0 items-center justify-end gap-1'>

@@ -39,10 +39,11 @@
         if (prevButton) prevButton.disabled = true;
         if (nextButton) nextButton.disabled = true;
         try {
-            const workspaceId = readJson('workspace-storage')?.state?.currentWorkspaceId;
             const storageId = readJson('current-storage-platform')?.settingId;
             const headers = {};
-            if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
+            // 预览页与前端同源，直接从本地存储取 token；服务端不读 cookie，必须显式带上
+            const accessToken = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
+            if (accessToken) headers['Authorization'] = 'Bearer ' + accessToken;
             if (storageId) headers['X-Storage-Platform-Config-Id'] = storageId;
 
             const response = await fetch('/preview/token/' + encodeURIComponent(targetId), {

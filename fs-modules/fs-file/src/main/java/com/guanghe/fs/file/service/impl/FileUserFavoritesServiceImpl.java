@@ -6,7 +6,6 @@ import com.guanghe.fs.file.domain.FileInfo;
 import com.guanghe.fs.file.domain.FileUserFavorites;
 import com.guanghe.fs.file.mapper.FileUserFavoritesMapper;
 import com.guanghe.fs.file.service.FileUserFavoritesService;
-import com.guanghe.fs.framework.common.context.WorkspaceContext;
 import com.guanghe.fs.framework.common.exception.BusinessException;
 import com.guanghe.fs.framework.common.utils.I18nUtils;
 import com.mybatisflex.core.query.QueryWrapper;
@@ -47,11 +46,10 @@ public class FileUserFavoritesServiceImpl extends ServiceImpl<FileUserFavoritesM
         }
         List<String> distinctFileIds = fileIds.stream().distinct().collect(Collectors.toList());
         String userId = StpUtil.getLoginIdAsString();
-        String workspaceId = WorkspaceContext.getWorkspaceId();
         List<FileInfo> fileInfos = fileInfoService.list(
                 QueryWrapper.create()
                         .where(FILE_INFO.ID.in(distinctFileIds))
-                        .and(FILE_INFO.WORKSPACE_ID.eq(workspaceId))
+                        .and(FILE_INFO.USER_ID.eq(userId))
                         .and(FILE_INFO.IS_DELETED.eq(false))
         );
         if (fileInfos.isEmpty()) {
@@ -71,7 +69,6 @@ public class FileUserFavoritesServiceImpl extends ServiceImpl<FileUserFavoritesM
                 .filter(fileInfo -> !existingFileIds.contains(fileInfo.getId()))
                 .map(fileInfo -> {
                     FileUserFavorites favoritesFile = new FileUserFavorites();
-                    favoritesFile.setWorkspaceId(workspaceId);
                     favoritesFile.setFileId(fileInfo.getId());
                     favoritesFile.setUserId(userId);
                     return favoritesFile;
@@ -149,15 +146,18 @@ public class FileUserFavoritesServiceImpl extends ServiceImpl<FileUserFavoritesM
     @Override
     public Long getFavoritesCount() {
         String userId = StpUtil.getLoginIdAsString();
-        String workspaceId = WorkspaceContext.getWorkspaceId();
         String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
-        return this.count(new QueryWrapper()
+        QueryWrapper queryWrapper = new QueryWrapper()
                 .from(FILE_USER_FAVORITES)
                 .leftJoin(FILE_INFO).on(FILE_USER_FAVORITES.FILE_ID.eq(FILE_INFO.ID))
                 .where(FILE_USER_FAVORITES.USER_ID.eq(userId))
-                .and(FILE_USER_FAVORITES.WORKSPACE_ID.eq(workspaceId))
-                .and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.eq(storagePlatformSettingId))
-                .and(FILE_INFO.IS_DELETED.eq(false))
-        );
+                .and(FILE_INFO.IS_DELETED.eq(false));
+        // 本地存储的 configId 为 null，需用 IS NULL 匹配
+        if (storagePlatformSettingId == null || storagePlatformSettingId.isBlank()) {
+            queryWrapper.and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.isNull());
+        } else {
+            queryWrapper.and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.eq(storagePlatformSettingId));
+        }
+        return this.count(queryWrapper);
     }
 }

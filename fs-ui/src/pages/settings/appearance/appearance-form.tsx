@@ -206,10 +206,11 @@ export function AppearanceForm() {
                         </FormControl>
                         <div className='space-y-2'>
                           <div className='theme-card h-32 items-center rounded-lg border-2 border-muted bg-popover p-3 transition-colors hover:bg-accent hover:text-accent-foreground'>
-                            <div className='flex h-full flex-col justify-center space-y-2 rounded-sm bg-slate-950 p-3'>
-                              <div className='space-y-2 rounded-md bg-slate-800 p-3 shadow-sm'>
-                                <div className='h-2.5 w-[120px] rounded-lg bg-slate-400' />
-                                <div className='h-2.5 w-[150px] rounded-lg bg-slate-400' />
+                            {/* 预览缩略图跟实际暗黑主题保持一致：中性灰黑而非 slate 的蓝调 */}
+                            <div className='flex h-full flex-col justify-center space-y-2 rounded-sm bg-neutral-950 p-3'>
+                              <div className='space-y-2 rounded-md bg-neutral-800 p-3 shadow-sm'>
+                                <div className='h-2.5 w-[120px] rounded-lg bg-neutral-400' />
+                                <div className='h-2.5 w-[150px] rounded-lg bg-neutral-400' />
                               </div>
                             </div>
                           </div>

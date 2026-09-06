@@ -10,8 +10,6 @@ import {
 import type { UserInfo } from '@/types/user'
 import { mergeUserInfo } from '@/utils/merge-user-info'
 import { getActiveStoragePlatforms } from '@/api/storage'
-import { workspaceApi } from '@/api/workspace'
-import { useWorkspaceStore } from '@/store/workspace'
 import {
   setToken as saveToken,
   clearToken as removeToken,
@@ -22,7 +20,6 @@ interface AuthContextType {
   isAuthenticated: boolean
   user: UserInfo | null
   token: string | null
-  needsWorkspaceSetup: boolean
   login: (
     token: string,
     userInfo: UserInfo,
@@ -30,10 +27,8 @@ interface AuthContextType {
   ) => Promise<void>
   logout: () => void
   updateUser: (patch: Partial<UserInfo>) => void
-  /** 加载工作空间列表（不激活） */
-  loadWorkspaces: () => Promise<boolean>
-  /** 激活指定工作空间：设置 ID、加载角色权限、加载存储配置 */
-  activateWorkspace: (workspaceId: string) => Promise<void>
+  /** 加载登录后的会话上下文：已启用存储平台与用户传输配置 */
+  loadSessionContext: () => Promise<void>
   isLoading: boolean
 }
 
@@ -48,9 +43,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<UserInfo | null>(null)
   const [token, setToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [needsWorkspaceSetup, setNeedsWorkspaceSetup] = useState(false)
-
-  const wsStore = useWorkspaceStore
 
   const loadStoragePlatform = async () => {
     try {
@@ -73,35 +65,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }
 
-  const loadWorkspaces = useCallback(async (): Promise<boolean> => {
-    try {
-      const workspaces = await workspaceApi.list()
-      wsStore.getState().setWorkspaces(workspaces)
-
-      if (workspaces.length === 0) {
-        setNeedsWorkspaceSetup(true)
-        return false
-      }
-
-      setNeedsWorkspaceSetup(false)
-      return true
-    } catch (error) {
-      console.error('加载工作空间列表失败:', error)
-      return false
-    }
-  }, [])
-
-  const activateWorkspace = useCallback(async (workspaceId: string) => {
-    wsStore.getState().setCurrentWorkspaceId(workspaceId)
-    localStorage.removeItem('current-storage-platform')
-
-    const detail = await workspaceApi.getCurrent()
-    wsStore.getState().setCurrentRole({
-      roleCode: detail.roleCode,
-      roleName: detail.roleName,
-      permissions: detail.permissions,
-    })
-
+  const loadSessionContext = useCallback(async () => {
     await Promise.all([
       loadStoragePlatform(),
       import('@/store/user')
@@ -146,7 +110,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             setToken(storedToken)
             setUser(userInfo)
             setIsAuthenticated(true)
-            await loadWorkspaces()
+            await loadSessionContext()
           }
         }
       } catch (error) {
@@ -158,7 +122,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     initAuth()
-  }, [loadWorkspaces])
+  }, [loadSessionContext])
 
   const login = useCallback(
     async (accessToken: string, userInfo: UserInfo, remember = false) => {
@@ -172,20 +136,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const userStore = useUserStore.getState()
         userStore.setUserInfo(userInfo)
 
-        await loadWorkspaces()
+        await loadSessionContext()
       } catch (error) {
         console.error('登录失败:', error)
         throw error
       }
     },
-    [loadWorkspaces]
+    [loadSessionContext]
   )
 
   const logout = useCallback(() => {
     setToken(null)
     setUser(null)
     setIsAuthenticated(false)
-    setNeedsWorkspaceSetup(false)
 
     removeToken()
     localStorage.removeItem('current-storage-platform')
@@ -193,8 +156,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     import('@/store/user').then(({ useUserStore }) => {
       useUserStore.getState().clearUserInfo()
     })
-
-    wsStore.getState().clear()
   }, [])
 
   const updateUser = useCallback((patch: Partial<UserInfo>) => {
@@ -215,24 +176,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isAuthenticated,
       user,
       token,
-      needsWorkspaceSetup,
       login,
       logout,
       updateUser,
-      loadWorkspaces,
-      activateWorkspace,
+      loadSessionContext,
       isLoading,
     }),
     [
       isAuthenticated,
       user,
       token,
-      needsWorkspaceSetup,
       login,
       logout,
       updateUser,
-      loadWorkspaces,
-      activateWorkspace,
+      loadSessionContext,
       isLoading,
     ]
   )

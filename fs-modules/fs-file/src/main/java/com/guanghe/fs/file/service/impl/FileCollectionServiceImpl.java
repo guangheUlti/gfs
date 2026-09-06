@@ -30,15 +30,11 @@ import com.guanghe.fs.file.mapper.FileCollectionSubmissionMapper;
 import com.guanghe.fs.file.mapper.FileTransferTaskMapper;
 import com.guanghe.fs.file.service.FileCollectionService;
 import com.guanghe.fs.file.service.FileInfoService;
-import com.guanghe.fs.framework.common.context.WorkspaceContext;
 import com.guanghe.fs.framework.common.domain.PageResult;
 import com.guanghe.fs.framework.common.exception.BusinessException;
 import com.guanghe.fs.framework.common.utils.IpUtils;
 import com.guanghe.fs.framework.redis.repository.RedisRepository;
 import com.guanghe.fs.system.auth.PasswordHashService;
-import com.guanghe.fs.system.domain.SysWorkspaceMember;
-import com.guanghe.fs.system.service.SysRolePermissionService;
-import com.guanghe.fs.system.service.SysWorkspaceMemberService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,18 +72,16 @@ public class FileCollectionServiceImpl
     private final TransferTaskCacheManager transferTaskCacheManager;
     private final PasswordHashService passwordHashService;
     private final RedisRepository redisRepository;
-    private final SysWorkspaceMemberService workspaceMemberService;
-    private final SysRolePermissionService rolePermissionService;
 
     @Override
     public PageResult<FileCollectionVO> getPages(FileCollectionQry qry) {
-        String workspaceId = WorkspaceContext.getWorkspaceId();
+        String userId = StpUtil.getLoginIdAsString();
         int pageNumber = qry.getPage() == null ? 1 : qry.getPage();
         int pageSize = qry.getPageSize() == null ? 10 : Math.min(qry.getPageSize(), 100);
         Page<FileCollection> page = new Page<>(pageNumber, pageSize);
 
         QueryWrapper wrapper = new QueryWrapper()
-                .where(FILE_COLLECTION.WORKSPACE_ID.eq(workspaceId));
+                .where(FILE_COLLECTION.USER_ID.eq(userId));
         if (StrUtil.isNotBlank(qry.getKeyword())) {
             String keyword = "%" + qry.getKeyword().trim() + "%";
             wrapper.and(FILE_COLLECTION.COLLECTION_NAME.like(keyword)
@@ -117,7 +111,6 @@ public class FileCollectionServiceImpl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public FileCollectionVO createCollection(CreateFileCollectionCmd cmd) {
-        String workspaceId = WorkspaceContext.getWorkspaceId();
         String userId = StpUtil.getLoginIdAsString();
         FileInfo targetFolder = fileInfoService.getAuthorizedFile(cmd.getTargetFolderId());
         if (!Boolean.TRUE.equals(targetFolder.getIsDir()) || Boolean.TRUE.equals(targetFolder.getIsDeleted())) {
@@ -126,7 +119,6 @@ public class FileCollectionServiceImpl
 
         FileCollection collection = new FileCollection();
         collection.setUserId(userId);
-        collection.setWorkspaceId(workspaceId);
         collection.setTargetFolderId(targetFolder.getId());
         collection.setStoragePlatformSettingId(targetFolder.getStoragePlatformSettingId());
         collection.setCollectionName(cmd.getCollectionName().trim());
@@ -165,7 +157,6 @@ public class FileCollectionServiceImpl
             if (!StpUtil.hasPermission("file:write")) {
                 throw new BusinessException(403, "没有上传权限，无法重新开启文件收集");
             }
-            ensureCollectionOwnerCanCollect(collection);
         }
         collection.setStatus(status);
         collection.setUpdatedAt(LocalDateTime.now());
@@ -187,7 +178,6 @@ public class FileCollectionServiceImpl
         // 与分片上传/合并线程竞争；无论哪种状态，都不会触碰 FileInfo 或对象存储。
         QueryWrapper terminalTaskQuery = new QueryWrapper()
                 .where(FILE_TRANSFER_TASK.COLLECTION_ID.eq(collectionId))
-                .and(FILE_TRANSFER_TASK.WORKSPACE_ID.eq(collection.getWorkspaceId()))
                 .and(FILE_TRANSFER_TASK.STATUS.in(
                         TransferTaskStatus.completed,
                         TransferTaskStatus.failed,
@@ -233,7 +223,6 @@ public class FileCollectionServiceImpl
     @Override
     public FileCollectionPublicVO getPublicInfo(String collectionId) {
         FileCollection collection = getCollection(collectionId);
-        ensureCollectionOwnerCanCollect(collection);
         FileCollectionPublicVO vo = new FileCollectionPublicVO();
         vo.setId(collection.getId());
         vo.setCollectionName(collection.getCollectionName());
@@ -252,14 +241,13 @@ public class FileCollectionServiceImpl
     public FileCollectionSubmissionSessionVO startSubmission(
             String collectionId, CreateFileCollectionSubmissionCmd cmd) {
         FileCollection collection = getActiveCollection(collectionId);
-        ensureCollectionOwnerCanCollect(collection);
         String ip = IpUtils.getIpAddr();
         checkSubmissionRateLimit(collectionId, ip);
         verifyAccessCode(collection, cmd.getAccessCode(), ip);
 
         FileInfo targetFolder = fileInfoService.getById(collection.getTargetFolderId());
         if (targetFolder == null
-                || !Objects.equals(targetFolder.getWorkspaceId(), collection.getWorkspaceId())
+                || !Objects.equals(targetFolder.getUserId(), collection.getUserId())
                 || !Boolean.TRUE.equals(targetFolder.getIsDir())
                 || Boolean.TRUE.equals(targetFolder.getIsDeleted())) {
             throw new BusinessException(400, "收集目标文件夹已不存在");
@@ -268,7 +256,7 @@ public class FileCollectionServiceImpl
         String submitterName = sanitizeSubmitterName(cmd.getSubmitterName());
         String desiredFolderName = submitterName + "-" + LocalDateTime.now().format(SUBMISSION_FOLDER_TIME);
         String folderName = fileInfoService.generateUniqueName(
-                collection.getWorkspaceId(), collection.getTargetFolderId(), desiredFolderName,
+                collection.getUserId(), collection.getTargetFolderId(), desiredFolderName,
                 true, null, collection.getStoragePlatformSettingId());
 
         FileInfo submissionFolder = new FileInfo();
@@ -277,7 +265,6 @@ public class FileCollectionServiceImpl
         submissionFolder.setDisplayName(folderName);
         submissionFolder.setIsDir(true);
         submissionFolder.setParentId(collection.getTargetFolderId());
-        submissionFolder.setWorkspaceId(collection.getWorkspaceId());
         submissionFolder.setUserId(collection.getUserId());
         submissionFolder.setStoragePlatformSettingId(collection.getStoragePlatformSettingId());
         LocalDateTime now = LocalDateTime.now();
@@ -376,10 +363,10 @@ public class FileCollectionServiceImpl
     }
 
     private FileCollection getOwnedCollection(String collectionId) {
-        String workspaceId = WorkspaceContext.getWorkspaceId();
+        String userId = StpUtil.getLoginIdAsString();
         FileCollection collection = this.getOne(new QueryWrapper()
                 .where(FILE_COLLECTION.ID.eq(collectionId))
-                .and(FILE_COLLECTION.WORKSPACE_ID.eq(workspaceId)));
+                .and(FILE_COLLECTION.USER_ID.eq(userId)));
         if (collection == null) {
             throw new BusinessException(404, "文件收集不存在");
         }
@@ -403,21 +390,6 @@ public class FileCollectionServiceImpl
             throw new BusinessException(400, "文件收集已过期");
         }
         return collection;
-    }
-
-    private void ensureCollectionOwnerCanCollect(FileCollection collection) {
-        SysWorkspaceMember owner = workspaceMemberService.findByWorkspaceAndUser(
-                collection.getWorkspaceId(), collection.getUserId());
-        if (owner == null) {
-            throw new BusinessException(403, "文件收集创建者已不在工作空间，收集已停用");
-        }
-        List<String> permissions = rolePermissionService
-                .getPermissionCodesByRoleId(owner.getRoleId());
-        if (permissions == null
-                || !permissions.contains("file:share")
-                || !permissions.contains("file:write")) {
-            throw new BusinessException(403, "文件收集创建者已无分享或上传权限，收集已停用");
-        }
     }
 
     private void verifyAccessCode(FileCollection collection, String accessCode, String ip) {

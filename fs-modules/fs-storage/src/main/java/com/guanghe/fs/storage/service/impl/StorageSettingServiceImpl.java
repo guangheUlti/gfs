@@ -19,7 +19,6 @@ import com.guanghe.fs.storage.plugin.core.context.StoragePlatformContextHolder;
 import com.guanghe.fs.storage.plugin.core.dto.StoragePluginMetadata;
 import com.guanghe.fs.storage.plugin.core.utils.StorageUtils;
 import com.guanghe.fs.storage.service.StoragePlatformService;
-import com.guanghe.fs.framework.common.context.WorkspaceContext;
 import com.guanghe.fs.storage.service.StorageSettingService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
@@ -64,12 +63,11 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     private final StoragePluginRegistry storagePluginRegistry;
 
     @Override
-    @Cacheable(value = "storageSettings", keyGenerator = "storageSettingKeyGenerator", unless = "#result == null || #result.isEmpty()")
+    @Cacheable(value = "storageSettings", key = "'global'", unless = "#result == null || #result.isEmpty()")
     public List<StorageSettingUserVO> getStorageSettingsByUser() {
-        String workspaceId = WorkspaceContext.getWorkspaceId();
+        // 存储配置为系统级资源，仅系统管理员可读写，无需再按归属过滤
         List<StorageSetting> storageSettings = this.list(
                 new QueryWrapper()
-                        .where(STORAGE_SETTING.WORKSPACE_ID.eq(workspaceId))
                         .orderBy(STORAGE_SETTING.ENABLED.desc())
         );
         if (CollUtil.isEmpty(storageSettings)) {
@@ -86,14 +84,10 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     }
 
     @Override
-    @Cacheable(value = "storageActivePlatforms", keyGenerator = "storageSettingKeyGenerator", unless = "#result == null || #result.isEmpty()")
+    @Cacheable(value = "storageActivePlatforms", key = "'global'", unless = "#result == null || #result.isEmpty()")
     public List<StorageActivePlatformsVO> getActiveStoragePlatforms() {
-        String workspaceId = WorkspaceContext.getWorkspaceId();
-
         StorageSetting storageSetting = this.getOne(
-                new QueryWrapper().where(STORAGE_SETTING.ENABLED.eq(CommonConstant.Y)
-                        .and(STORAGE_SETTING.WORKSPACE_ID.eq(workspaceId))
-                )
+                new QueryWrapper().where(STORAGE_SETTING.ENABLED.eq(CommonConstant.Y))
         );
         List<StorageActivePlatformsVO> result = new ArrayList<>();
         // 添加默认本地存储平台
@@ -134,27 +128,22 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     @Override
     @Transactional(rollbackFor = Exception.class)
     @Caching(evict = {
-            @CacheEvict(value = "storageSettings", keyGenerator = "storageSettingKeyGenerator"),
-            @CacheEvict(value = "storageActivePlatforms", keyGenerator = "storageSettingKeyGenerator")
+            @CacheEvict(value = "storageSettings", key = "'global'"),
+            @CacheEvict(value = "storageActivePlatforms", key = "'global'")
     })
     public void enableOrDisableStoragePlatform(String settingId, Integer action) {
-        String workspaceId = WorkspaceContext.getWorkspaceId();
         StorageSetting storageSetting = this.getById(settingId);
         if (storageSetting == null) {
             throw new BusinessException(I18nUtils.getMessage("storage.config.not.exist"));
-        }
-        if (!workspaceId.equals(storageSetting.getWorkspaceId())) {
-            throw new BusinessException(I18nUtils.getMessage("storage.config.no.permission.modify"));
         }
 
         Integer newStatus = action == 0 ? CommonConstant.N : CommonConstant.Y;
 
         if (newStatus.equals(CommonConstant.Y)) {
+            // 全系统同时只允许一个存储配置处于启用状态
             List<StorageSetting> storageSettings = this.list(
                     new QueryWrapper()
-                            .where(STORAGE_SETTING.WORKSPACE_ID.eq(workspaceId)
-                                    .and(STORAGE_SETTING.ENABLED.eq(CommonConstant.Y))
-                            )
+                            .where(STORAGE_SETTING.ENABLED.eq(CommonConstant.Y))
             );
             storageSettings.forEach(s -> s.setEnabled(CommonConstant.N));
             this.updateBatch(storageSettings);
@@ -172,14 +161,12 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     @Transactional(rollbackFor = Exception.class)
     @Override
     @Caching(evict = {
-            @CacheEvict(value = "storageSettings", keyGenerator = "storageSettingKeyGenerator"),
-            @CacheEvict(value = "storageActivePlatforms", keyGenerator = "storageSettingKeyGenerator")
+            @CacheEvict(value = "storageSettings", key = "'global'"),
+            @CacheEvict(value = "storageActivePlatforms", key = "'global'")
     })
     public void addStorageSetting(StorageSettingAddCmd cmd) {
-        String workspaceId = WorkspaceContext.getWorkspaceId();
         boolean exists = this.checkDuplicateConfig(
                 cmd.getPlatformIdentifier(),
-                workspaceId,
                 cmd.getConfigData()
         );
         if (exists) {
@@ -187,27 +174,22 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
         }
         StorageSetting storageSetting = new StorageSetting();
         storageSetting.setPlatformIdentifier(cmd.getPlatformIdentifier());
-        storageSetting.setWorkspaceId(workspaceId);
         storageSetting.setConfigData(cmd.getConfigData());
         storageSetting.setEnabled(CommonConstant.N);
         storageSetting.setRemark(cmd.getRemark());
         this.save(storageSetting);
-        log.info("新增存储配置成功: settingId={}, platform={}, workspaceId={}",
+        log.info("新增存储配置成功: settingId={}, platform={}",
                 storageSetting.getId(),
-                cmd.getPlatformIdentifier(),
-                workspaceId);
+                cmd.getPlatformIdentifier());
     }
 
     /**
      * 检查是否存在重复配置
      */
     private boolean checkDuplicateConfig(String platformIdentifier,
-                                         String workspaceId,
                                          String configData) {
         List<StorageSetting> existingSettings = this.list(new QueryWrapper()
-                .where(STORAGE_SETTING.WORKSPACE_ID.eq(workspaceId)
-                        .and(STORAGE_SETTING.PLATFORM_IDENTIFIER.eq(platformIdentifier))
-                )
+                .where(STORAGE_SETTING.PLATFORM_IDENTIFIER.eq(platformIdentifier))
         );
         // 将新配置转为标准JSON格式
         String normalizedNewConfig = JsonUtils.normalizeJson(configData);
@@ -222,22 +204,17 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     @Transactional(rollbackFor = Exception.class)
     @Override
     @Caching(evict = {
-            @CacheEvict(value = "storageSettings", keyGenerator = "storageSettingKeyGenerator"),
-            @CacheEvict(value = "storageActivePlatforms", keyGenerator = "storageSettingKeyGenerator")
+            @CacheEvict(value = "storageSettings", key = "'global'"),
+            @CacheEvict(value = "storageActivePlatforms", key = "'global'")
     })
     public void editStorageSetting(StorageSettingEditCmd cmd) {
-        String workspaceId = WorkspaceContext.getWorkspaceId();
         StorageSetting storageSetting = this.getById(cmd.getSettingId());
         if (storageSetting == null) {
             throw new BusinessException(I18nUtils.getMessage("storage.config.not.exist"));
         }
-        if (!workspaceId.equals(storageSetting.getWorkspaceId())) {
-            throw new BusinessException(I18nUtils.getMessage("storage.config.no.permission.modify"));
-        }
         String mergedConfigData = mergeSensitiveConfig(storageSetting.getConfigData(), cmd.getConfigData());
         boolean exists = this.checkDuplicateConfigForUpdate(
                 storageSetting.getPlatformIdentifier(),
-                workspaceId,
                 mergedConfigData,
                 cmd.getSettingId()
         );
@@ -255,12 +232,10 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
      * 检查更新时是否存在重复配置（排除自身）
      */
     private boolean checkDuplicateConfigForUpdate(String platformIdentifier,
-                                                  String workspaceId,
                                                   String configData,
                                                   String excludeId) {
         List<StorageSetting> existingSettings = this.list(new QueryWrapper()
-                .where(STORAGE_SETTING.WORKSPACE_ID.eq(workspaceId)
-                        .and(STORAGE_SETTING.PLATFORM_IDENTIFIER.eq(platformIdentifier))
+                .where(STORAGE_SETTING.PLATFORM_IDENTIFIER.eq(platformIdentifier)
                         .and(STORAGE_SETTING.ID.ne(excludeId))
                 )
         );
@@ -275,18 +250,14 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     @Transactional(rollbackFor = Exception.class)
     @Override
     @Caching(evict = {
-            @CacheEvict(value = "storageSettings", keyGenerator = "storageSettingKeyGenerator"),
-            @CacheEvict(value = "storageActivePlatforms", keyGenerator = "storageSettingKeyGenerator")
+            @CacheEvict(value = "storageSettings", key = "'global'"),
+            @CacheEvict(value = "storageActivePlatforms", key = "'global'")
     })
     public void deleteStorageSettingById(String id) {
-        String workspaceId = WorkspaceContext.getWorkspaceId();
         StorageSetting storageSetting = this.getById(id);
 
         if (storageSetting == null) {
             throw new BusinessException(I18nUtils.getMessage("storage.config.not.exist"));
-        }
-        if (!workspaceId.equals(storageSetting.getWorkspaceId())) {
-            throw new BusinessException(I18nUtils.getMessage("storage.config.no.permission.delete"));
         }
         String cacheSettingId = StoragePlatformContextHolder.getConfigId();
         if (id.equals(cacheSettingId)) {
@@ -296,16 +267,14 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
         this.removeById(id);
         storageServiceFacade.removeInstance(id);
 
-        log.info("存储配置已删除并移除缓存: settingId={}, workspaceId={}", id, workspaceId);
+        log.info("存储配置已删除并移除缓存: settingId={}", id);
     }
 
     @Override
     public List<StorageSetting> listByPlatformIdentifier(String platformIdentifier) {
-        String workspaceId = WorkspaceContext.getWorkspaceId();
         return this.list(
                 new QueryWrapper()
                         .where(STORAGE_SETTING.PLATFORM_IDENTIFIER.eq(platformIdentifier))
-                        .and(STORAGE_SETTING.WORKSPACE_ID.eq(workspaceId))
                         .and(STORAGE_SETTING.ENABLED.eq(CommonConstant.Y))
         );
     }

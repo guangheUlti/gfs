@@ -6,14 +6,8 @@ import {
   RiAdminLine,
   RiArrowLeftRightFill,
   RiArrowLeftRightLine,
-  RiBuildingFill,
-  RiBuildingLine,
   RiComputerFill,
   RiComputerLine,
-  RiGroupFill,
-  RiGroupLine,
-  RiShieldUserFill,
-  RiShieldUserLine,
   RiTShirtFill,
   RiTShirtLine,
   RiUserSettingsFill,
@@ -31,15 +25,10 @@ import {
   useSettingsModal,
   type SettingsTab,
 } from '@/contexts/settings-modal-context'
-import { usePermission } from '@/hooks/use-permission'
 import type { SidebarNavIconPair } from '@/components/layout/types'
-import type { PermissionCodeType } from '@/types/permission'
 import { SettingsProfile } from './profile'
 import { SettingsAppearance } from './appearance'
 import { SettingsTransfer } from './transfer'
-import { SettingsWorkspace } from './workspace'
-import { SettingsMembers } from './members'
-import { SettingsRoles } from './roles'
 import { SettingsUserApproval } from './user-approval'
 import { SettingsLoginManagement } from './login-management'
 import { SidebarNav, type SettingsNavGroup } from './components/sidebar-nav'
@@ -49,7 +38,6 @@ interface NavItemConfig {
   title: string
   tab: SettingsTab
   icon: SidebarNavIconPair
-  permission?: PermissionCodeType
   /** 仅系统管理员可见 */
   superAdminOnly?: boolean
 }
@@ -82,29 +70,6 @@ function buildNavConfig(
       ],
     },
     {
-      label: t('nav.groupWorkspace'),
-      items: [
-        {
-          title: t('nav.workspace'),
-          tab: 'workspace',
-          icon: { line: RiBuildingLine, fill: RiBuildingFill },
-          permission: 'member:manage',
-        },
-        {
-          title: t('nav.members'),
-          tab: 'members',
-          icon: { line: RiGroupLine, fill: RiGroupFill },
-          permission: 'member:manage',
-        },
-        {
-          title: t('nav.roles'),
-          tab: 'roles',
-          icon: { line: RiShieldUserLine, fill: RiShieldUserFill },
-          permission: 'member:manage',
-        },
-      ],
-    },
-    {
       label: t('nav.groupSystem'),
       items: [
         {
@@ -126,18 +91,13 @@ function buildNavConfig(
 
 function toNavGroups(
   config: ReturnType<typeof buildNavConfig>,
-  hasPermission: (p: PermissionCodeType) => boolean,
   isSuperAdmin: boolean
 ): SettingsNavGroup[] {
   return config
     .map((group) => ({
       label: group.label,
       items: group.items
-        .filter(
-          (item) =>
-            (!item.permission || hasPermission(item.permission)) &&
-            (!item.superAdminOnly || isSuperAdmin)
-        )
+        .filter((item) => !item.superAdminOnly || isSuperAdmin)
         .map(({ title, tab, icon }) => ({
           title,
           tab,
@@ -148,7 +108,6 @@ function toNavGroups(
 }
 
 function SettingsPanel({ tab }: { tab: SettingsTab }) {
-  const { hasPermission } = usePermission()
   const { user } = useAuth()
 
   switch (tab) {
@@ -158,24 +117,6 @@ function SettingsPanel({ tab }: { tab: SettingsTab }) {
       return <SettingsAppearance />
     case 'transfer':
       return <SettingsTransfer />
-    case 'workspace':
-      return hasPermission('member:manage') ? (
-        <SettingsWorkspace />
-      ) : (
-        <NoPermission />
-      )
-    case 'members':
-      return hasPermission('member:manage') ? (
-        <SettingsMembers />
-      ) : (
-        <NoPermission />
-      )
-    case 'roles':
-      return hasPermission('member:manage') ? (
-        <SettingsRoles />
-      ) : (
-        <NoPermission />
-      )
     case 'user-approval':
       return user?.isSuperAdmin ? (
         <SettingsUserApproval />
@@ -196,12 +137,11 @@ function SettingsPanel({ tab }: { tab: SettingsTab }) {
 export function SettingsDialog() {
   const { t } = useTranslation('settings')
   const { open, setOpen, tab, setTab } = useSettingsModal()
-  const { hasPermission } = usePermission()
   const { user } = useAuth()
 
   const navGroups = useMemo(
-    () => toNavGroups(buildNavConfig(t), hasPermission, !!user?.isSuperAdmin),
-    [hasPermission, t, user?.isSuperAdmin]
+    () => toNavGroups(buildNavConfig(t), !!user?.isSuperAdmin),
+    [t, user?.isSuperAdmin]
   )
 
   return (

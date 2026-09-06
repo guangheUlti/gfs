@@ -16,7 +16,7 @@ services:
       # 数据持久化，防止容器删了数据库就没了
       - ./mysql/data:/var/lib/mysql
       # 关键：自动执行初始化 SQL（路径相对本 compose 文件，指向仓库根的 sql/）
-      - ../../sql/mysql/gfs-new.sql:/docker-entrypoint-initdb.d/gfs.sql
+      - ../../sql/mysql/gfs.sql:/docker-entrypoint-initdb.d/gfs.sql
 
   # Redis 缓存
   gfs-redis:

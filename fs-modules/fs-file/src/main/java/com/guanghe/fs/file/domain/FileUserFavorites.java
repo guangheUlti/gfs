@@ -23,9 +23,6 @@ public class FileUserFavorites implements Serializable {
     private static final long serialVersionUID = 4725335083497380636L;
 
     @Id(keyType = KeyType.None)
-    private String workspaceId;
-
-    @Id(keyType = KeyType.None)
     private String userId;
 
     @Id(keyType = KeyType.None)

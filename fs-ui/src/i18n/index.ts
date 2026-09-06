@@ -6,22 +6,18 @@ import enCommon from '@/locales/en/common.json'
 import enFiles from '@/locales/en/files.json'
 import enLayout from '@/locales/en/layout.json'
 import enLogin from '@/locales/en/login.json'
-import enInvite from '@/locales/en/invite.json'
 import enSettings from '@/locales/en/settings.json'
 import enShare from '@/locales/en/share.json'
 import enStorage from '@/locales/en/storage.json'
 import enTransfer from '@/locales/en/transfer.json'
-import enWorkspace from '@/locales/en/workspace.json'
 import zhCommon from '@/locales/zh/common.json'
 import zhFiles from '@/locales/zh/files.json'
 import zhLayout from '@/locales/zh/layout.json'
 import zhLogin from '@/locales/zh/login.json'
-import zhInvite from '@/locales/zh/invite.json'
 import zhSettings from '@/locales/zh/settings.json'
 import zhShare from '@/locales/zh/share.json'
 import zhStorage from '@/locales/zh/storage.json'
 import zhTransfer from '@/locales/zh/transfer.json'
-import zhWorkspace from '@/locales/zh/workspace.json'
 
 export type AppLang = 'zh' | 'en'
 
@@ -51,24 +47,20 @@ void i18n
         files: enFiles,
         layout: enLayout,
         login: enLogin,
-        invite: enInvite,
         settings: enSettings,
         share: enShare,
         storage: enStorage,
         transfer: enTransfer,
-        workspace: enWorkspace,
       },
       zh: {
         common: zhCommon,
         files: zhFiles,
         layout: zhLayout,
         login: zhLogin,
-        invite: zhInvite,
         settings: zhSettings,
         share: zhShare,
         storage: zhStorage,
         transfer: zhTransfer,
-        workspace: zhWorkspace,
       },
     },
     /** 默认中文；勿设置 `lng`，否则会覆盖 localStorage 里用户选的语言（如登录页切英文） */
@@ -80,12 +72,10 @@ void i18n
       'files',
       'layout',
       'login',
-      'invite',
       'settings',
       'share',
       'storage',
       'transfer',
-      'workspace',
     ],
     defaultNS: 'login',
     interpolation: { escapeValue: false },

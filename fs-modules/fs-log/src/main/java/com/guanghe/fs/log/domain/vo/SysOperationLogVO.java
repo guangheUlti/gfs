@@ -26,8 +26,6 @@ public class SysOperationLogVO implements Serializable {
 
     private String operatorName;
 
-    private String workspaceId;
-
     private String operationType;
 
     private String operationName;
