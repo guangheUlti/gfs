@@ -31,7 +31,6 @@
 - **实时上传进度** - 实时推送上传进度，精确到分片级别
 - **秒传功能** - 基于 MD5 双重校验，相同文件秒级完成
 - **插件化存储** - SPI 机制热插拔，5 分钟接入一个新存储平台
-- **工作空间** - 多工作空间支持，团队协作更高效
 - **国际化支持** - 中英文双语支持，轻松扩展更多语言
 - **虚拟线程** - 全面启用 Java 虚拟线程，异步任务、定时任务与预览队列高并发下更稳
 - **模块化架构** - 清晰的分层设计，易于维护和扩展
@@ -50,19 +49,6 @@
     - 文件分享/授权码分享
     - 文件删除
 
-- **工作空间**
-    - 多工作空间管理
-    - 工作空间成员管理
-    - 角色权限控制
-    - 成员邀请（邀请链接，可选邮件通知）
-    - 工作空间切换
-
-- **团队协作**
-    - 成员邀请与管理
-    - 角色权限分配
-    - 工作空间隔离
-    - 成员权限控制
-
 - **国际化**
     - 中文简体
     - 英文
@@ -71,7 +57,6 @@
 - **认证与授权**
     - 用户名密码登录
     - Sa-Token 会话认证（会话存 Redis，重启不掉线、可多实例）
-    - 基于角色的权限控制（RBAC）
     - 新注册用户审核
     - 登录管理（查看在线设备、管理员强制下线）
 
@@ -143,15 +128,6 @@ mvn clean install -DskipTests
 
    修改 `fs-admin/src/main/resources/application-dev.yml` 中的数据库和 Redis 配置
 
-3. **邮件配置（可选）**
-
-   `application.yml` 的 `spring.mail` 已配置为发件邮箱 `18903378092@163.com`（`smtp.163.com:465` SSL）。
-   邮件仅用于工作空间邀请通知，需通过环境变量提供 163 邮箱的 SMTP 授权码；不配置时邀请邮件不发送，邀请链接仍可正常使用：
-
-   ```bash
-   export MAIL_PASSWORD=<163 邮箱 SMTP 授权码>
-   ```
-
 ### 运行
 
 ```bash
@@ -208,7 +184,6 @@ bin\install-service.bat :: 注册开机自启（需管理员）
 | 功能   | 效果图                                                                                                                  | 效果图                                                                                                                     | 效果图                                                                                                                          |
 |------|----------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------|
 | 登录   | <img alt="login.png"  width="600" src=".images/login.png"/>                                                          | <img alt="register.png"  width="600" src=".images/register.png"/>          |                                                                                                                              |
-| 首页   | <img alt="dashboard.png" width="600" src=".images/dashboard.png"/>      |                                                                                                                         |                                                                                                                              |
 | 我的文件 | <img alt="grid_file.png" width="600" src=".images/grid_file.png"/>      | <img alt="file.png" width="600" src=".images/file.png"/>                   |                                                                                                                              |
 | 回收站  | <img alt="recycle.png" width="600" src=".images/recycle.png"/>          | <img alt="recycle_clear.png" width="600" src=".images/recycle_clear.png"/> |                                                                                                                              |
 | 分享文件 | <img alt="share.png" width="600" src=".images/share.png"/>              | <img alt="share_create.png" width="600" src=".images/share_create.png"/>   | <img alt="share_list.png" width="600" src=".images/share_list.png"/>            |
@@ -246,7 +221,7 @@ gfs/
 └── fs-modules/                  # 业务模块
     ├── fs-file/                 # 文件管理模块
     ├── fs-storage/              # 存储平台管理模块
-    ├── fs-system/               # 系统管理模块（用户、工作空间、角色、权限）
+    ├── fs-system/               # 系统管理模块（用户、注册审核、登录管理）
     └── fs-log/                  # 日志模块
 fs-ui/                           # Web 前端（React 19 + Vite）
 doc/                             # 设计文档（登录认证等）
@@ -259,10 +234,7 @@ sql/                             # 数据库初始化脚本
 
 ## 路线图
 
-- 工作空间配额管理与统计报表
-- 工作空间模板、工作空间转让
 - 更细粒度的权限控制、审计日志
-- 批量邀请、邀请链接短链
 
 欢迎在 [Issues](https://github.com/guangheUlti/gfs/issues) 中提出你的想法。
 
