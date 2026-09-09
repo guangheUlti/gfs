@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatFileListDisplayTime } from '@/utils/format'
+import { isEditableSuffix } from '@/utils/preview-types'
 import { usePermission } from '@/hooks/use-permission'
 import { Button } from '@/components/ui/button'
 import {
@@ -33,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { FileIcon } from '@/components/file-icon'
+import { useAppearanceStore } from '@/store/appearance'
 import { useFileDragDrop } from '../hooks/useFileDragDrop'
 import { FileListScrollSentinel } from './FileListScrollSentinel'
 
@@ -44,6 +46,7 @@ interface FileGridViewProps {
   onDownload: (file: FileItem | FileItem[]) => void
   onShare: (file: FileItem) => void
   onDelete: (file: FileItem) => void
+  onPermanentDelete: (file: FileItem) => void
   onRename: (file: FileItem) => void
   onMove: (file: FileItem) => void
   onMoveFiles: (fileIds: string[], targetDirId: string) => Promise<void>
@@ -58,6 +61,7 @@ interface FileGridViewProps {
   onBatchShare?: (files: FileItem[]) => void
   onBatchMove?: (files: FileItem[]) => void
   onBatchDelete?: (files: FileItem[]) => void
+  onBatchPermanentDelete?: (files: FileItem[]) => void
   /** 触屏多选模式：点击即切换选中，无需 Ctrl 键 */
   selectMode?: boolean
   hasMore?: boolean
@@ -75,6 +79,7 @@ export function FileGridView({
   onDownload,
   onShare,
   onDelete,
+  onPermanentDelete,
   onRename,
   onMove,
   onMoveFiles,
@@ -86,6 +91,7 @@ export function FileGridView({
   onBatchShare,
   onBatchMove,
   onBatchDelete,
+  onBatchPermanentDelete,
   selectMode = false,
   hasMore = false,
   loadingMore = false,
@@ -93,6 +99,9 @@ export function FileGridView({
   scrollRootRef,
 }: FileGridViewProps) {
   const { t } = useTranslation('files')
+  const thumbnailsEnabled = useAppearanceStore(
+    (state) => state.thumbnailsEnabled
+  )
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const { hasPermission } = usePermission()
   const canRead = hasPermission('file:read')
@@ -261,7 +270,7 @@ export function FileGridView({
                             </DropdownMenuItem>
                           </>
                         )}
-                        {!file.isDir && canWrite && onEdit && file.suffix?.toLowerCase() === 'txt' && (
+                        {!file.isDir && canWrite && onEdit && isEditableSuffix(file.suffix) && (
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation()
@@ -352,10 +361,19 @@ export function FileGridView({
                                 e.stopPropagation()
                                 onDelete(file)
                               }}
+                            >
+                              <Trash2 className='mr-2 h-4 w-4' />
+                              {t('rowMenu.delete')}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onPermanentDelete(file)
+                              }}
                               className='text-destructive'
                             >
                               <Trash2 className='mr-2 h-4 w-4' />
-                              {t('rowMenu.trash')}
+                              {t('rowMenu.deleteForever')}
                             </DropdownMenuItem>
                           </>
                         )}
@@ -365,7 +383,7 @@ export function FileGridView({
 
                   {/* 缩略图 95×75；文件夹同宽，略增高以容纳 Folder 顶部标签（勿 overflow-hidden） */}
                   <div className='mb-3 flex min-h-[90px] items-center justify-center overflow-visible pt-1'>
-                    {file.thumbnailUrl ? (
+                    {file.thumbnailUrl && thumbnailsEnabled ? (
                       <div className='h-[75px] w-[95px] shrink-0 overflow-hidden rounded-md shadow-sm transition-transform group-hover:scale-[1.02]'>
                         <img
                           src={file.thumbnailUrl}
@@ -468,10 +486,21 @@ export function FileGridView({
                           e.stopPropagation()
                           onBatchDelete(selectedFiles)
                         }}
+                      >
+                        <Trash2 className='mr-2 h-4 w-4' />
+                        {t('rowMenu.delete')}
+                      </ContextMenuItem>
+                    )}
+                    {canWrite && onBatchPermanentDelete && (
+                      <ContextMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onBatchPermanentDelete(selectedFiles)
+                        }}
                         className='text-destructive focus:text-destructive'
                       >
                         <Trash2 className='mr-2 h-4 w-4' />
-                        {t('rowMenu.trash')}
+                        {t('rowMenu.deleteForever')}
                       </ContextMenuItem>
                     )}
                   </>
@@ -491,7 +520,7 @@ export function FileGridView({
                         </ContextMenuItem>
                       </>
                     )}
-                    {!file.isDir && canWrite && onEdit && file.suffix?.toLowerCase() === 'txt' && (
+                    {!file.isDir && canWrite && onEdit && isEditableSuffix(file.suffix) && (
                       <ContextMenuItem
                         onClick={(e) => {
                           e.stopPropagation()
@@ -582,10 +611,19 @@ export function FileGridView({
                             e.stopPropagation()
                             onDelete(file)
                           }}
+                        >
+                          <Trash2 className='mr-2 h-4 w-4' />
+                          {t('rowMenu.delete')}
+                        </ContextMenuItem>
+                        <ContextMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onPermanentDelete(file)
+                          }}
                           className='text-destructive focus:text-destructive'
                         >
                           <Trash2 className='mr-2 h-4 w-4' />
-                          {t('rowMenu.trash')}
+                          {t('rowMenu.deleteForever')}
                         </ContextMenuItem>
                       </>
                     )}

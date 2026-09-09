@@ -5,7 +5,6 @@ export interface UserInfo {
   id: string
   username: string
   nickname: string
-  email: string
   avatar: string
   status: number
   createdAt: string
@@ -24,7 +23,6 @@ export interface PendingUser {
   id: string
   username: string
   nickname: string
-  email: string
   avatar: string
   createdAt: string
 }
@@ -53,7 +51,6 @@ export interface OnlineUser {
   username?: string
   nickname?: string
   avatar?: string
-  email?: string
   status?: number
   terminals: OnlineTerminal[]
 }
@@ -62,7 +59,7 @@ export interface LoginRes {
   accessToken: string
 }
 
-/** 登录方式：账号/邮箱 + 密码 */
+/** 登录方式：用户名 + 密码 */
 export type LoginType = 'password'
 
 export interface LoginParams {
@@ -76,14 +73,12 @@ export interface UserRegisterParams {
   username: string
   password: string
   confirmPassword: string
-  email: string
   nickname: string
   avatar?: string
 }
 
 export interface UpdateUserInfoParams {
   nickname?: string
-  email?: string
   avatar?: string
 }
 

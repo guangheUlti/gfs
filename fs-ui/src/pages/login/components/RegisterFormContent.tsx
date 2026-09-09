@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { userApi } from '@/api'
 import { UserRegisterParams } from '@/types/user'
-import { User, Lock, Mail, Pen } from 'lucide-react'
+import { User, Lock, Pen } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,7 +20,6 @@ export default function RegisterFormContent({ onSwitchForm }: Props) {
     username: '',
     password: '',
     confirmPassword: '',
-    email: '',
     nickname: '',
   })
 
@@ -104,19 +103,6 @@ export default function RegisterFormContent({ onSwitchForm }: Props) {
           disabled={loading}
           required
           minLength={6}
-        />
-      </FieldBox>
-
-      <FieldBox icon={<Mail className='h-5 w-5 shrink-0 text-neutral-400' />}>
-        <Input
-          id='register-email'
-          type='email'
-          placeholder={t('placeholderEmail')}
-          value={formData.email}
-          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-          className={fieldInputClass}
-          disabled={loading}
-          required
         />
       </FieldBox>
 

@@ -39,17 +39,6 @@ public class RedisKey {
     public static final long PREVIEW_TOKEN_EXPIRE = 5 * 60;
 
     /**
-     * 获取验证码发送限流 key
-     *
-     * @param scene 验证码使用场景
-     * @param email 邮箱
-     * @return fs:codeRate:场景:邮箱
-     */
-    public static String getVerifyCodeRateLimitKey(String scene, String email) {
-        return String.join(SEPARATOR, BASE_KEY, "codeRate", scene, email);
-    }
-
-    /**
      * 获取验证码key
      *
      * @param token 预览短链token

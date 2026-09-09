@@ -35,16 +35,6 @@ public class SysUserTransferSetting extends BaseEntity {
     private String userId;
 
     /**
-     * 文件下载位置
-     */
-    private String downloadLocation;
-
-    /**
-     * 是否默认该路径为下载路径，如果否则每次下载询问保存地址
-     */
-    private Integer isDefaultDownloadLocation;
-
-    /**
      * 下载速率限制 单位：MB/S
      */
     private Integer downloadSpeedLimit;
@@ -68,30 +58,10 @@ public class SysUserTransferSetting extends BaseEntity {
     public static SysUserTransferSetting init(String userId) {
         SysUserTransferSetting sysUserTransferSetting = new SysUserTransferSetting();
         sysUserTransferSetting.setUserId(userId);
-        sysUserTransferSetting.setIsDefaultDownloadLocation(1);
-        sysUserTransferSetting.setDownloadLocation(getDefaultDownloadPath());
         sysUserTransferSetting.setDownloadSpeedLimit(-1);
         sysUserTransferSetting.setConcurrentUploadQuantity(3);
         sysUserTransferSetting.setConcurrentDownloadQuantity(3);
         sysUserTransferSetting.setChunkSize(5L * 1024 * 1024); // 默认 5MB
         return sysUserTransferSetting;
-    }
-
-    /**
-     * 获取系统默认下载路径
-     * Windows: C:\Users\用户名\Downloads
-     * Linux/Mac: /home/用户名/Downloads 或 /Users/用户名/Downloads
-     */
-    private static String getDefaultDownloadPath() {
-        String userHome = System.getProperty("user.home");
-        String os = System.getProperty("os.name").toLowerCase();
-        
-        if (os.contains("win")) {
-            // Windows系统
-            return userHome + "\\Downloads";
-        } else {
-            // Linux/Mac系统
-            return userHome + "/Downloads";
-        }
     }
 }

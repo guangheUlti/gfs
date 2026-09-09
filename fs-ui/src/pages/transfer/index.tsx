@@ -22,6 +22,7 @@ export default function TransferPage() {
 
   const {
     getUploadingTasks,
+    getDownloadingTasks,
     getCompletedTasks,
     fetchTasks,
     pauseTask,
@@ -33,13 +34,14 @@ export default function TransferPage() {
   } = useTransferStore()
 
   const uploadingTasks = getUploadingTasks()
+  const downloadingTasks = getDownloadingTasks()
   const completedTasks = getCompletedTasks()
 
   const currentDisplayTasks =
     activeTab === 'uploading'
       ? uploadingTasks
       : activeTab === 'downloading'
-        ? []
+        ? downloadingTasks
         : completedTasks
 
   useEffect(() => {
@@ -181,7 +183,8 @@ export default function TransferPage() {
               {uploadingTasks.length > 0 && `(${uploadingTasks.length})`}
             </TabsTrigger>
             <TabsTrigger value='downloading'>
-              {t('page.tabDownloading')} (0)
+              {t('page.tabDownloading')}{' '}
+              {downloadingTasks.length > 0 && `(${downloadingTasks.length})`}
             </TabsTrigger>
             <TabsTrigger value='completed'>
               {t('page.tabCompleted')}
@@ -230,7 +233,7 @@ export default function TransferPage() {
           <TransferTable
             tasks={currentDisplayTasks}
             loading={loading}
-            showActions={activeTab === 'uploading'}
+            showActions={activeTab !== 'completed'}
             showCompleteTime={activeTab === 'completed'}
             onPause={handlePause}
             onResume={handleResume}

@@ -172,16 +172,27 @@ public class FileRecycleServiceImpl implements FileRecycleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void permanentlyDeleteFiles(List<String> fileIds, String userId) {
+        doPermanentDelete(fileIds, userId, true);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void permanentlyDeleteActiveFiles(List<String> fileIds) {
+        doPermanentDelete(fileIds, StpUtil.getLoginIdAsString(), false);
+    }
+
+    private void doPermanentDelete(List<String> fileIds, String userId, boolean onlyRecycled) {
         if (CollUtil.isEmpty(fileIds)) {
             return;
         }
         Set<String> allFileIds = collectFileIdsRecursively(
                 fileIds,
                 userId,
-                wrapper -> wrapper.and(FILE_INFO.IS_DELETED.eq(true))
+                onlyRecycled ? wrapper -> wrapper.and(FILE_INFO.IS_DELETED.eq(true)) : null
         );
         if (CollUtil.isEmpty(allFileIds)) {
-            throw new BusinessException(I18nUtils.getMessage("recycle.file.not.found.delete"));
+            throw new BusinessException(I18nUtils.getMessage(
+                    onlyRecycled ? "recycle.file.not.found.delete" : "file.not.found"));
         }
         List<FileInfo> allFiles = fileInfoService.listByIds(allFileIds);
         List<FileInfo> physicalObjects = allFiles.stream()

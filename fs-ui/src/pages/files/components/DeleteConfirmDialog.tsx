@@ -45,3 +45,46 @@ export function DeleteConfirmDialog({
     />
   )
 }
+
+interface PermanentDeleteConfirmDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  files: FileItem[]
+  onConfirm: () => void
+  isLoading?: boolean
+}
+
+export function PermanentDeleteConfirmDialog({
+  open,
+  onOpenChange,
+  files,
+  onConfirm,
+  isLoading = false,
+}: PermanentDeleteConfirmDialogProps) {
+  const { t } = useTranslation('files')
+  const fileCount = files.length
+  const firstName = files[0]?.displayName ?? ''
+  const desc = useMemo(
+    () =>
+      fileCount === 0
+        ? t('deleteForeverDialog.batch')
+        : fileCount === 1
+          ? t('deleteForeverDialog.single', { name: firstName })
+          : t('deleteForeverDialog.multi', { count: fileCount }),
+    [fileCount, firstName, t]
+  )
+
+  return (
+    <ConfirmDialog
+      destructive
+      open={open}
+      onOpenChange={onOpenChange}
+      handleConfirm={onConfirm}
+      isLoading={isLoading}
+      title={t('deleteForeverDialog.title')}
+      desc={desc}
+      confirmText={t('deleteForeverDialog.confirm')}
+      cancelBtnText={t('common.cancel')}
+    />
+  )
+}

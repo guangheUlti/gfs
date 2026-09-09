@@ -39,13 +39,13 @@ import {
   FileListView,
   CreateFolderModal,
   CreateTextModal,
-  TextEditorModal,
   RenameModal,
   MoveModal,
   ShareModal,
   FileBulkSelectionBar,
   RecycleBinView,
   DeleteConfirmDialog,
+  PermanentDeleteConfirmDialog,
   FileDetailModal,
   MySharesView,
 } from './components'
@@ -438,17 +438,21 @@ export default function FilesPage() {
                       onDownload={operations.handleDownload}
                       onShare={operations.openShareModal}
                       onDelete={operations.openDeleteConfirm}
+                      onPermanentDelete={operations.openPermanentDeleteConfirm}
                       onRename={operations.openRenameModal}
                       onMove={operations.openMoveModal}
                       onMoveFiles={handleMoveFiles}
                       onFavorite={operations.handleFavorite}
-                      onPreview={operations.openPreview}
+                      onPreview={(file) => operations.openPreview(file, fileList.fileList)}
                       onEdit={operations.openTextEditor}
                       onDetail={operations.openDetail}
                       onDragStateChange={handleDragStateChange}
                       onBatchShare={handleBatchShare}
                       onBatchMove={handleBatchMove}
                       onBatchDelete={handleBatchDelete}
+                      onBatchPermanentDelete={
+                        operations.openBatchPermanentDeleteConfirm
+                      }
                       selectMode={selectMode}
                       hasMore={fileList.hasMore}
                       loadingMore={fileList.loadingMore}
@@ -465,17 +469,21 @@ export default function FilesPage() {
                       onDownload={operations.handleDownload}
                       onShare={operations.openShareModal}
                       onDelete={operations.openDeleteConfirm}
+                      onPermanentDelete={operations.openPermanentDeleteConfirm}
                       onRename={operations.openRenameModal}
                       onMove={operations.openMoveModal}
                       onMoveFiles={handleMoveFiles}
                       onFavorite={operations.handleFavorite}
-                      onPreview={operations.openPreview}
+                      onPreview={(file) => operations.openPreview(file, fileList.fileList)}
                       onEdit={operations.openTextEditor}
                       onDetail={operations.openDetail}
                       onDragStateChange={handleDragStateChange}
                       onBatchShare={handleBatchShare}
                       onBatchMove={handleBatchMove}
                       onBatchDelete={handleBatchDelete}
+                      onBatchPermanentDelete={
+                        operations.openBatchPermanentDeleteConfirm
+                      }
                       selectMode={selectMode}
                       hasMore={fileList.hasMore}
                       loadingMore={fileList.loadingMore}
@@ -495,7 +503,7 @@ export default function FilesPage() {
               </ContextMenuItem>
             )}
             {canWrite && (
-              <ContextMenuItem onClick={operations.openCreateTextModal}>
+              <ContextMenuItem onClick={() => operations.openCreateTextModal('txt')}>
                 <FilePlus className='mr-2 h-4 w-4' />
                 {t('index.newTextFile')}
               </ContextMenuItem>
@@ -642,15 +650,9 @@ export default function FilesPage() {
       <CreateTextModal
         open={operations.createTextModalVisible}
         onOpenChange={operations.setCreateTextModalVisible}
+        suffix={operations.createTextSuffix}
         parentId={fileList.currentParentId}
         onConfirm={operations.handleCreateText}
-      />
-
-      <TextEditorModal
-        open={operations.textEditorVisible}
-        onOpenChange={operations.setTextEditorVisible}
-        file={operations.editingTextFile}
-        onSuccess={fileList.refresh}
       />
 
       <RenameModal
@@ -682,6 +684,13 @@ export default function FilesPage() {
         onOpenChange={operations.setDeleteDialogVisible}
         files={operations.deletingFiles}
         onConfirm={operations.handleDelete}
+      />
+
+      <PermanentDeleteConfirmDialog
+        open={operations.permanentDeleteDialogVisible}
+        onOpenChange={operations.setPermanentDeleteDialogVisible}
+        files={operations.permanentlyDeletingFiles}
+        onConfirm={operations.handlePermanentDelete}
       />
 
       <FileDetailModal

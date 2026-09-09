@@ -23,10 +23,6 @@
   },
   "listTotalItems": "{{count}} items",
   "refresh": "Refresh",
-  "preview": {
-    "popupBlocked": "Pop-up was blocked. Allow pop-ups and try again.",
-    "tokenFailed": "Could not get preview token. Try again later."
-  },
   "fileErrors": {
     "readFailed": "Failed to read file",
     "chunkReadFailed": "Failed to read chunk"

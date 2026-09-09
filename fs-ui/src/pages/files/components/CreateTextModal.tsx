@@ -11,9 +11,14 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 
+// 弹窗标题里的类型展示名：md 用全称，其余大写
+const TYPE_LABELS: Record<string, string> = { txt: 'TXT', json: 'JSON', md: 'Markdown' }
+
 interface CreateTextModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** 新建文件的固定后缀（txt/json/md），由入口菜单决定 */
+  suffix: string
   parentId?: string
   onConfirm: (fileName: string, parentId?: string) => void
 }
@@ -21,6 +26,7 @@ interface CreateTextModalProps {
 export function CreateTextModal({
   open,
   onOpenChange,
+  suffix,
   parentId,
   onConfirm,
 }: CreateTextModalProps) {
@@ -36,9 +42,8 @@ export function CreateTextModal({
   const handleConfirm = () => {
     const name = fileName.trim()
     if (!name) return
-    // 输入框只填主体名，后缀固定 .txt；若用户手动带了后缀也不重复追加
-    const full = name.toLowerCase().endsWith('.txt') ? name : `${name}.txt`
-    onConfirm(full, parentId)
+    // 只传主体名，后缀由后端统一拼接
+    onConfirm(name, parentId)
     onOpenChange(false)
   }
 
@@ -52,7 +57,9 @@ export function CreateTextModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className='sm:max-w-[420px]'>
         <DialogHeader>
-          <DialogTitle>{t('createText.title')}</DialogTitle>
+          <DialogTitle>
+            {t('createText.title', { type: TYPE_LABELS[suffix] ?? suffix.toUpperCase() })}
+          </DialogTitle>
         </DialogHeader>
         <div className='space-y-6'>
           <div className='flex items-center justify-center'>
@@ -70,7 +77,7 @@ export function CreateTextModal({
               className='pr-14'
             />
             <span className='pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground'>
-              .txt
+              .{suffix}
             </span>
           </div>
         </div>

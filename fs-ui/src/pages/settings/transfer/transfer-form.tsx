@@ -2,13 +2,10 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
-import { InfoCircledIcon } from '@radix-ui/react-icons'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useUserStore } from '@/store/user'
 import { toast } from 'sonner'
 import { userApi } from '@/api/user'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Form,
   FormControl,
@@ -25,51 +22,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
-import { SettingsRow, SettingsBlock } from '../components/settings-row'
-
-// 路径格式校验
-const validatePath = (value: string) => {
-  if (!value || !value.trim()) {
-    return false
-  }
-
-  const path = value.trim()
-
-  const windowsAbsolutePathRegex =
-    /^[a-zA-Z]:\\([\w\s\u4e00-\u9fa5\-().]+\\)*[\w\s\u4e00-\u9fa5\-().]*$/
-  const windowsNetworkPathRegex =
-    /^\\\\[\w\-.]+(\[\w\s\u4e00-\u9fa5\-().]+)+(\[\w\s\u4e00-\u9fa5\-().]+)*$/
-
-  const unixPathRegex = /^\/[\w\s\u4e00-\u9fa5\-./]*$/
-
-  const isWindowsPath =
-    windowsAbsolutePathRegex.test(path) || windowsNetworkPathRegex.test(path)
-  const isUnixPath = unixPathRegex.test(path)
-
-  if (!isWindowsPath && !isUnixPath) {
-    return false
-  }
-
-  if (isWindowsPath) {
-    const illegalChars = /[<>"|?*]/
-    const pathWithoutDrive = path.substring(path.indexOf(':') + 1)
-    if (illegalChars.test(pathWithoutDrive)) {
-      return false
-    }
-  }
-
-  return true
-}
+import { SettingsRow } from '../components/settings-row'
 
 type TransferFormValues = {
-  downloadLocation: string
-  isDefaultDownloadLocation: boolean
   enableDownloadSpeedLimit: boolean
   downloadSpeedLimit?: number
   concurrentUploadQuantity: number
@@ -82,11 +37,6 @@ export function TransferForm() {
   const transferFormSchema = useMemo(
     () =>
       z.object({
-        downloadLocation: z
-          .string()
-          .min(1, t('transfer.validation.downloadRequired'))
-          .refine(validatePath, t('transfer.validation.pathInvalid')),
-        isDefaultDownloadLocation: z.boolean(),
         enableDownloadSpeedLimit: z.boolean(),
         downloadSpeedLimit: z.number().min(1).max(200).optional(),
         concurrentUploadQuantity: z.number().min(1).max(3),
@@ -105,8 +55,6 @@ export function TransferForm() {
   const form = useForm<TransferFormValues>({
     resolver: zodResolver(transferFormSchema),
     defaultValues: {
-      downloadLocation: '',
-      isDefaultDownloadLocation: false,
       enableDownloadSpeedLimit: false,
       downloadSpeedLimit: 5,
       concurrentUploadQuantity: 3,
@@ -128,8 +76,6 @@ export function TransferForm() {
       const settings = await userApi.getTransferSetting()
 
       form.reset({
-        downloadLocation: settings.downloadLocation || '',
-        isDefaultDownloadLocation: settings.isDefaultDownloadLocation === 1,
         enableDownloadSpeedLimit: settings.downloadSpeedLimit > 0,
         downloadSpeedLimit:
           settings.downloadSpeedLimit > 0 ? settings.downloadSpeedLimit : 5,
@@ -158,8 +104,6 @@ export function TransferForm() {
     setLoading(true)
     try {
       await userApi.updateTransferSetting({
-        downloadLocation: data.downloadLocation,
-        isDefaultDownloadLocation: data.isDefaultDownloadLocation ? 1 : 0,
         downloadSpeedLimit: data.enableDownloadSpeedLimit
           ? data.downloadSpeedLimit || 5
           : -1,
@@ -226,82 +170,6 @@ export function TransferForm() {
     <Form {...form}>
       <div>
         <div className='divide-y divide-border'>
-          <div className='py-5'>
-            <FormField
-              control={form.control}
-              name='downloadLocation'
-              render={({ field }) => (
-                <FormItem className='space-y-0'>
-                  <SettingsBlock
-                    className='py-0'
-                    label={t('transfer.downloadLocation')}
-                    description={t('transfer.downloadLocationDesc')}
-                  >
-                    <div className='flex w-full min-w-0 items-center gap-2'>
-                      <FormControl>
-                        <Input
-                          placeholder={t('transfer.downloadLocationPlaceholder')}
-                          className='min-w-0 flex-1 font-mono text-sm'
-                          {...field}
-                          onChange={(e) => {
-                            field.onChange(e)
-                            handleFieldChange()
-                          }}
-                          disabled={loading}
-                        />
-                      </FormControl>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type='button'
-                              variant='outline'
-                              size='icon'
-                              className='shrink-0'
-                            >
-                              <InfoCircledIcon className='h-4 w-4' />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side='left' className='max-w-xs'>
-                            <p>{t('transfer.pathHintTitle')}</p>
-                            <p>{t('transfer.pathHintWin')}</p>
-                            <p>{t('transfer.pathHintUnix')}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                  </SettingsBlock>
-                  <FormMessage className='pt-1' />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name='isDefaultDownloadLocation'
-              render={({ field }) => (
-                <FormItem className='space-y-0'>
-                  <SettingsRow
-                    className='py-0 pt-6'
-                    label={t('transfer.defaultPath')}
-                    description={t('transfer.defaultPathDesc')}
-                  >
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={(checked) => {
-                          handleImmediateChange(() => field.onChange(checked))
-                        }}
-                        className='size-5 sm:mt-0.5'
-                        disabled={loading}
-                      />
-                    </FormControl>
-                  </SettingsRow>
-                </FormItem>
-              )}
-            />
-          </div>
-
           <div className='py-5'>
             <FormField
               control={form.control}

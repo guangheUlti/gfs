@@ -1,0 +1,628 @@
+import { downloadChunk, getDownloadedChunks, initDownload, pauseUpload } from '@/api/transfer'
+import type { InitDownloadResultVO } from '@/types/transfer'
+
+export interface DownloadItemInput {
+  fileId: string
+  fileName: string
+  fileSize: number
+}
+
+export interface DownloadStartMeta {
+  taskId: string
+  fileName: string
+  fileSize: number
+  chunkSize: number
+  totalChunks: number
+  downloadedChunks?: number[]
+  chunkConcurrency: number
+}
+
+interface DownloadTaskContext {
+  taskId: string
+  fileName: string
+  fileSize: number
+  chunkSize: number
+  totalChunks: number
+  downloadedChunks: Set<number>
+  chunkConcurrency: number
+  isPaused: boolean
+  isCancelled: boolean
+  saving: boolean
+  activeRequests: Map<number, AbortController>
+  retryCount: Map<number, number>
+  opfsFileHandle: FileSystemFileHandle | null
+  memoryChunks: Map<number, Blob> | null
+  /** OPFS 同一文件不允许并发 writable，分片落盘串行化 */
+  writeChain: Promise<void>
+}
+
+/** createWritable 尚未进标准 TS DOM lib，用最小结构约定 */
+interface WritableFileStreamLike {
+  write(params: { type: 'write'; position: number; data: Blob }): Promise<void>
+  close(): Promise<void>
+}
+
+export interface DownloadProgressData {
+  uploadedBytes: number
+  totalBytes: number
+  uploadedChunks: number
+  totalChunks: number
+}
+
+export interface DownloadExecutorCallbacks {
+  onTransition: (taskId: string, status: string) => void
+  onProgress: (taskId: string, data: DownloadProgressData) => void
+  onError: (taskId: string, errorMessage: string) => void
+  /** 排队任务真正调用 initDownload 后，用后端 taskId 替换占位 tempId */
+  onTaskIdReplaced: (
+    tempId: string,
+    realTaskId: string,
+    meta: {
+      fileName: string
+      fileSize: number
+      chunkSize: number
+      totalChunks: number
+      downloadedChunks: number[]
+    }
+  ) => void
+}
+
+function isNetworkError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase()
+    return (
+      message.includes('network') ||
+      message.includes('timeout') ||
+      message.includes('abort') ||
+      message.includes('connection') ||
+      message.includes('fetch')
+    )
+  }
+  return false
+}
+
+function isConcurrencyLimitError(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : ((error as { response?: { data?: { msg?: string } } })?.response?.data
+          ?.msg ?? '')
+  return message.includes('并发下载')
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
+interface QueueItem extends DownloadItemInput {
+  tempId: string
+}
+
+class DownloadExecutor {
+  private static instance: DownloadExecutor | null = null
+  public readonly MAX_RETRY_COUNT = 3
+  private readonly RETRY_BASE_DELAY = 1000
+  /** 不限速时任务内并行拉取的分片数 */
+  private readonly UNLIMITED_CHUNK_CONCURRENCY = 3
+
+  private taskContexts = new Map<string, DownloadTaskContext>()
+  /** 已通过 initDownload 占住后端并发名额的任务（含暂停中，终态才释放） */
+  private active = new Set<string>()
+  private queue: QueueItem[] = []
+  /** initDownload 因后端并发上限被拒后暂停出队，待名额释放再继续 */
+  private queueBlocked = false
+  private maxConcurrency = 3
+  private speedLimited = false
+  private tempIdCounter = 0
+  private callbacks: DownloadExecutorCallbacks | null = null
+
+  public static getInstance(): DownloadExecutor {
+    if (!DownloadExecutor.instance) {
+      DownloadExecutor.instance = new DownloadExecutor()
+    }
+    return DownloadExecutor.instance
+  }
+
+  public setCallbacks(callbacks: DownloadExecutorCallbacks): void {
+    this.callbacks = callbacks
+  }
+
+  /** maxConcurrentTasks：同时下载数量；speedLimited：是否启用下载限速 */
+  public configure(maxConcurrentTasks: number, speedLimited: boolean): void {
+    this.maxConcurrency = Math.max(1, maxConcurrentTasks)
+    this.speedLimited = speedLimited
+    this.pump()
+  }
+
+  /** 入队一个下载项，返回占位 tempId（真实 taskId 由 onTaskIdReplaced 回调替换） */
+  public enqueue(item: DownloadItemInput): string {
+    const tempId = `dl-temp-${Date.now()}-${(this.tempIdCounter += 1)}`
+    this.queue.push({ ...item, tempId })
+    this.pump()
+    return tempId
+  }
+
+  public isQueued(taskId: string): boolean {
+    return this.queue.some((item) => item.tempId === taskId)
+  }
+
+  public removeFromQueue(taskId: string): boolean {
+    const before = this.queue.length
+    this.queue = this.queue.filter((item) => item.tempId !== taskId)
+    return this.queue.length < before
+  }
+
+  /** 刷新页面后，本地（OPFS）是否留有该任务的分片临时文件 */
+  public async hasLocalProgress(taskId: string): Promise<boolean> {
+    try {
+      if (!navigator.storage?.getDirectory) return false
+      const root = await navigator.storage.getDirectory()
+      await root.getFileHandle(this.tempFileName(taskId), { create: false })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** 恢复上次会话遗留的下载任务（本地 OPFS 有临时文件时由 store 调用） */
+  public async adoptResumed(meta: DownloadStartMeta): Promise<void> {
+    const context = this.createContext(meta)
+    await this.sanitizeLocalProgress(context)
+    this.taskContexts.set(meta.taskId, context)
+    this.active.add(meta.taskId)
+    void this.runFetch(context)
+  }
+
+  public pause(taskId: string): boolean {
+    const context = this.taskContexts.get(taskId)
+    if (!context) return false
+    context.isPaused = true
+    context.activeRequests.forEach((controller) => controller.abort())
+    context.activeRequests.clear()
+    return true
+  }
+
+  public async resume(taskId: string): Promise<void> {
+    const context = this.taskContexts.get(taskId)
+    if (!context) throw new Error(`Download task context not found: ${taskId}`)
+
+    context.isPaused = false
+    try {
+      const backendChunks = (await getDownloadedChunks(taskId)) || []
+      context.downloadedChunks = new Set(backendChunks)
+      await this.sanitizeLocalProgress(context)
+      this.notifyProgress(taskId, context)
+      await this.runFetch(context)
+    } catch (error) {
+      this.handleFetchError(taskId, context, error)
+    }
+  }
+
+  /** 失败任务重试：复用原上下文重新拉取缺失分片 */
+  public async retry(taskId: string): Promise<void> {
+    const context = this.taskContexts.get(taskId)
+    if (!context) throw new Error(`Download task context not found: ${taskId}`)
+
+    context.isPaused = false
+    context.isCancelled = false
+    context.retryCount.clear()
+    try {
+      const backendChunks = (await getDownloadedChunks(taskId)) || []
+      context.downloadedChunks = new Set(backendChunks)
+      await this.sanitizeLocalProgress(context)
+      await this.runFetch(context)
+    } catch (error) {
+      this.handleFetchError(taskId, context, error)
+    }
+  }
+
+  public cancel(taskId: string): void {
+    if (this.removeFromQueue(taskId)) return
+
+    const context = this.taskContexts.get(taskId)
+    if (!context) return
+
+    context.isCancelled = true
+    context.activeRequests.forEach((controller) => controller.abort())
+    context.activeRequests.clear()
+
+    void this.removeOpfsTemp(context)
+      .catch(() => undefined)
+      .finally(() => {
+        this.taskContexts.delete(taskId)
+        this.releaseSlotAndPump(taskId)
+      })
+  }
+
+  public getTaskContext(taskId: string): DownloadTaskContext | undefined {
+    return this.taskContexts.get(taskId)
+  }
+
+  public clearAll(): void {
+    this.taskContexts.forEach((context) => {
+      context.isCancelled = true
+      context.activeRequests.forEach((controller) => controller.abort())
+    })
+    this.taskContexts.clear()
+    this.active.clear()
+    this.queue = []
+  }
+
+  // ==================== 内部流程 ====================
+
+  private createContext(meta: DownloadStartMeta): DownloadTaskContext {
+    return {
+      taskId: meta.taskId,
+      fileName: meta.fileName,
+      fileSize: meta.fileSize,
+      chunkSize: meta.chunkSize,
+      totalChunks: meta.totalChunks,
+      downloadedChunks: new Set(meta.downloadedChunks ?? []),
+      chunkConcurrency: meta.chunkConcurrency,
+      isPaused: false,
+      isCancelled: false,
+      saving: false,
+      activeRequests: new Map(),
+      retryCount: new Map(),
+      opfsFileHandle: null,
+      memoryChunks: null,
+      writeChain: Promise.resolve(),
+    }
+  }
+
+  private async pump(): Promise<void> {
+    if (this.queueBlocked) return
+
+    while (this.queue.length > 0 && this.active.size < this.maxConcurrency) {
+      const item = this.queue.shift()!
+      let vo: InitDownloadResultVO
+      try {
+        vo = await initDownload({
+          fileId: item.fileId,
+          chunkSize: undefined,
+        })
+      } catch (error) {
+        if (isConcurrencyLimitError(error)) {
+          this.queue.unshift(item)
+          this.queueBlocked = true
+          return
+        }
+        this.notifyError(
+          item.tempId,
+          error instanceof Error ? error.message : '初始化下载任务失败'
+        )
+        continue
+      }
+
+      const chunkConcurrency = this.speedLimited
+        ? 1
+        : this.UNLIMITED_CHUNK_CONCURRENCY
+      this.callbacks?.onTaskIdReplaced(item.tempId, vo.taskId, {
+        fileName: vo.fileName,
+        fileSize: vo.fileSize,
+        chunkSize: vo.chunkSize,
+        totalChunks: vo.totalChunks,
+        downloadedChunks: vo.downloadedChunks ?? [],
+      })
+
+      const context = this.createContext({
+        taskId: vo.taskId,
+        fileName: vo.fileName,
+        fileSize: vo.fileSize,
+        chunkSize: vo.chunkSize,
+        totalChunks: vo.totalChunks,
+        downloadedChunks: vo.downloadedChunks ?? [],
+        chunkConcurrency,
+      })
+      this.taskContexts.set(vo.taskId, context)
+      this.active.add(vo.taskId)
+      void this.runFetch(context)
+    }
+  }
+
+  private releaseSlotAndPump(taskId: string): void {
+    this.active.delete(taskId)
+    if (this.active.size < this.maxConcurrency) {
+      this.queueBlocked = false
+    }
+    this.pump()
+  }
+
+  private async runFetch(context: DownloadTaskContext): Promise<void> {
+    const { taskId, totalChunks, downloadedChunks } = context
+
+    if (!(await this.ensureStorage(context))) {
+      // OPFS 不可用且内存模式初始化失败，直接报错
+      this.notifyError(taskId, '无法创建本地下载缓存')
+      return
+    }
+
+    try {
+      await this.fetchChunks(context)
+    } catch (error) {
+      this.handleFetchError(taskId, context, error)
+      return
+    }
+
+    if (context.isCancelled || context.isPaused) return
+
+    if (downloadedChunks.size === totalChunks) {
+      await this.finishDownload(context)
+    }
+  }
+
+  private async fetchChunks(context: DownloadTaskContext): Promise<void> {
+    const { totalChunks, downloadedChunks, chunkConcurrency } = context
+
+    const pending: number[] = []
+    for (let i = 0; i < totalChunks; i += 1) {
+      if (!downloadedChunks.has(i)) pending.push(i)
+    }
+    if (pending.length === 0) return
+
+    let cursor = 0
+
+    const worker = async (): Promise<void> => {
+      while (cursor < pending.length) {
+        if (context.isPaused || context.isCancelled) return
+
+        const chunkIndex = pending[cursor]
+        cursor += 1
+
+        const ok = await this.fetchChunkWithRetry(context, chunkIndex)
+        if (ok) {
+          context.downloadedChunks.add(chunkIndex)
+          this.notifyProgress(context.taskId, context)
+        } else if (!context.isCancelled && !context.isPaused) {
+          throw new Error(`分片 ${chunkIndex} 下载失败`)
+        }
+      }
+    }
+
+    const workerCount = Math.min(chunkConcurrency, pending.length)
+    await Promise.all(Array.from({ length: workerCount }, () => worker()))
+  }
+
+  private async fetchChunkWithRetry(
+    context: DownloadTaskContext,
+    chunkIndex: number
+  ): Promise<boolean> {
+    const { taskId } = context
+    let retryCount = context.retryCount.get(chunkIndex) || 0
+
+    while (retryCount <= this.MAX_RETRY_COUNT) {
+      if (context.isPaused || context.isCancelled) return false
+
+      const abortController = new AbortController()
+      context.activeRequests.set(chunkIndex, abortController)
+
+      try {
+        const response = await downloadChunk(
+          taskId,
+          chunkIndex,
+          abortController.signal
+        )
+        const blob = response.data
+        context.activeRequests.delete(chunkIndex)
+        context.retryCount.delete(chunkIndex)
+        await this.writeChunk(context, chunkIndex, blob)
+        return true
+      } catch (error) {
+        context.activeRequests.delete(chunkIndex)
+
+        if (context.isCancelled || context.isPaused) return false
+
+        retryCount += 1
+        context.retryCount.set(chunkIndex, retryCount)
+
+        if (retryCount <= this.MAX_RETRY_COUNT) {
+          await sleep(this.RETRY_BASE_DELAY * 2 ** (retryCount - 1))
+        } else {
+          return false
+        }
+      }
+    }
+    return false
+  }
+
+  private handleFetchError(
+    taskId: string,
+    context: DownloadTaskContext,
+    error: unknown
+  ): void {
+    if (context.isCancelled) return
+
+    if (isNetworkError(error) || context.isPaused) {
+      // 网络中断自动转暂停；同步后端状态，保证后续 resume 接口可用
+      context.isPaused = true
+      void pauseUpload(taskId).catch(() => undefined)
+      this.notifyTransition(taskId, 'paused')
+      return
+    }
+
+    this.notifyError(
+      taskId,
+      error instanceof Error ? error.message : '下载失败'
+    )
+  }
+
+  private async finishDownload(context: DownloadTaskContext): Promise<void> {
+    const { taskId } = context
+    if (context.saving) return
+    context.saving = true
+
+    this.notifyTransition(taskId, 'merging')
+
+    try {
+      // 等待所有在途分片写完，再组装保存
+      await context.writeChain
+
+      let blob: Blob
+      if (context.opfsFileHandle) {
+        blob = await context.opfsFileHandle.getFile()
+      } else {
+        const ordered: Blob[] = []
+        for (let i = 0; i < context.totalChunks; i += 1) {
+          ordered.push(context.memoryChunks?.get(i) ?? new Blob())
+        }
+        blob = new Blob(ordered)
+      }
+
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = context.fileName
+      link.style.display = 'none'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+
+      await this.removeOpfsTemp(context)
+    } finally {
+      this.taskContexts.delete(taskId)
+      this.releaseSlotAndPump(taskId)
+    }
+
+    this.notifyTransition(taskId, 'completed')
+  }
+
+  // ==================== 本地存储（OPFS 优先 / 内存降级） ====================
+
+  private tempFileName(taskId: string): string {
+    return `download-${taskId}.part`
+  }
+
+  private async ensureStorage(context: DownloadTaskContext): Promise<boolean> {
+    if (context.opfsFileHandle || context.memoryChunks) return true
+    try {
+      if (!navigator.storage?.getDirectory) return false
+      const root = await navigator.storage.getDirectory()
+      context.opfsFileHandle = await root.getFileHandle(
+        this.tempFileName(context.taskId),
+        { create: true }
+      )
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * OPFS createWritable 是 close 时才原子落盘，故每分片独立 open→write→close。
+   * 同一文件不允许并发 writable，用 writeChain 串行化。
+   */
+  private writeChunk(
+    context: DownloadTaskContext,
+    chunkIndex: number,
+    blob: Blob
+  ): void {
+    if (context.opfsFileHandle) {
+      context.writeChain = context.writeChain.then(async () => {
+        if (context.isCancelled) return
+        const handle = context.opfsFileHandle as (FileSystemFileHandle & {
+          createWritable?: (opts?: {
+            keepExistingData?: boolean
+          }) => Promise<WritableFileStreamLike>
+        }) | null
+        if (!handle?.createWritable) {
+          context.memoryChunks = context.memoryChunks ?? new Map()
+          context.memoryChunks.set(chunkIndex, blob)
+          return
+        }
+        const writable = await handle.createWritable({
+          keepExistingData: true,
+        })
+        try {
+          await writable.write({
+            type: 'write',
+            position: chunkIndex * context.chunkSize,
+            data: blob,
+          })
+        } finally {
+          await writable.close()
+        }
+      })
+    } else {
+      context.memoryChunks?.set(chunkIndex, blob)
+    }
+  }
+
+  /**
+   * 后端 Redis 的分片记录早于本地落盘，崩溃窗口内可能出现
+   * 「Redis 记为已下载但本地缺字节」的空洞。用文件尺寸做下限校验，
+   * 不满足则丢弃本地进度整体重下，避免拼出损坏文件。
+   */
+  private async sanitizeLocalProgress(
+    context: DownloadTaskContext
+  ): Promise<void> {
+    if (!context.opfsFileHandle && !context.memoryChunks) {
+      await this.ensureStorage(context)
+    }
+    if (!context.opfsFileHandle) return
+
+    try {
+      const file = await context.opfsFileHandle.getFile()
+      let maxIndex = -1
+      context.downloadedChunks.forEach((index) => {
+        if (index > maxIndex) maxIndex = index
+      })
+      if (maxIndex < 0) return
+
+      const expectedMin =
+        Math.min((maxIndex + 1) * context.chunkSize, context.fileSize)
+      if (file.size < expectedMin) {
+        context.downloadedChunks = new Set()
+        await this.removeOpfsTemp(context)
+        await this.ensureStorage(context)
+      }
+    } catch {
+      context.downloadedChunks = new Set()
+    }
+  }
+
+  private async removeOpfsTemp(context: DownloadTaskContext): Promise<void> {
+    if (!context.opfsFileHandle) return
+    const name = this.tempFileName(context.taskId)
+    context.opfsFileHandle = null
+    try {
+      const root = await navigator.storage.getDirectory()
+      await root.removeEntry(name)
+    } catch {
+      // 临时文件可能已不存在
+    }
+  }
+
+  // ==================== 通知 ====================
+
+  private notifyTransition(taskId: string, status: string): void {
+    this.callbacks?.onTransition(taskId, status)
+  }
+
+  private notifyProgress(taskId: string, context: DownloadTaskContext): void {
+    if (!this.callbacks?.onProgress) return
+
+    const { chunkSize, fileSize, downloadedChunks, totalChunks } = context
+
+    let uploadedBytes = 0
+    downloadedChunks.forEach((chunkIndex) => {
+      const start = chunkIndex * chunkSize
+      uploadedBytes += Math.min(start + chunkSize, fileSize) - start
+    })
+
+    this.callbacks.onProgress(taskId, {
+      uploadedBytes,
+      totalBytes: fileSize,
+      uploadedChunks: downloadedChunks.size,
+      totalChunks,
+    })
+  }
+
+  private notifyError(taskId: string, errorMessage: string): void {
+    this.callbacks?.onError(taskId, errorMessage)
+  }
+}
+
+export const downloadExecutor = DownloadExecutor.getInstance()

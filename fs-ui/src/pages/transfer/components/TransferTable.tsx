@@ -57,6 +57,7 @@ const getStatusColor = (
     initialized: 'secondary',
     checking: 'default',
     uploading: 'default',
+    downloading: 'default',
     paused: 'outline',
     merging: 'secondary',
     completed: 'default',
@@ -85,6 +86,7 @@ export default function TransferTable({
         initialized: t('status.initialized'),
         checking: t('status.checking'),
         uploading: t('status.uploading'),
+        downloading: t('status.downloading'),
         paused: t('status.paused'),
         merging: t('status.merging'),
         completed: t('status.completed'),
@@ -97,13 +99,19 @@ export default function TransferTable({
   const statusText = (status: TaskStatus) =>
     statusMap[status] ?? t('status.unknown')
 
-  const canPause = (status: TaskStatus) => status === 'uploading'
+  const canPause = (status: TaskStatus) =>
+    status === 'uploading' || status === 'downloading'
   const canResume = (status: TaskStatus) => status === 'paused'
   const canRetry = (status: TaskStatus) => status === 'failed'
   const canCancel = (status: TaskStatus) =>
-    ['initialized', 'checking', 'uploading', 'paused', 'failed'].includes(
-      status
-    )
+    [
+      'initialized',
+      'checking',
+      'uploading',
+      'downloading',
+      'paused',
+      'failed',
+    ].includes(status)
 
   return (
     <div className='overflow-hidden rounded-xl border border-border/60'>
@@ -154,7 +162,9 @@ export default function TransferTable({
                 </TableCell>
 
                 <TableCell className='px-4 py-3.5 tabular-nums'>
-                  {task.status === 'uploading' || task.status === 'paused' ? (
+                  {task.status === 'uploading' ||
+                  task.status === 'downloading' ||
+                  task.status === 'paused' ? (
                     <span className='text-sm'>
                       <span className='font-medium'>
                         {formatFileSize(task.uploadedBytes || 0)}
@@ -202,8 +212,9 @@ export default function TransferTable({
                     </div>
                   )}
 
-                  {/* Uploading */}
-                  {task.status === 'uploading' && (
+                  {/* Uploading / Downloading */}
+                  {(task.status === 'uploading' ||
+                    task.status === 'downloading') && (
                     <div className='flex items-center gap-3'>
                       <Progress
                         value={displayData.progress}

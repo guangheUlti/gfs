@@ -112,7 +112,6 @@ export function SettingsUserApproval() {
             <TableHeader>
               <TableRow>
                 <TableHead>{t('userApproval.colUser')}</TableHead>
-                <TableHead>{t('userApproval.colEmail')}</TableHead>
                 <TableHead>{t('userApproval.colRegisteredAt')}</TableHead>
                 <TableHead className='w-40'>{t('userApproval.colActions')}</TableHead>
               </TableRow>
@@ -121,7 +120,7 @@ export function SettingsUserApproval() {
               {loading && users.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={4}
+                    colSpan={3}
                     className='py-8 text-center text-muted-foreground'
                   >
                     {t('userApproval.loading')}
@@ -130,7 +129,7 @@ export function SettingsUserApproval() {
               ) : users.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={4}
+                    colSpan={3}
                     className='py-8 text-center text-muted-foreground'
                   >
                     {t('userApproval.empty')}
@@ -157,7 +156,6 @@ export function SettingsUserApproval() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className='text-sm'>{u.email}</TableCell>
                     <TableCell className='text-xs text-muted-foreground'>
                       {u.createdAt
                         ? dayjs(u.createdAt).format('YYYY-MM-DD HH:mm')

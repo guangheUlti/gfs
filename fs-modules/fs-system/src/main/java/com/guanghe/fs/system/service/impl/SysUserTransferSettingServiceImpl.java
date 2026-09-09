@@ -56,8 +56,6 @@ public class SysUserTransferSettingServiceImpl extends ServiceImpl<SysUserTransf
             this.save(newTransferSetting);
         } else {
             transferSetting.setUserId(userId);
-            transferSetting.setDownloadLocation(cmd.getDownloadLocation());
-            transferSetting.setIsDefaultDownloadLocation(cmd.getIsDefaultDownloadLocation());
             transferSetting.setConcurrentDownloadQuantity(cmd.getConcurrentDownloadQuantity());
             transferSetting.setConcurrentUploadQuantity(cmd.getConcurrentUploadQuantity());
             transferSetting.setDownloadSpeedLimit(cmd.getDownloadSpeedLimit());

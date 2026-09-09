@@ -102,6 +102,23 @@ public class FileController {
         return Result.ok();
     }
 
+    @DeleteMapping("/permanent")
+    @Operation(summary = "永久删除文件", description = "不经回收站直接永久删除文件，不可恢复")
+    @SaCheckPermission("file:write")
+    public Result<?> permanentlyDeleteActiveFiles(@RequestBody List<String> fileIds) {
+        List<FileInfo> targets = getAuthorizedFiles(fileIds);
+        fileRecycleService.permanentlyDeleteActiveFiles(fileIds);
+        operationLogService.recordSuccess(
+                OperationType.PERMANENT_DELETE,
+                "永久删除",
+                targetType(targets),
+                String.join(",", fileIds),
+                summarizeNames(targets),
+                "共 " + targets.size() + " 项"
+        );
+        return Result.ok();
+    }
+
     @PostMapping("/directory")
     @Operation(summary = "创建目录", description = "在指定目录下创建新目录")
     @SaCheckPermission("file:write")

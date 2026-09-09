@@ -5,6 +5,7 @@ import { useSSEConnection } from '@/hooks/useSSEConnection'
 import { useUploadGuard } from '@/hooks/useUploadGuard'
 import { Toaster } from '@/components/ui/sonner'
 import { NavigationProgress } from '@/components/navigation-progress'
+import { FilePreviewModal } from '@/components/preview/FilePreviewModal'
 
 // SSE 初始化组件（必须在 AuthProvider 内部）
 function SSEInitializer() {
@@ -19,6 +20,7 @@ export default function App() {
       <SSEInitializer />
       <NavigationProgress />
       <RouterProvider router={router} />
+      <FilePreviewModal />
       <Toaster />
     </AuthProvider>
   )

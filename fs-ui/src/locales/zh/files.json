@@ -31,7 +31,9 @@
     "emptyDesc": "上传文件或创建文件夹开始使用",
     "uploadFile": "上传文件",
     "newFolder": "新建文件夹",
-    "newTextFile": "新建纯文本",
+    "newTextFile": "新建TXT",
+    "newTextJson": "新建JSON",
+    "newTextMd": "新建Markdown",
     "fileActions": "新建",
     "refresh": "刷新",
     "noMore": "没有更多了"
@@ -51,7 +53,9 @@
     "rename": "重命名",
     "move": "移动到",
     "detail": "详细信息",
-    "trash": "放入回收站"
+    "trash": "放入回收站",
+    "delete": "删除",
+    "deleteForever": "永久删除"
   },
   "breadcrumb": {
     "allFiles": "文件"
@@ -89,26 +93,24 @@
     "multi": "确定要将选中的 {{count}} 个文件放入回收站吗？可在回收站还原。",
     "batch": "确定要将选中的文件放入回收站吗？可在回收站还原。"
   },
+  "deleteForeverDialog": {
+    "title": "永久删除",
+    "confirm": "永久删除",
+    "single": "确定要永久删除「{{name}}」吗？不会进入回收站，此操作不可恢复。",
+    "multi": "确定要永久删除选中的 {{count}} 个文件吗？不会进入回收站，此操作不可恢复。",
+    "batch": "确定要永久删除选中的文件吗？不会进入回收站，此操作不可恢复。"
+  },
   "createFolder": {
     "title": "新建文件夹",
     "placeholder": "请输入文件夹名称",
     "cancel": "取消",
     "confirm": "确认"
   },
-"createText": {
-    "title": "新建纯文本",
+  "createText": {
+    "title": "新建{{type}}",
     "placeholder": "请输入文件名",
     "cancel": "取消",
     "confirm": "确认"
-  },
-  "textEditor": {
-    "description": "在线编辑纯文本内容",
-    "unsaved": "（未保存）",
-    "save": "保存",
-    "cancel": "取消",
-    "saveOk": "保存成功",
-    "saveFail": "保存失败",
-    "loadFail": "读取文件内容失败"
   },
   "rename": {
     "title": "重命名",
@@ -290,8 +292,6 @@
     "mkdirFail": "创建文件夹失败",
     "createTextOk": "文本文件创建成功",
     "createTextFail": "创建文本文件失败",
-    "saveTextOk": "文本已保存",
-    "saveTextFail": "保存文本失败",
     "renameOk": "重命名成功",
     "renameFail": "重命名失败",
     "moveOk": "移动成功",
@@ -299,8 +299,9 @@
     "trashOne": "已移到回收站",
     "trashMany": "已将 {{count}} 个文件移到回收站",
     "trashFail": "删除失败",
-    "downloadOne": "开始下载文件",
-    "downloadMany": "开始下载 {{count}} 个文件",
+    "deleteForeverOne": "已永久删除",
+    "deleteForeverMany": "已永久删除 {{count}} 个文件",
+    "deleteForeverFail": "永久删除失败",
     "favOk": "收藏成功",
     "unfavOk": "取消收藏成功",
     "favFail": "收藏失败",
@@ -329,5 +330,29 @@
     "pauseAll": "全部暂停",
     "resumeAll": "继续上传",
     "cancelAll": "全部取消"
+  },
+  "preview": {
+    "close": "关闭预览",
+    "title": "文件预览",
+    "unsupported": "该文件类型暂不支持预览",
+    "unsaved": "（未保存）",
+    "loadFail": "文件内容加载失败",
+    "save": "保存",
+    "saveOk": "保存成功",
+    "saveFail": "保存失败",
+    "modeEdit": "在线编辑",
+    "modePreview": "在线预览",
+    "wrap": "自动换行",
+    "themeSystem": "跟随系统",
+    "prev": "上一个",
+    "next": "下一个",
+    "rotate": "向右旋转",
+    "collapseList": "折叠缩略图",
+    "expandList": "展开缩略图",
+    "playlist": "播放列表",
+    "autoNext": "自动连播",
+    "play": "播放",
+    "pause": "暂停",
+    "embedFail": "内嵌预览页加载失败，请稍后重试"
   }
 }

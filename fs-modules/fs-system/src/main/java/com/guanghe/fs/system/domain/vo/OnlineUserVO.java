@@ -32,9 +32,6 @@ public class OnlineUserVO implements Serializable {
     @Schema(description = "头像")
     private String avatar;
 
-    @Schema(description = "邮箱")
-    private String email;
-
     @Schema(description = "账号状态，取值见 UserStatus；账号已被删除时为空")
     private Integer status;
 

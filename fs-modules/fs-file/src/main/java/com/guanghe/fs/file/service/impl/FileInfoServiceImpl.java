@@ -255,21 +255,26 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
                 throw new BusinessException(I18nUtils.getMessage("file.target.dir.invalid"));
             }
         }
+        String suffix = StrUtil.blankToDefault(cmd.getSuffix(), TEXT_SUFFIX).trim().toLowerCase();
+        if (!FileTypeEnum.isEditableTextType(suffix)) {
+            throw new BusinessException(I18nUtils.getMessage("file.text.not.editable"));
+        }
         byte[] bytes = StrUtil.nullToEmpty(cmd.getContent()).getBytes(StandardCharsets.UTF_8);
         if (bytes.length > MAX_TEXT_EDIT_SIZE) {
             throw new BusinessException(I18nUtils.getMessage("file.text.too.large",
                     new Object[]{FileUtils.formatFileSize(MAX_TEXT_EDIT_SIZE)}));
         }
-        // 后缀固定 .txt：用户输入的主体名直接拼接，重名冲突交给 generateUniqueName 处理
+        // 去掉用户误带的后缀再统一拼接，避免出现 .txt.txt；重名冲突交给 generateUniqueName 处理
+        String baseName = StrUtil.removeSuffixIgnoreCase(cmd.getFileName().trim(), "." + suffix);
         String displayName = generateUniqueName(
                 userId,
                 cmd.getParentId(),
-                cmd.getFileName().trim() + "." + TEXT_SUFFIX,
+                baseName + "." + suffix,
                 false,
                 null,
                 storagePlatformSettingId
         );
-        return writeTextObject(userId, storagePlatformSettingId, cmd.getParentId(), displayName, bytes);
+        return writeTextObject(userId, storagePlatformSettingId, cmd.getParentId(), displayName, suffix, bytes);
     }
 
     @Override
@@ -346,10 +351,10 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         }
     }
 
-    /** 校验文件可在线编辑：仅非目录的 .txt，且不超过大小上限 */
+    /** 校验文件可在线编辑：仅非目录的文本/代码/Markdown 类文件，且不超过大小上限 */
     private void assertEditableTextFile(FileInfo fileInfo) {
-        if (Boolean.TRUE.equals(fileInfo.getIsDir())
-                || !TEXT_SUFFIX.equalsIgnoreCase(StrUtil.trimToEmpty(fileInfo.getSuffix()))) {
+        String suffix = StrUtil.trimToEmpty(fileInfo.getSuffix());
+        if (Boolean.TRUE.equals(fileInfo.getIsDir()) || !FileTypeEnum.isEditableTextType(suffix)) {
             throw new BusinessException(I18nUtils.getMessage("file.text.not.editable"));
         }
         if (fileInfo.getSize() != null && fileInfo.getSize() > MAX_TEXT_EDIT_SIZE) {
@@ -360,7 +365,7 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
 
     /** 写入文本物理对象（含内容级复用）并落库文件记录 */
     private FileInfo writeTextObject(String userId, String storagePlatformSettingId,
-                                     String parentId, String displayName, byte[] bytes) {
+                                     String parentId, String displayName, String suffix, byte[] bytes) {
         String contentMd5 = DigestUtil.md5Hex(bytes);
         FileObjectReferenceService referenceService = objectReferenceServiceProvider.getObject();
         LocalDateTime now = LocalDateTime.now();
@@ -368,7 +373,7 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         fileInfo.setId(IdUtil.fastSimpleUUID());
         fileInfo.setOriginalName(displayName);
         fileInfo.setDisplayName(displayName);
-        fileInfo.setSuffix(TEXT_SUFFIX);
+        fileInfo.setSuffix(suffix);
         fileInfo.setMimeType("text/plain");
         fileInfo.setIsDir(false);
         fileInfo.setParentId(parentId);
@@ -388,7 +393,7 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
                 }
             } else {
                 String objectKey = FileUtils.generateObjectKey(
-                        userId, IdUtil.fastSimpleUUID() + "." + TEXT_SUFFIX);
+                        userId, IdUtil.fastSimpleUUID() + "." + suffix);
                 IStorageOperationService storageService =
                         storageServiceFacade.getStorageService(storagePlatformSettingId);
                 storageService.uploadFile(new ByteArrayInputStream(bytes), objectKey);
@@ -656,7 +661,7 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         if (existingFiles.isEmpty()) {
             return desiredName;
         }
-        Set<Integer> usedSuffixes = extractUsedSuffixes(existingFiles, nameWithoutExt, isDir);
+        Set<Integer> usedSuffixes = extractUsedSuffixes(existingFiles, nameWithoutExt, extension, isDir);
         int suffixNum = 0;
         String finalName;
         do {
@@ -710,25 +715,24 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
      */
     private Set<Integer> extractUsedSuffixes(List<FileInfo> existingFiles,
                                              String nameWithoutExt,
+                                             String extension,
                                              Boolean isDir) {
+        // 主体名后必须紧跟目标扩展名整体匹配：3.txt 不算作 3.json 的重名
+        String quotedExt = isDir ? "" : Pattern.quote(extension);
+        Pattern numbered = Pattern.compile(
+                "^" + Pattern.quote(nameWithoutExt) + "\\((\\d+)\\)" + quotedExt + "$");
+        String exactName = nameWithoutExt + (isDir ? "" : extension);
         return existingFiles.stream()
                 .map(f -> {
                     String displayName = f.getDisplayName();
 
-                    // 移除扩展名（如果是文件）
-                    if (!isDir && displayName.contains(".")) {
-                        int lastDotIndex = displayName.lastIndexOf(".");
-                        displayName = displayName.substring(0, lastDotIndex);
-                    }
-
                     // 检查是否完全匹配基础名称（表示原始文件，后缀为 0）
-                    if (displayName.equals(nameWithoutExt)) {
+                    if (displayName.equals(exactName)) {
                         return 0;
                     }
 
-                    // 匹配 (n) 格式的后缀
-                    String pattern = "^" + Pattern.quote(nameWithoutExt) + "\\((\\d+)\\)$";
-                    Matcher matcher = Pattern.compile(pattern).matcher(displayName);
+                    // 匹配 base(n)ext 格式的后缀
+                    Matcher matcher = numbered.matcher(displayName);
 
                     if (matcher.find()) {
                         return Integer.parseInt(matcher.group(1));

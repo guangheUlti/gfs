@@ -68,7 +68,6 @@ public class SessionAdminServiceImpl implements SessionAdminService {
                 vo.setUsername(user.getUsername());
                 vo.setNickname(user.getNickname());
                 vo.setAvatar(user.getAvatar());
-                vo.setEmail(user.getEmail());
                 vo.setStatus(user.getStatus());
             }
             vo.setTerminals(buildTerminals(loginId, entry.getValue(), currentToken));

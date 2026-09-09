@@ -50,7 +50,7 @@ export const userApi = {
     return request.put('/apis/user/password', data)
   },
 
-  /** 首次设置密码（无原密码，邮箱验证码注册用户） */
+  /** 首次设置密码（账号尚未设置过密码时使用，无原密码） */
   setPassword: async (data: SetPasswordParams): Promise<void> => {
     await request.post<unknown>('/apis/user/password', data)
   },

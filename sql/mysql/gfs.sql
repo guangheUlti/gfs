@@ -439,7 +439,6 @@ CREATE TABLE `sys_user` (
   `id` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '用户ID',
   `username` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '用户名',
   `password` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '密码',
-  `email` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '邮箱',
   `nickname` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '昵称',
   `avatar` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '头像',
   `status` int NOT NULL DEFAULT '0' COMMENT '用户状态 0正常 1禁用',
@@ -456,7 +455,7 @@ CREATE TABLE `sys_user` (
 
 LOCK TABLES `sys_user` WRITE;
 /*!40000 ALTER TABLE `sys_user` DISABLE KEYS */;
-INSERT INTO `sys_user` VALUES ('01jrvgs943q0f43h0aa5mjde0y','admin','8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918','18903378092@163.com','Administrator',NULL,0,'2026-07-23 14:38:36','2026-07-23 14:38:36',NULL);
+INSERT INTO `sys_user` VALUES ('01jrvgs943q0f43h0aa5mjde0y','admin','8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918','Administrator',NULL,0,'2026-07-23 14:38:36','2026-07-23 14:38:36',NULL);
 /*!40000 ALTER TABLE `sys_user` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -470,8 +469,6 @@ DROP TABLE IF EXISTS `sys_user_transfer_setting`;
 CREATE TABLE `sys_user_transfer_setting` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `user_id` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '用户ID',
-  `download_location` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '文件下载位置',
-  `is_default_download_location` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否默认该路径为下载路径，如果否则每次下载询问保存地址',
   `download_speed_limit` int NOT NULL DEFAULT '5' COMMENT '下载速率限制 单位：MB/S',
   `concurrent_upload_quantity` int NOT NULL DEFAULT '1' COMMENT '并发上传数量',
   `concurrent_download_quantity` int NOT NULL DEFAULT '1' COMMENT '并发下载数量',

@@ -1,11 +1,12 @@
 /**
- * 任务状态联合类型（9 种状态）
+ * 任务状态联合类型
  */
 export type TaskStatus =
   | 'idle'
   | 'initialized'
   | 'checking'
   | 'uploading'
+  | 'downloading'
   | 'paused'
   | 'merging'
   | 'completed'
@@ -13,10 +14,16 @@ export type TaskStatus =
   | 'cancelled'
 
 /**
+ * 任务类型
+ */
+export type TransferTaskType = 'upload' | 'download'
+
+/**
  * 传输任务接口
  */
 export interface TransferTask {
   taskId: string
+  taskType: TransferTaskType
   fileName: string
   fileSize: number
   status: TaskStatus
@@ -132,6 +139,26 @@ export interface CheckUploadResultVO {
   fileId?: string
   taskId: string
   message?: string
+}
+
+/**
+ * 初始化下载请求参数
+ */
+export interface InitDownloadCmd {
+  fileId: string
+  chunkSize?: number
+}
+
+/**
+ * 初始化下载响应结果
+ */
+export interface InitDownloadResultVO {
+  taskId: string
+  fileName: string
+  fileSize: number
+  totalChunks: number
+  chunkSize: number
+  downloadedChunks: number[]
 }
 
 /**

@@ -2063,7 +2063,9 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             task.setChunkSize(chunkSize);
             task.setObjectKey(fileInfo.getObjectKey());
             task.setStoragePlatformSettingId(fileInfo.getStoragePlatformSettingId());
-            task.setStatus(TransferTaskStatus.initialized);
+            // 下载任务初始化即进入 downloading：
+            // 前端拿到 taskId 后立即拉取分片，且暂停/恢复接口以 downloading 为前置状态
+            task.setStatus(TransferTaskStatus.downloading);
             task.setStartTime(LocalDateTime.now());
 
             this.save(task);
@@ -2073,7 +2075,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             Set<Integer> downloadedChunks = getDownloadedChunks(taskId);
 
             transferSseService.sendStatusEvent(userId, taskId,
-                    TransferTaskStatus.initialized.name(), "下载任务初始化成功");
+                    TransferTaskStatus.downloading.name(), "下载任务已开始");
 
             log.info("初始化下载任务成功: taskId={}, fileId={}, fileName={}, totalChunks={}, currentDownloads={}/{}",
                     taskId, cmd.getFileId(), fileInfo.getDisplayName(), totalChunks,
@@ -2229,9 +2231,13 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                     taskId, chunkIndex, downloadedCount, task.getTotalChunks());
 
             if (downloadedCount.intValue() >= task.getTotalChunks()) {
-                updateTaskStatus(task, TransferTaskStatus.completed);
+                // 全部分片已记录即完成，不再做状态机校验：
+                // 任务可能处于 paused（暂停前最后一片已在途），此时仍应完结释放并发名额
+                task.setStatus(TransferTaskStatus.completed);
                 task.setCompleteTime(LocalDateTime.now());
                 this.updateById(task);
+                cacheManager.cacheTask(task);
+                cacheManager.updateTaskStatus(taskId, TransferTaskStatus.completed);
 
                 transferSseService.sendCompleteEvent(task.getUserId(), taskId,
                         task.getFileName(), task.getFileName(), task.getFileSize());

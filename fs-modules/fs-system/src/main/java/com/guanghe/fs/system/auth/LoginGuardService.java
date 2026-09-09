@@ -101,7 +101,7 @@ public class LoginGuardService {
     }
 
     /**
-     * 锁定维度：账号 + 客户端IP（账号 trim 后原样使用，区分邮箱与用户名登录）
+     * 锁定维度：账号 + 客户端IP（账号 trim 后原样使用）
      */
     private String guardKey(String account) {
         return (account == null ? "" : account.trim()) + ":" + IpUtils.getIpAddr();

@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 /** 使用率文案：0 与非 0 极小值分开处理，避免出现「0.0%」掩盖真实占用 */
 function formatPercent(percent: number): string {
   if (percent <= 0) return '0%'
-  if (percent < 0.1) return '<0.1%'
+  if (percent < 0.1) return '0.1%'
   if (percent >= 100) return '100%'
   return `${percent.toFixed(1)}%`
 }

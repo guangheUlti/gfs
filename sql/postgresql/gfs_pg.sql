@@ -251,7 +251,6 @@ CREATE TABLE "sys_user" (
     "id" varchar(128) NOT NULL,
     "username" varchar(128) NOT NULL,
     "password" varchar(128) NOT NULL,
-    "email" varchar(128) NOT NULL,
     "nickname" varchar(128) NOT NULL,
     "avatar" varchar(255) DEFAULT NULL,
     "status" int NOT NULL DEFAULT 0,
@@ -299,7 +298,7 @@ INSERT INTO "storage_platform" ("name", "identifier", "config_scheme", "icon", "
  'RustFS 是一个基于 Rust 构建的高性能分布式对象存储系统。Rust 是全球最受开发者喜爱的编程语言之一，RustFS 完美结合了 MinIO 的简洁性与 Rust 的内存安全及高性能优势。它提供完整的 S3 兼容性，完全开源，并专为数据湖、人工智能（AI）和大数据负载进行了优化。');
 
 -- 系统管理员（用户名与 security.super-admin.username 配置一致即拥有存储/日志管理权限）
-INSERT INTO "sys_user" ("id", "username", "password", "email", "nickname", "avatar", "status", "created_at", "updated_at", "last_login_at")
-VALUES ('01jrvgs943q0f43h0aa5mjde0y', 'admin', '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918', '18903378092@163.com', 'Administrator', NULL, 0, '2026-07-23 14:38:36', '2026-07-23 14:38:36', NULL);
+INSERT INTO "sys_user" ("id", "username", "password", "nickname", "avatar", "status", "created_at", "updated_at", "last_login_at")
+VALUES ('01jrvgs943q0f43h0aa5mjde0y', 'admin', '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918', 'Administrator', NULL, 0, '2026-07-23 14:38:36', '2026-07-23 14:38:36', NULL);
 
 SET session_replication_role = 'origin';

@@ -24,12 +24,14 @@ import {
 import { useSidebar } from '@/components/ui/sidebar'
 import { LAYOUT_STORAGE_KEY } from '@/components/layout/app-layout'
 import { useTheme } from '@/components/theme-provider'
+import { useAppearanceStore } from '@/store/appearance'
 import { SettingsBlock, SettingsRow } from '../components/settings-row'
 
 type AppearanceFormValues = {
   theme: 'light' | 'dark'
   language: AppLang
   layout: 'default' | 'compact'
+  thumbnails: boolean
 }
 
 function getInitialLayout(): 'default' | 'compact' {
@@ -46,6 +48,12 @@ export function AppearanceForm() {
   const { i18n } = useTranslation()
   const { theme, setTheme } = useTheme()
   const { setOpen, open } = useSidebar()
+  const thumbnailsEnabled = useAppearanceStore(
+    (state) => state.thumbnailsEnabled
+  )
+  const setThumbnailsEnabled = useAppearanceStore(
+    (state) => state.setThumbnailsEnabled
+  )
 
   const appearanceFormSchema = React.useMemo(
     () =>
@@ -59,6 +67,7 @@ export function AppearanceForm() {
         layout: z.enum(['default', 'compact'], {
           message: t('appearance.validation.layout'),
         }),
+        thumbnails: z.boolean(),
       }),
     [t]
   )
@@ -69,6 +78,7 @@ export function AppearanceForm() {
       theme: (theme as 'light' | 'dark') || 'light',
       language: getAppLang(),
       layout: getInitialLayout(),
+      thumbnails: thumbnailsEnabled,
     },
   })
 
@@ -120,6 +130,11 @@ export function AppearanceForm() {
     toast.success(
       i18n.t('appearance.languageUpdated', { ns: 'settings' })
     )
+  }
+
+  const handleThumbnailsChange = (enabled: boolean) => {
+    setThumbnailsEnabled(enabled)
+    toast.success(t('appearance.thumbnailsUpdated'))
   }
 
   return (
@@ -357,6 +372,43 @@ export function AppearanceForm() {
                   </RadioGroup>
                 </SettingsBlock>
                 <FormMessage className='pt-2 pb-1' />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name='thumbnails'
+            render={({ field }) => (
+              <FormItem className='space-y-0'>
+                <SettingsRow
+                  label={t('appearance.thumbnailsLabel')}
+                  description={t('appearance.thumbnailsDescription')}
+                >
+                  <FormControl>
+                    <RadioGroup
+                      onValueChange={(value) => {
+                        const enabled = value === 'true'
+                        field.onChange(enabled)
+                        handleThumbnailsChange(enabled)
+                      }}
+                      value={field.value ? 'true' : 'false'}
+                      className='flex flex-row flex-wrap items-center justify-end gap-6'
+                    >
+                      <label className='flex cursor-pointer items-center gap-2'>
+                        <RadioGroupItem value='true' id='thumbnails-on' />
+                        <span className='text-sm'>
+                          {t('appearance.thumbnailsOn')}
+                        </span>
+                      </label>
+                      <label className='flex cursor-pointer items-center gap-2'>
+                        <RadioGroupItem value='false' id='thumbnails-off' />
+                        <span className='text-sm'>
+                          {t('appearance.thumbnailsOff')}
+                        </span>
+                      </label>
+                    </RadioGroup>
+                  </FormControl>
+                </SettingsRow>
               </FormItem>
             )}
           />

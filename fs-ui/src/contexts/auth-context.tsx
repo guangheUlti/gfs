@@ -95,7 +95,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 id: userStore.id,
                 username: userStore.username,
                 nickname: userStore.nickname,
-                email: userStore.email,
                 avatar: userStore.avatar,
                 status: userStore.status,
                 createdAt: userStore.createdAt,

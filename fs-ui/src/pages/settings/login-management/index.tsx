@@ -105,10 +105,19 @@ export function SettingsLoginManagement() {
     [users]
   )
 
+  // 后端存的是 UA 解析的全称（浏览器带完整版本号、Windows 全拼），
+  // 在展示层缩短，历史会话里的旧值也一并生效
+  const shortenDevice = (value: string) =>
+    value
+      .replace(/^(?:Microsoft |MS ?)Edge/i, 'Edge')
+      .replace(/(\d+)(\.\d+)+$/, '$1')
+      .replace(/^Mac OS X/i, 'macOS')
+      .replace(/^Windows /i, 'Win ')
+
   const deviceLabel = (terminal: OnlineTerminal) => {
-    const parts = [terminal.browser, terminal.os].filter(
-      (v) => v && !UNKNOWN_DEVICE_RE.test(v.trim())
-    )
+    const parts = [terminal.browser, terminal.os]
+      .filter((v) => v && !UNKNOWN_DEVICE_RE.test(v.trim()))
+      .map((v) => shortenDevice(v.trim()))
     return parts.length > 0 ? parts.join(' · ') : t('loginManagement.unknownDevice')
   }
 
@@ -249,14 +258,19 @@ export function SettingsLoginManagement() {
       </header>
 
       <div className='mt-8 flex-1'>
-        <div className='rounded-md border'>
-          <Table>
+        {/* 桌面端表格 */}
+        <div className='hidden rounded-md border md:block'>
+          <Table className='min-w-[760px]'>
             <TableHeader>
               <TableRow>
                 <TableHead>{t('loginManagement.colUser')}</TableHead>
                 <TableHead>{t('loginManagement.colDevice')}</TableHead>
-                <TableHead>{t('loginManagement.colLoginAt')}</TableHead>
-                <TableHead>{t('loginManagement.colLastActive')}</TableHead>
+                <TableHead className='whitespace-nowrap'>
+                  {t('loginManagement.colLoginAt')}
+                </TableHead>
+                <TableHead className='whitespace-nowrap'>
+                  {t('loginManagement.colLastActive')}
+                </TableHead>
                 <TableHead className='w-44'>
                   {t('loginManagement.colActions')}
                 </TableHead>
@@ -371,6 +385,121 @@ export function SettingsLoginManagement() {
               )}
             </TableBody>
           </Table>
+        </div>
+
+        {/* 移动端：表格塞不下，按用户分组改为卡片 */}
+        <div className='rounded-md border md:hidden'>
+          {loading && users.length === 0 ? (
+            <div className='py-8 text-center text-sm text-muted-foreground'>
+              {t('loginManagement.loading')}
+            </div>
+          ) : users.length === 0 ? (
+            <div className='py-8 text-center text-sm text-muted-foreground'>
+              {t('loginManagement.empty')}
+            </div>
+          ) : (
+            users.map((user) => {
+              const abnormal = statusLabel(user.status)
+              return (
+                <div
+                  key={user.loginId}
+                  className='border-b p-4 last:border-b-0'
+                >
+                  <div className='flex items-start justify-between gap-2'>
+                    <div className='flex min-w-0 items-center gap-3'>
+                      <Avatar className='h-8 w-8'>
+                        {user.avatar && <AvatarImage src={user.avatar} />}
+                        <AvatarFallback className='text-xs'>
+                          {(user.nickname || user.username || '?')
+                            .slice(0, 2)
+                            .toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className='min-w-0'>
+                        <div className='flex items-center gap-1.5'>
+                          <span className='truncate text-sm font-medium'>
+                            {user.nickname || user.username || user.loginId}
+                          </span>
+                          {abnormal && (
+                            <Badge variant='secondary' className='text-xs'>
+                              {abnormal}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className='truncate text-xs text-muted-foreground'>
+                          {user.username}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      className='h-7 shrink-0 px-2.5 text-xs'
+                      disabled={!!actingKey}
+                      onClick={() => setTarget({ type: 'user', user })}
+                    >
+                      {t('loginManagement.kickAll')}
+                    </Button>
+                  </div>
+                  <ul className='mt-3 space-y-2'>
+                    {(user.terminals ?? []).map((terminal) => (
+                      <li
+                        key={terminal.tokenTail}
+                        className='rounded-md bg-muted/40 p-3'
+                      >
+                        <div className='flex items-center justify-between gap-2'>
+                          <div className='flex min-w-0 items-center gap-1.5'>
+                            <RiComputerLine className='size-4 shrink-0 text-muted-foreground' />
+                            <span className='truncate text-sm'>
+                              {deviceLabel(terminal)}
+                            </span>
+                            {terminal.current && (
+                              <Badge className='shrink-0 text-xs'>
+                                {t('loginManagement.currentSession')}
+                              </Badge>
+                            )}
+                          </div>
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            className='h-7 shrink-0 px-2.5 text-xs text-destructive hover:text-destructive'
+                            disabled={!!actingKey}
+                            onClick={() =>
+                              setTarget({ type: 'terminal', user, terminal })
+                            }
+                          >
+                            {t('loginManagement.kickDevice')}
+                          </Button>
+                        </div>
+                        <div className='mt-1 truncate text-xs text-muted-foreground'>
+                          {[
+                            terminal.ip,
+                            `${t('loginManagement.tokenTail')} ${terminal.tokenTail}`,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </div>
+                        <div className='mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground'>
+                          <span>
+                            {t('loginManagement.colLoginAt')}{' '}
+                            {terminal.loginTime
+                              ? dayjs(terminal.loginTime).format(
+                                  'MM-DD HH:mm'
+                                )
+                              : '—'}
+                          </span>
+                          <span>
+                            {t('loginManagement.colLastActive')}{' '}
+                            {agoLabel(terminal.lastActiveTime)}
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })
+          )}
         </div>
       </div>
 

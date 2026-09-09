@@ -44,7 +44,7 @@ export default function LoginFormContent({ onSwitchForm }: Props) {
 
     const acc = account.trim()
     if (!acc) {
-      toast.error(t('toast.enterUsernameOrEmail'))
+      toast.error(t('toast.enterUsername'))
       return
     }
     if (!password) {
@@ -100,7 +100,7 @@ export default function LoginFormContent({ onSwitchForm }: Props) {
         <Input
           id='account'
           type='text'
-          placeholder={t('placeholderUsernameOrEmail')}
+          placeholder={t('placeholderUsername')}
           value={account}
           onChange={(e) => setAccount(e.target.value)}
           className={fieldInputClass}
@@ -158,10 +158,7 @@ export default function LoginFormContent({ onSwitchForm }: Props) {
         {loading ? t('loggingIn') : t('login')}
       </Button>
 
-      <div className='flex w-full items-center justify-between text-sm'>
-        <span className='text-neutral-500 dark:text-neutral-400'>
-          {t('noAccount')}
-        </span>
+      <div className='flex w-full items-center justify-end text-sm'>
         <button
           type='button'
           className='cursor-pointer text-[#3573FF] hover:underline'

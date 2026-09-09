@@ -13,7 +13,7 @@
 | 入口 | `AuthController` | `fs-modules/fs-system/.../controller/AuthController.java` | `POST /apis/auth/login`、`POST /apis/auth/logout`；只返回响应体里的 `accessToken`，不下发 Cookie（见 §3.1） |
 | 编排 | `AuthServiceImpl` | `fs-modules/fs-system/.../service/impl/AuthServiceImpl.java` | 策略分发 → 建立会话 → 写入会话数据 → 更新最后登录时间 |
 | 分发 | `LoginStrategyFactory` | `fs-modules/fs-system/.../auth/LoginStrategyFactory.java` | 注入所有 `LoginStrategy` 实现，按 `loginType` 路由（新增登录方式无需改动此类） |
-| 认证 | `PasswordLoginStrategy` | `fs-modules/fs-system/.../auth/impl/PasswordLoginStrategy.java` | 账号/邮箱 + 口令认证，当前 `LoginType` 仅有 `password` 一种 |
+| 认证 | `PasswordLoginStrategy` | `fs-modules/fs-system/.../auth/impl/PasswordLoginStrategy.java` | 用户名 + 口令认证，当前 `LoginType` 仅有 `password` 一种 |
 | 防爆破 | `LoginGuardService` | `fs-modules/fs-system/.../auth/LoginGuardService.java` | Redis 计数，按「账号 + 客户端 IP」维度失败锁定 |
 | 口令 | `PasswordHashService` | `fs-modules/fs-system/.../auth/PasswordHashService.java` | BCrypt(cost=12)；识别遗留 SHA-256 哈希并在登录成功时透明升级 |
 | 权限源 | `StpInterfaceImpl` | `fs-modules/fs-system/.../auth/StpInterfaceImpl.java` | 向 Sa-Token 提供权限码/角色，支撑 `@SaCheckPermission` 类校验 |
@@ -35,7 +35,7 @@
   │                         │  ├─ LoginStrategyFactory.getStrategy(password)
   │                         │  └─ PasswordLoginStrategy.authenticate
   │                         │      ├─ LoginGuardService.checkLoginAllowed(account)   ← Redis 锁定检查
-  │                         │      ├─ 邮箱正则判定 → 按 email 或 username 查询 sys_user
+  │                         │      ├─ 按 username 查询 sys_user
   │                         │      ├─ 用户不存在 → recordLoginFailure → 统一错误文案
   │                         │      ├─ 状态判定：DISABLED / PENDING_REVIEW / REJECTED → 业务拒绝（不计入试错）
   │                         │      ├─ PasswordHashService.matches → 失败则 recordLoginFailure

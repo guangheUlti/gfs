@@ -5,10 +5,11 @@ import type { TaskStatus, TransferTask } from '@/types/transfer'
  */
 export const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   idle: ['initialized'],
-  initialized: ['checking', 'failed', 'cancelled'],
+  initialized: ['checking', 'downloading', 'failed', 'cancelled'],
   checking: ['uploading', 'completed', 'failed', 'cancelled'],
   uploading: ['paused', 'merging', 'failed', 'cancelled'],
-  paused: ['uploading', 'cancelled'],
+  downloading: ['paused', 'merging', 'completed', 'failed', 'cancelled'],
+  paused: ['uploading', 'downloading', 'cancelled'],
   merging: ['completed', 'failed'],
   completed: [],
   failed: ['initialized'],

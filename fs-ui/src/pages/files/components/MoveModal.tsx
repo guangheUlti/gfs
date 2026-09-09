@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { FileItem } from '@/types/file'
 import { Home, FolderPlus, Check, X } from 'lucide-react'
-import FolderIconSvg from '../../../../public/fi/folder'
+import folderIconUrl from '@/assets/file-icons/dir.png'
 import { toast } from 'sonner'
 import { getFolders, createFolder } from '@/api/file'
 import { cn } from '@/lib/utils'
@@ -221,7 +221,14 @@ export function MoveModal({
                   }
                   tabIndex={-1}
                 >
-                  <FolderIconSvg size={16} />
+                  <img
+                    src={folderIconUrl}
+                    width={16}
+                    height={16}
+                    className='shrink-0'
+                    draggable={false}
+                    alt=''
+                  />
                   <span>{folder.displayName}</span>
                 </button>
               </div>
@@ -236,7 +243,14 @@ export function MoveModal({
               </div>
             ) : folders.length === 0 && !isCreatingFolder ? (
               <div className='flex h-[300px] flex-col items-center justify-center text-muted-foreground'>
-                <FolderIconSvg size={48} className='mb-3 opacity-50' />
+                <img
+                  src={folderIconUrl}
+                  width={48}
+                  height={48}
+                  className='mb-3 opacity-50'
+                  draggable={false}
+                  alt=''
+                />
                 <p className='text-sm'>{t('move.emptyFolders')}</p>
               </div>
             ) : (

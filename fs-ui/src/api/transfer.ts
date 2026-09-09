@@ -3,8 +3,11 @@ import type {
   InitUploadCmd,
   CheckUploadCmd,
   CheckUploadResultVO,
+  InitDownloadCmd,
+  InitDownloadResultVO,
 } from '@/types/transfer'
 import { request } from './request'
+import service from './request'
 
 /**
  * 初始化上传
@@ -90,4 +93,34 @@ export function resumeUpload(taskId: string) {
  */
 export function clearCompletedTasks() {
   return request.delete('/apis/transfer/clears')
+}
+
+/**
+ * 初始化下载任务
+ */
+export function initDownload(params: InitDownloadCmd) {
+  return request.post<InitDownloadResultVO>('/apis/transfer/init-download', params)
+}
+
+/**
+ * 下载分片（blob 响应，需取 response.data）
+ */
+export function downloadChunk(
+  taskId: string,
+  chunkIndex: number,
+  signal?: AbortSignal
+) {
+  return service.get<Blob>('/apis/transfer/download/chunk', {
+    params: { taskId, chunkIndex },
+    responseType: 'blob',
+    signal,
+    timeout: 120000,
+  })
+}
+
+/**
+ * 查询已下载分片索引
+ */
+export function getDownloadedChunks(taskId: string) {
+  return request.get<number[]>(`/apis/transfer/download/chunks/${taskId}`)
 }

@@ -21,15 +21,6 @@ export function AccountSecuritySection() {
       <div className='space-y-6'>
         <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-8'>
           <div className='min-w-0 space-y-1'>
-            <p className='text-base'>{t('account.email')}</p>
-            <p className='truncate text-sm text-muted-foreground'>
-              {user?.email || t('account.notSet')}
-            </p>
-          </div>
-        </div>
-
-        <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-8'>
-          <div className='min-w-0 space-y-1'>
             <p className='text-base'>{t('account.password')}</p>
             <p className='text-sm text-muted-foreground'>
               {t('account.passwordHint')}

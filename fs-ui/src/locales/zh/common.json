@@ -23,10 +23,6 @@
   },
   "listTotalItems": "共 {{count}} 项",
   "refresh": "刷新",
-  "preview": {
-    "popupBlocked": "浏览器阻止了弹窗，请允许后重试",
-    "tokenFailed": "获取预览凭证失败，请稍后重试"
-  },
   "fileErrors": {
     "readFailed": "文件读取失败",
     "chunkReadFailed": "分片读取失败"

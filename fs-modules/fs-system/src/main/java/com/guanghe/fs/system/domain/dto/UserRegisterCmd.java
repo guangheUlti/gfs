@@ -24,9 +24,6 @@ public class UserRegisterCmd {
     @Size(min = 8, max = 128, message = "confirmPassword长度必须在8到128个字符之间")
     private String confirmPassword;
 
-    @NotBlank(message = "email不能为空")
-    private String email;
-
     @NotBlank(message = "nickname不能为空")
     private String nickname;
 

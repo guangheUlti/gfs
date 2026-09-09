@@ -67,10 +67,11 @@ export function createFolder(data: { folderName: string; parentId?: string }) {
 }
 
 /**
- * 新建纯文本文件（后缀固定 .txt）
+ * 新建文本文件（suffix 须为可在线编辑类型，缺省 txt）
  */
 export function createTextFile(data: {
   fileName: string
+  suffix?: string
   parentId?: string
   content?: string
 }) {
@@ -96,6 +97,13 @@ export function updateTextContent(fileId: string, content: string) {
  */
 export function deleteFiles(fileIds: string[]) {
   return request.delete('/apis/file', { data: fileIds })
+}
+
+/**
+ * 永久删除文件（不经回收站，不可恢复）
+ */
+export function permanentlyDeleteFiles(fileIds: string[]) {
+  return request.delete('/apis/file/permanent', { data: fileIds })
 }
 
 /**

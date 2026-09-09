@@ -34,9 +34,6 @@ public class PendingUserVO implements Serializable {
     @Schema(description = "昵称")
     private String nickname;
 
-    @Schema(description = "邮箱地址")
-    private String email;
-
     @Schema(description = "头像")
     private String avatar;
 

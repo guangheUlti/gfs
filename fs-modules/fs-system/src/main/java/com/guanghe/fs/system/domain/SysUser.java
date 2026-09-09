@@ -42,11 +42,6 @@ public class SysUser extends BaseEntity {
     private String password;
 
     /**
-     * 邮箱地址
-     */
-    private String email;
-
-    /**
      * 昵称
      */
     private String nickname;

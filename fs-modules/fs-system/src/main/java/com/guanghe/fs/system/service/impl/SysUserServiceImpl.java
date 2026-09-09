@@ -33,7 +33,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Objects;
 import java.util.List;
-import java.util.Locale;
 
 import static com.guanghe.fs.system.domain.table.SysUserTableDef.SYS_USER;
 
@@ -103,7 +102,6 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
             user = new SysUser();
             user.setUsername(cmd.getUsername());
             user.setPassword(passwordHashService.encode(cmd.getPassword()));
-            user.setEmail(cmd.getEmail().trim().toLowerCase(Locale.ROOT));
             user.setNickname(cmd.getNickname());
             user.setAvatar(cmd.getAvatar());
             // 新注册账号需管理员审核通过后才允许登录

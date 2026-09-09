@@ -48,6 +48,13 @@ public interface FileRecycleService {
     void permanentlyDeleteFiles(List<String> fileIds, String userId);
 
     /**
+     * 直接永久删除未进入回收站的文件（不经回收站），文件及其子级立即删除。
+     *
+     * @param fileIds 文件/文件夹ID集合
+     */
+    void permanentlyDeleteActiveFiles(List<String> fileIds);
+
+    /**
      * 清空回收站
      */
     void clearRecycles();

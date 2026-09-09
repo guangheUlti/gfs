@@ -1,20 +1,4 @@
-import ArchiveIcon from '../../public/fi/archive'
-import AudioIcon from '../../public/fi/audio'
-import CodeIcon from '../../public/fi/code'
-import DatabaseIcon from '../../public/fi/database'
-import DefaultIcon from '../../public/fi/default'
-import DocumentIcon from '../../public/fi/document'
-import ExcelIcon from '../../public/fi/excel'
-import FolderIcon from '../../public/fi/folder'
-import FontIcon from '../../public/fi/font'
-import ImageIcon from '../../public/fi/images'
-import LinkIcon from '../../public/fi/link'
-import LogIcon from '../../public/fi/log'
-import PdfIcon from '../../public/fi/pdf'
-import PptIcon from '../../public/fi/ppt'
-import TextIcon from '../../public/fi/text'
-import VideoIcon from '../../public/fi/video'
-import Folder from './Folder'
+import { cn } from '@/lib/utils'
 
 interface FileIconProps {
   type: string
@@ -23,220 +7,220 @@ interface FileIconProps {
 }
 
 /**
- * 统一的文件图标组件
- * 根据文件类型显示对应的图标，颜色自动适配主题
+ * ffs 风格的彩色文件类型图标（按扩展名精确匹配，未命中时按类别兜底）。
+ * 图标素材来自 D:\workspace\lab\ffs 项目的 assets/file 目录。
  */
+const assetModules = import.meta.glob<string>('../assets/file-icons/*', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+})
+
+/** 文件名去掉 file_ 前缀和扩展名得到图标 key，如 file_pdf.png -> pdf、dir.png -> dir */
+const iconUrlByKey: Record<string, string> = {}
+for (const [path, url] of Object.entries(assetModules)) {
+  const fileName = path.split('/').pop()!.toLowerCase()
+  const key = fileName.replace(/^file_/, '').replace(/\.(png|svg)$/, '')
+  iconUrlByKey[key] = url
+}
+
+/** 扩展名 -> 图标 key 的精确映射（对齐 ffs 的 fileImgMap，并补充常见扩展名） */
+const EXACT_EXT_ICON: Record<string, string> = {
+  // 脚本与编程语言
+  bat: 'powershell',
+  cmd: 'powershell',
+  ps1: 'powershell',
+  c: 'c',
+  h: 'c',
+  'c++': 'c++',
+  cpp: 'c++',
+  cc: 'c++',
+  cxx: 'c++',
+  hpp: 'c++',
+  // c# 素材命名为 csharp：原文件名里的 # 会被 URL 解析成 fragment
+  'c#': 'csharp',
+  cs: 'csharp',
+  css: 'css',
+  scss: 'scss',
+  sass: 'sass',
+  less: 'less',
+  styl: 'stylus',
+  go: 'go',
+  py: 'python',
+  java: 'java',
+  jar: 'jar',
+  kt: 'kotlin',
+  js: 'js',
+  jsx: 'js',
+  m: 'objective_c',
+  jsp: 'jsp',
+  php: 'php',
+  r: 'r',
+  rs: 'rust',
+  swift: 'swift',
+  lua: 'lua',
+  vue: 'vue',
+  sh: 'shell',
+  bash: 'shell',
+  zsh: 'shell',
+  // 数据与配置
+  json: 'json',
+  xml: 'xml',
+  html: 'html',
+  htm: 'html',
+  sql: 'sql',
+  properties: 'properties',
+  conf: 'nginx',
+  yaml: 'yaml',
+  yml: 'yaml',
+  toml: 'yaml',
+  ini: 'txt',
+  cfg: 'txt',
+  env: 'txt',
+  csv: 'csv',
+  tsv: 'csv',
+  // 文档
+  pdf: 'pdf',
+  doc: 'word',
+  docx: 'word',
+  odt: 'word',
+  pages: 'word',
+  rtf: 'rtf',
+  md: 'markdown',
+  markdown: 'markdown',
+  txt: 'txt',
+  log: 'log',
+  chm: 'chm',
+  // 表格与演示
+  xls: 'excel',
+  xlsx: 'excel',
+  xlsm: 'excel',
+  xlsb: 'excel',
+  ods: 'excel',
+  numbers: 'excel',
+  ppt: 'ppt',
+  pptx: 'ppt',
+  odp: 'ppt',
+  key: 'ppt',
+  // 二进制与压缩
+  exe: 'exe',
+  msi: 'exe',
+  dmg: 'dmg',
+  zip: 'zip',
+  '7z': '7z',
+  tar: 'tar',
+  rar: 'rar',
+  gz: 'zip',
+  bz2: 'zip',
+  xz: 'zip',
+  psd: 'ps',
+  ps: 'ps',
+}
+
+/** 无精确图标时的扩展名类别兜底（对齐 ffs 的通用 image/music/video 图标） */
+const IMAGE_EXTS = [
+  'jpg',
+  'jpeg',
+  'png',
+  'gif',
+  'bmp',
+  'webp',
+  'ico',
+  'tiff',
+  'tif',
+  'heic',
+  'heif',
+]
+const VIDEO_EXTS = [
+  'mp4',
+  'avi',
+  'mov',
+  'wmv',
+  'flv',
+  'mkv',
+  'webm',
+  'm4v',
+  'mpg',
+  'mpeg',
+  '3gp',
+  'ogv',
+]
+const AUDIO_EXTS = [
+  'mp3',
+  'wav',
+  'flac',
+  'aac',
+  'ogg',
+  'wma',
+  'm4a',
+  'opus',
+  'ape',
+  'alac',
+]
+const ARCHIVE_EXTS = ['iso', 'zst', 'lz4', 'cab', 'gz', 'bz2', 'xz']
+const DATABASE_EXTS = ['db', 'sqlite', 'sqlite3', 'mdb', 'accdb', 'dbf', 'mdf', 'ldf']
+
 export const FileIcon: React.FC<FileIconProps> = ({
   type,
   className = '',
   size = 48,
 }) => {
-  const iconType = getIconType(type)
+  const iconKey = getIconKey(type)
 
-  // 如果是文件夹，使用动画 Folder 组件
-  if (iconType === 'folder') {
-    // 根据 size 计算缩放比例
-    // 原始 Folder 组件宽度是 100px，我们需要缩放到指定的 size
-    const scale = size / 100
-    
-    return (
-      <div className={className} style={{ display: 'inline-block' }}>
-        <Folder size={scale} />
-      </div>
-    )
-  }
-
-  const iconMap: Record<
-    string,
-    React.FC<{ className?: string; size?: number }>
-  > = {
-    folder: FolderIcon,
-    code: CodeIcon,
-    image: ImageIcon,
-    video: VideoIcon,
-    audio: AudioIcon,
-    document: DocumentIcon,
-    pdf: PdfIcon,
-    text: TextIcon,
-    excel: ExcelIcon,
-    ppt: PptIcon,
-    link: LinkIcon,
-    archive: ArchiveIcon,
-    database: DatabaseIcon,
-    font: FontIcon,
-    log: LogIcon,
-    default: DefaultIcon,
-  }
-
-  const IconComponent = iconMap[iconType] || DefaultIcon
-
-  return <IconComponent className={className} size={size} />
+  return (
+    <img
+      src={iconUrlByKey[iconKey] ?? iconUrlByKey['unknown']}
+      width={size}
+      height={size}
+      className={cn('select-none object-contain', className)}
+      draggable={false}
+      alt=''
+      loading='lazy'
+    />
+  )
 }
 
 /**
- * 根据文件扩展名确定图标类型
+ * 根据扩展名解析图标 key；解析不出来时返回 unknown
  */
-function getIconType(type: string): string {
+function getIconKey(type: string): string {
   const lowerType = type.toLowerCase()
 
-  // 文件夹
-  if (lowerType === 'dir' || lowerType === 'folder') return 'folder'
+  if (lowerType === 'dir' || lowerType === 'folder') return 'dir'
 
-  // 代码文件
-  const codeTypes = [
-    'js',
-    'jsx',
-    'ts',
-    'tsx',
-    'vue',
-    'py',
-    'java',
-    'cpp',
-    'c',
-    'h',
-    'cs',
-    'php',
-    'rb',
-    'go',
-    'rs',
-    'swift',
-    'kt',
-    'scala',
-    'sh',
-    'bash',
-    'json',
-    'xml',
-    'yaml',
-    'yml',
-    'toml',
-    'css',
-    'scss',
-    'sass',
-    'less',
-    'html',
-    'htm',
-    'r',
-    'dart',
-    'lua',
-  ]
-  if (codeTypes.includes(lowerType)) return 'code'
+  const exact = EXACT_EXT_ICON[lowerType]
+  if (exact && iconUrlByKey[exact]) return exact
 
-  // 图片文件
-  const imageTypes = [
-    'jpg',
-    'jpeg',
-    'png',
-    'gif',
-    'bmp',
-    'svg',
-    'webp',
-    'ico',
-    'tiff',
-    'tif',
-    'heic',
-    'heif',
-  ]
-  if (imageTypes.includes(lowerType)) return 'image'
+  // 图片（svg/gif 用 ffs 专属图标，其余走通用图片图标）
+  if (IMAGE_EXTS.includes(lowerType)) return 'image'
+  if (lowerType === 'svg') return iconUrlByKey['svg'] ? 'svg' : 'image'
+  if (lowerType === 'gif') return iconUrlByKey['gif'] ? 'gif' : 'image'
 
-  // 视频文件
-  const videoTypes = [
-    'mp4',
-    'avi',
-    'mov',
-    'wmv',
-    'flv',
-    'mkv',
-    'webm',
-    'm4v',
-    'mpg',
-    'mpeg',
-    '3gp',
-    'ogv',
-  ]
-  if (videoTypes.includes(lowerType)) return 'video'
+  if (VIDEO_EXTS.includes(lowerType)) return 'video'
+  if (AUDIO_EXTS.includes(lowerType)) return 'music'
+  if (ARCHIVE_EXTS.includes(lowerType)) return 'zip'
+  if (DATABASE_EXTS.includes(lowerType)) return 'sql'
 
-  // 音频文件
-  const audioTypes = [
-    'mp3',
-    'wav',
-    'flac',
-    'aac',
-    'ogg',
-    'wma',
-    'm4a',
-    'opus',
-    'ape',
-    'alac',
-  ]
-  if (audioTypes.includes(lowerType)) return 'audio'
+  // 其余文本类：未知编程语言扩展名按文本文件处理
+  if (
+    [
+      'rb',
+      'dart',
+      'scala',
+      'erl',
+      'ex',
+      'exs',
+      'hs',
+      'clj',
+      'groovy',
+      'pl',
+      'vb',
+      'fs',
+      'fsi',
+    ].includes(lowerType)
+  ) {
+    return 'txt'
+  }
 
-  // Word文档
-  const documentTypes = ['doc', 'docx', 'odt', 'rtf', 'pages']
-  if (documentTypes.includes(lowerType)) return 'document'
-
-  // Excel表格 - 统一使用 excel 图标
-  const spreadsheetTypes = [
-    'xls',
-    'xlsx',
-    'csv',
-    'ods',
-    'numbers',
-    'tsv',
-    'xlsm',
-    'xlsb',
-  ]
-  if (spreadsheetTypes.includes(lowerType)) return 'excel'
-
-  // PPT演示文稿
-  const presentationTypes = ['ppt', 'pptx', 'odp', 'key']
-  if (presentationTypes.includes(lowerType)) return 'ppt'
-
-  // PDF
-  if (lowerType === 'pdf') return 'pdf'
-
-  // 文本文件
-  const textTypes = ['txt', 'md', 'ini', 'cfg', 'conf', 'env']
-  if (textTypes.includes(lowerType)) return 'text'
-
-  // 日志文件
-  const logTypes = ['log']
-  if (logTypes.includes(lowerType)) return 'log'
-
-  // 链接文件
-  if (lowerType === 'url' || lowerType === 'lnk' || lowerType === 'link')
-    return 'link'
-
-  // 压缩文件
-  const archiveTypes = [
-    'zip',
-    'rar',
-    '7z',
-    'tar',
-    'gz',
-    'bz2',
-    'xz',
-    'iso',
-    'dmg',
-  ]
-  if (archiveTypes.includes(lowerType)) return 'archive'
-
-  // 数据库文件
-  const databaseTypes = [
-    'db',
-    'sqlite',
-    'sqlite3',
-    'mdb',
-    'accdb',
-    'sql',
-    'dbf',
-    'mdf',
-    'ldf',
-  ]
-  if (databaseTypes.includes(lowerType)) return 'database'
-
-  // 字体文件
-  const fontTypes = ['ttf', 'otf', 'woff', 'woff2', 'eot', 'fon', 'fnt']
-  if (fontTypes.includes(lowerType)) return 'font'
-
-  return 'default'
+  return 'unknown'
 }

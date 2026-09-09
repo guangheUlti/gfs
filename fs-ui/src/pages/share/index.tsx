@@ -21,7 +21,7 @@ import {
 } from '@/api/share'
 import { getToken } from '@/utils/auth'
 import { getAvatarFallback } from '@/utils/avatar'
-import { openFilePreviewWithToken } from '@/utils/preview'
+import { usePreviewStore } from '@/store/preview'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   Breadcrumb,
@@ -199,9 +199,10 @@ export default function SharePage() {
     [t]
   )
 
-  // 处理预览
-  const handlePreview = async (file: FileItem) => {
-    await openFilePreviewWithToken(file.id, import.meta.env.VITE_API_BASE_URL)
+  // 处理预览（本窗口全屏弹窗）
+  const handlePreview = (file: FileItem) => {
+    const index = fileList.findIndex((f) => f.id === file.id)
+    usePreviewStore.getState().openPreview(fileList, Math.max(index, 0))
   }
 
   // 处理下载

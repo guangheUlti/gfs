@@ -1,7 +1,9 @@
 import { useTranslation } from 'react-i18next'
 import {
   ChevronDown,
+  FileJson,
   FilePlus,
+  FileText,
   FolderPlus,
   RefreshCw,
   Upload,
@@ -23,7 +25,8 @@ interface ToolbarProps {
   onSearch: (keyword: string) => void
   onUpload: () => void
   onCreateFolder: () => void
-  onCreateText?: () => void
+  /** 新建文本：suffix 为 txt/json/md，由菜单项决定 */
+  onCreateText?: (suffix: 'txt' | 'json' | 'md') => void
   onRefresh: () => void
   hideActions?: boolean
   /** 触屏多选模式；仅当传入 onToggleSelectMode 时才渲染「选择/完成」按钮 */
@@ -95,10 +98,20 @@ export function Toolbar({
                 {t('index.newFolder')}
               </DropdownMenuItem>
               {onCreateText && (
-                <DropdownMenuItem onClick={onCreateText}>
-                  <FilePlus />
-                  {t('index.newTextFile')}
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuItem onClick={() => onCreateText('txt')}>
+                    <FilePlus />
+                    {t('index.newTextFile')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onCreateText('json')}>
+                    <FileJson />
+                    {t('index.newTextJson')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onCreateText('md')}>
+                    <FileText />
+                    {t('index.newTextMd')}
+                  </DropdownMenuItem>
+                </>
               )}
             </DropdownMenuContent>
           </DropdownMenu>

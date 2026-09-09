@@ -9,7 +9,6 @@ interface UserState {
   id: string
   username: string
   nickname: string
-  email: string
   avatar: string
   status: number
   createdAt: string
@@ -33,7 +32,6 @@ export const useUserStore = create<UserState>()(
       id: '',
       username: '',
       nickname: '',
-      email: '',
       avatar: '',
       status: 0,
       createdAt: '',
@@ -48,7 +46,6 @@ export const useUserStore = create<UserState>()(
           id: userInfo.id,
           username: userInfo.username,
           nickname: userInfo.nickname,
-          email: userInfo.email,
           avatar: userInfo.avatar,
           status: userInfo.status,
           createdAt: userInfo.createdAt,
@@ -67,8 +64,6 @@ export const useUserStore = create<UserState>()(
           set({
             transferSetting: {
               userId: '',
-              downloadLocation: '',
-              isDefaultDownloadLocation: 1,
               downloadSpeedLimit: 0,
               concurrentUploadQuantity: 3,
               concurrentDownloadQuantity: 3,
@@ -82,7 +77,6 @@ export const useUserStore = create<UserState>()(
           id: '',
           username: '',
           nickname: '',
-          email: '',
           avatar: '',
           status: 0,
           createdAt: '',

@@ -8,7 +8,7 @@
     "emptyUploadingTitle": "暂无上传任务",
     "emptyUploadingDesc": "上传文件后，任务会在这里显示",
     "emptyDownloadingTitle": "暂无下载任务",
-    "emptyDownloadingDesc": "下载功能即将推出",
+    "emptyDownloadingDesc": "选择文件下载后，任务会在这里显示",
     "emptyCompletedTitle": "暂无已完成任务",
     "emptyCompletedDesc": "已完成的任务会在这里显示",
     "toastPause": "已暂停",
@@ -16,7 +16,10 @@
     "toastCancel": "已取消",
     "toastRetry": "已重试",
     "toastClearWarn": "没有可清空的任务",
-    "toastClearOk": "已清空所有已完成任务"
+    "toastClearOk": "已清空所有已完成任务",
+    "toastDownloadComplete": "{{name}} 下载完成",
+    "toastDownloadQueued": "已添加 {{count}} 个下载任务",
+    "folderSkipHint": "{{count}} 个文件夹暂不支持下载，已跳过"
   },
   "table": {
     "colFileName": "文件名称",
@@ -42,6 +45,7 @@
     "initialized": "准备中",
     "checking": "校验中",
     "uploading": "上传中",
+    "downloading": "下载中",
     "paused": "已暂停",
     "merging": "处理中",
     "completed": "已完成",
@@ -53,27 +57,5 @@
     "sec": "{{n}}秒",
     "min": "{{n}}分钟",
     "hour": "{{n}}小时"
-  },
-  "settings": {
-    "title": "传输设置",
-    "downloadPath": "文件下载位置 *",
-    "downloadPathPh": "Windows: C:\\Users\\用户名\\Desktop  |  Linux/Mac: /home/username/Desktop",
-    "defaultPath": "默认此路径为下载路径",
-    "defaultPathHint": "如果不勾选，每次下载时会询问保存地址",
-    "toastPath": "请输入文件下载位置",
-    "toastSaveOk": "保存成功",
-    "speedLimit": "下载速率限制",
-    "unlimited": "不限制",
-    "limited": "上限",
-    "speedHint": "(可输入 1-200 之间的整数)",
-    "concurrent": "并发限制",
-    "uploadConcurrency": "同时上传数量",
-    "downloadConcurrency": "同时下载数量",
-    "countUnit": "{{n}}个",
-    "chunkSize": "分片大小",
-    "chunkHint": "上传文件时的分片大小，推荐设置 5 MB",
-    "cancel": "取消",
-    "save": "保存",
-    "saving": "保存中..."
   }
 }

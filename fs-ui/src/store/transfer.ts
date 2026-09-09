@@ -1,5 +1,6 @@
 import { sseService } from '@/services/sse.service'
 import { uploadExecutor } from '@/services/upload-executor'
+import { downloadExecutor } from '@/services/download-executor'
 import type {
   TransferTask,
   TaskStatus,
@@ -22,6 +23,7 @@ import { UPLOAD_LIMITS, formatFileSize, shouldFilterFile } from '@/config/upload
 import { progressCalculator } from '@/utils/progress-calculator'
 import { stateMachine } from '@/utils/transfer-state-machine'
 import i18n from '@/i18n'
+import type { FileItem } from '@/types/file'
 import { useUserStore } from './user'
 
 interface TransferStore {
@@ -36,6 +38,7 @@ interface TransferStore {
   // Getters
   getTaskList: () => TransferTask[]
   getUploadingTasks: () => TransferTask[]
+  getDownloadingTasks: () => TransferTask[]
   getCompletedTasks: () => TransferTask[]
   getCurrentSessionTasks: () => TransferTask[]
 
@@ -57,6 +60,7 @@ interface TransferStore {
     files: File[],
     parentId?: string
   ) => Promise<void>
+  createDownloadTasks: (files: FileItem[]) => Promise<void>
   pauseTask: (taskId: string) => Promise<void>
   resumeTask: (taskId: string) => Promise<void>
   cancelTask: (taskId: string) => Promise<void>
@@ -72,6 +76,19 @@ interface TransferStore {
 
   // Internal methods
   triggerCompletedActions: (task: TransferTask) => void
+  replaceDownloadTempTask: (
+    tempId: string,
+    realTaskId: string,
+    meta: {
+      fileName: string
+      fileSize: number
+      chunkSize: number
+      totalChunks: number
+      downloadedChunks: number[]
+    }
+  ) => void
+  syncDownloadExecutorConfig: () => void
+  ensureDownloadExecutorCallbacks: () => void
   checkUnfinishedTasks: () => Promise<void>
   checkAndStartPolling: () => void
   startPolling: () => void
@@ -82,6 +99,7 @@ interface TransferStore {
 let sseMessageUnsubscribe: (() => void) | null = null
 let sseConnectionUnsubscribe: (() => void) | null = null
 let callbacksInitialized = false
+let downloadCallbacksInitialized = false
 let hasCheckedUnfinishedTasks = false
 let pollingTimerId: number | null = null
 let beforeUnloadWarningSetup = false
@@ -94,6 +112,7 @@ function convertVOToTask(vo: FileTransferTaskVO): TransferTask {
 
   return {
     taskId: vo.taskId,
+    taskType: vo.taskType ?? 'upload',
     fileName: vo.fileName,
     fileSize: vo.fileSize,
     status: vo.status as TaskStatus,
@@ -125,15 +144,28 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
   getUploadingTasks: () =>
     get()
       .getTaskList()
-      .filter((task) =>
-        [
-          'idle',
-          'initialized',
-          'checking',
-          'uploading',
-          'paused',
-          'merging',
-        ].includes(task.status)
+      .filter(
+        (task) =>
+          task.taskType === 'upload' &&
+          [
+            'idle',
+            'initialized',
+            'checking',
+            'uploading',
+            'paused',
+            'merging',
+          ].includes(task.status)
+      ),
+
+  getDownloadingTasks: () =>
+    get()
+      .getTaskList()
+      .filter(
+        (task) =>
+          task.taskType === 'download' &&
+          ['idle', 'initialized', 'downloading', 'paused'].includes(
+            task.status
+          )
       ),
 
   getCompletedTasks: () =>
@@ -186,6 +218,14 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
   triggerCompletedActions: (task: TransferTask) => {
     const { completedActionsTriggered, fileCache } = get()
     completedActionsTriggered.add(task.taskId)
+
+    if (task.taskType === 'download') {
+      toast.success(
+        i18n.t('transfer:page.toastDownloadComplete', { name: task.fileName })
+      )
+      progressCalculator.clear(task.taskId)
+      return
+    }
 
     toast.success(
       i18n.t('files:uploadPanel.toastFileComplete', { name: task.fileName })
@@ -289,6 +329,12 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       }
 
       case 'complete': {
+        // 下载任务的完成由执行器在本地保存成功后再通知，
+        // 后端标记完分片就会推 complete，若直接采信会提前展示已完成
+        const task = get().tasks.get(taskId)
+        if (task?.taskType === 'download' && downloadExecutor.getTaskContext(taskId)) {
+          break
+        }
         get().transitionTo(taskId, 'completed')
         break
       }
@@ -310,6 +356,18 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
 
       const newTasks = new Map<string, TransferTask>()
       progressCalculator.clearAll()
+
+      // 保留尚未在后端登记的排队占位任务（下载并发队列）
+      get()
+        .getTaskList()
+        .forEach((task) => {
+          if (
+            task.taskType === 'download' &&
+            downloadExecutor.isQueued(task.taskId)
+          ) {
+            newTasks.set(task.taskId, task)
+          }
+        })
 
       // 确保 taskVOs 是数组
       const tasks = Array.isArray(taskVOs) ? taskVOs : []
@@ -339,6 +397,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
         task.status === 'initialized' ||
         task.status === 'uploading' ||
         task.status === 'checking' ||
+        task.status === 'downloading' ||
         task.status === 'paused' ||
         task.status === 'merging'
     )
@@ -346,19 +405,68 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     if (unfinishedTasks.length === 0) return
 
     const results = await Promise.allSettled(
-      unfinishedTasks.map(async (task) => {
-        try {
-          await cancelUpload(task.taskId)
-          get().transitionTo(task.taskId, 'cancelled')
-          return { success: true, taskId: task.taskId }
-        } catch (error: any) {
+      unfinishedTasks.map(
+        async (
+          task
+        ): Promise<{
+          success: boolean
+          taskId: string
+          resumed: boolean
+          error?: unknown
+        }> => {
+          try {
+            if (task.taskType === 'download') {
+              // 当前会话排队中的占位任务，尚未开始下载，无需处理
+              if (downloadExecutor.isQueued(task.taskId)) {
+                return { success: true, taskId: task.taskId, resumed: false }
+              }
+
+              // 本地留有分片临时文件才续传，否则取消（避免拼出损坏文件）
+              const resumable =
+                !!task.chunkSize &&
+                !!task.totalChunks &&
+                (await downloadExecutor.hasLocalProgress(task.taskId))
+
+              if (resumable) {
+                get().syncDownloadExecutorConfig()
+                get().ensureDownloadExecutorCallbacks()
+                if (task.status === 'paused') {
+                  await resumeUpload(task.taskId).catch(() => undefined)
+                }
+                get().transitionTo(task.taskId, 'downloading')
+                await downloadExecutor.adoptResumed({
+                  taskId: task.taskId,
+                  fileName: task.fileName,
+                  fileSize: task.fileSize,
+                  chunkSize: task.chunkSize,
+                  totalChunks: task.totalChunks,
+                  chunkConcurrency: useUserStore.getState().transferSetting
+                    ?.downloadSpeedLimit
+                  ? 1
+                  : 3,
+                })
+                return { success: true, taskId: task.taskId, resumed: true }
+              }
+
+              await cancelUpload(task.taskId).catch((error: any) => {
+                const message = `${error?.message ?? ''}${error?.response?.data?.message ?? ''}`
+                if (!message.includes('任务不存在')) throw error
+              })
+              get().transitionTo(task.taskId, 'cancelled')
+              return { success: true, taskId: task.taskId, resumed: false }
+            }
+
+            await cancelUpload(task.taskId)
+            get().transitionTo(task.taskId, 'cancelled')
+            return { success: true, taskId: task.taskId, resumed: false }
+          } catch (error: any) {
           // 如果任务不存在，也算成功（因为目标已达成）
           if (
             error?.message?.includes('任务不存在') ||
             error?.response?.data?.message?.includes('任务不存在')
           ) {
             get().transitionTo(task.taskId, 'cancelled')
-            return { success: true, taskId: task.taskId }
+            return { success: true, taskId: task.taskId, resumed: false }
           }
           console.error('取消任务失败:', task.taskId, error)
           return { success: false, taskId: task.taskId, error }
@@ -366,13 +474,19 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       })
     )
 
-    const successCount = results.filter(
+    const settled = results.filter(
       (r) => r.status === 'fulfilled' && r.value.success
-    ).length
-    const failCount = results.length - successCount
+    )
+    const resumedCount = settled.filter((r) => r.value.resumed).length
+    const successCount = settled.length - resumedCount
+    const failCount = results.length - settled.length
+
+    if (resumedCount > 0) {
+      toast.info(`已恢复 ${resumedCount} 个未完成的下载任务`)
+    }
 
     if (successCount > 0) {
-      toast.info(`已自动取消 ${successCount} 个未完成的上传任务`, {
+      toast.info(`已自动取消 ${successCount} 个未完成的任务`, {
         description:
           failCount > 0
             ? `${failCount} 个任务取消失败`
@@ -404,6 +518,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
             checking: 2,
             paused: 3,
             uploading: 4,
+            downloading: 4,
             merging: 5,
             cancelled: 6,
             failed: 7,
@@ -432,8 +547,12 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       })
 
       const backendTaskIds = new Set(taskList.map((vo) => vo.taskId))
-      newTasks.forEach((_, taskId) => {
+      newTasks.forEach((task, taskId) => {
         if (!backendTaskIds.has(taskId)) {
+          // 排队占位任务后端尚不存在，保留
+          if (task.taskType === 'download' && downloadExecutor.isQueued(taskId)) {
+            return
+          }
           newTasks.delete(taskId)
           progressCalculator.clear(taskId)
         }
@@ -496,6 +615,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
 
     const task: TransferTask = {
       taskId,
+      taskType: 'upload',
       fileName: file.name,
       fileSize: file.size,
       status: 'idle',
@@ -701,7 +821,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       })
 
       await Promise.all(uploadPromises)
-      
+
       toast.success(`已添加 ${filteredFiles.length} 个文件到上传队列`)
     } catch (error) {
       console.error('上传目录失败:', error)
@@ -709,10 +829,147 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     }
   },
 
+  createDownloadTasks: async (files) => {
+    const downloadable = files.filter((file) => !file.isDir)
+    const skippedDirs = files.length - downloadable.length
+    if (skippedDirs > 0) {
+      toast.info(
+        i18n.t('transfer:page.folderSkipHint', { count: skippedDirs })
+      )
+    }
+    if (downloadable.length === 0) return
+
+    const userStore = useUserStore.getState()
+    if (!userStore.transferSetting) {
+      await userStore.loadTransferSetting()
+    }
+    get().syncDownloadExecutorConfig()
+    get().ensureDownloadExecutorCallbacks()
+
+    const { tasks, sessionTasks, currentSessionId } = get()
+    const newTasks = new Map(tasks)
+    const newSessionTasks = new Map(sessionTasks)
+    const now = Date.now()
+
+    downloadable.forEach((file) => {
+      const tempId = downloadExecutor.enqueue({
+        fileId: file.id,
+        fileName: file.displayName,
+        fileSize: file.size,
+      })
+
+      newTasks.set(tempId, {
+        taskId: tempId,
+        taskType: 'download',
+        fileName: file.displayName,
+        fileSize: file.size,
+        status: 'initialized',
+        progress: 0,
+        uploadedBytes: 0,
+        speed: 0,
+        remainingTime: 0,
+        createdAt: now,
+        updatedAt: now,
+      })
+
+      if (currentSessionId) {
+        const list = newSessionTasks.get(currentSessionId) || []
+        list.push(tempId)
+        newSessionTasks.set(currentSessionId, list)
+      }
+    })
+
+    set({ tasks: newTasks, sessionTasks: newSessionTasks })
+
+    toast.success(
+      i18n.t('transfer:page.toastDownloadQueued', {
+        count: downloadable.length,
+      })
+    )
+  },
+
+  replaceDownloadTempTask: (tempId, realTaskId, meta) => {
+    const { tasks, sessionTasks, currentSessionId } = get()
+    const oldTask = tasks.get(tempId)
+
+    const newTasks = new Map(tasks)
+    newTasks.delete(tempId)
+    newTasks.set(realTaskId, {
+      ...(oldTask ?? {}),
+      taskId: realTaskId,
+      taskType: 'download',
+      fileName: meta.fileName,
+      fileSize: meta.fileSize,
+      chunkSize: meta.chunkSize,
+      totalChunks: meta.totalChunks,
+      uploadedChunks: meta.downloadedChunks.length,
+      status: 'downloading',
+      updatedAt: Date.now(),
+    } as TransferTask)
+
+    const newSessionTasks = new Map(sessionTasks)
+    if (currentSessionId) {
+      const list = newSessionTasks.get(currentSessionId)
+      if (list) {
+        newSessionTasks.set(
+          currentSessionId,
+          list.map((id) => (id === tempId ? realTaskId : id))
+        )
+      }
+    }
+
+    set({ tasks: newTasks, sessionTasks: newSessionTasks })
+  },
+
+  syncDownloadExecutorConfig: () => {
+    const settings = useUserStore.getState().transferSetting
+    downloadExecutor.configure(
+      settings?.concurrentDownloadQuantity || 3,
+      (settings?.downloadSpeedLimit ?? -1) > 0
+    )
+  },
+
+  ensureDownloadExecutorCallbacks: () => {
+    if (downloadCallbacksInitialized) return
+    downloadCallbacksInitialized = true
+    downloadExecutor.setCallbacks({
+      onTransition: (taskId, status) => {
+        get().transitionTo(taskId, status as TaskStatus)
+      },
+      onProgress: (taskId, data) => {
+        get().updateProgress(taskId, data)
+      },
+      onError: (taskId, errorMessage) => {
+        get().setTaskError(taskId, errorMessage)
+      },
+      onTaskIdReplaced: (tempId, realTaskId, meta) => {
+        get().replaceDownloadTempTask(tempId, realTaskId, meta)
+      },
+    })
+  },
+
   pauseTask: async (taskId) => {
     const { tasks } = get()
     const task = tasks.get(taskId)
     if (!task) throw new Error(`Task not found: ${taskId}`)
+
+    if (task.taskType === 'download') {
+      if (!downloadExecutor.pause(taskId)) {
+        // 排队占位任务尚未开始，直接转取消
+        get().transitionTo(taskId, 'cancelled')
+        return
+      }
+      if (!get().transitionTo(taskId, 'paused')) {
+        throw new Error(`Cannot pause task in status: ${task.status}`)
+      }
+      try {
+        await pauseUpload(taskId)
+      } catch (error) {
+        get().transitionTo(taskId, task.status)
+        throw error
+      }
+      return
+    }
 
     uploadExecutor.pause(taskId)
 
@@ -733,15 +990,22 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     const task = tasks.get(taskId)
     if (!task) throw new Error(`Task not found: ${taskId}`)
 
-    if (!get().transitionTo(taskId, 'uploading')) {
+    const targetStatus = task.taskType === 'download' ? 'downloading' : 'uploading'
+    if (!get().transitionTo(taskId, targetStatus)) {
       throw new Error(`Cannot resume task in status: ${task.status}`)
     }
 
     try {
       await resumeUpload(taskId)
-      uploadExecutor.resume(taskId).catch(() => {
-        // Silent
-      })
+      if (task.taskType === 'download') {
+        downloadExecutor.resume(taskId).catch(() => {
+          // Silent
+        })
+      } else {
+        uploadExecutor.resume(taskId).catch(() => {
+          // Silent
+        })
+      }
     } catch (error) {
       get().transitionTo(taskId, task.status)
       throw error
@@ -752,6 +1016,27 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     const { tasks } = get()
     const task = tasks.get(taskId)
     if (!task) throw new Error(`Task not found: ${taskId}`)
+
+    if (task.taskType === 'download') {
+      downloadExecutor.cancel(taskId)
+
+      if (!get().transitionTo(taskId, 'cancelled')) {
+        throw new Error(`Cannot cancel task in status: ${task.status}`)
+      }
+
+      try {
+        await cancelUpload(taskId)
+      } catch (error) {
+        // 排队占位任务后端尚不存在，视为取消成功
+        const message = `${error?.message ?? ''}${error?.response?.data?.message ?? ''}`
+        if (!message.includes('任务不存在')) {
+          get().transitionTo(taskId, task.status)
+          throw error
+        }
+      }
+      progressCalculator.clear(taskId)
+      return
+    }
 
     uploadExecutor.cancel(taskId)
 
@@ -784,6 +1069,46 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
 
     if (task.status !== 'failed') {
       throw new Error(`Cannot retry task in status: ${task.status}`)
+    }
+
+    if (task.taskType === 'download') {
+      progressCalculator.reset(taskId)
+      completedActionsTriggered.delete(taskId)
+      errorNotificationTriggered.delete(taskId)
+
+      if (!get().transitionTo(taskId, 'initialized')) {
+        throw new Error('Failed to transition task to initialized state')
+      }
+
+      get().syncDownloadExecutorConfig()
+
+      try {
+        get().transitionTo(taskId, 'downloading')
+        if (downloadExecutor.getTaskContext(taskId)) {
+          await downloadExecutor.retry(taskId)
+        } else {
+          if (!task.chunkSize || !task.totalChunks) {
+            throw new Error('任务信息不完整，无法重试')
+          }
+          await downloadExecutor.adoptResumed({
+            taskId,
+            fileName: task.fileName,
+            fileSize: task.fileSize,
+            chunkSize: task.chunkSize,
+            totalChunks: task.totalChunks,
+            chunkConcurrency: useUserStore.getState().transferSetting
+              ?.downloadSpeedLimit
+            ? 1
+              : 3,
+          })
+        }
+      } catch (error) {
+        get().setTaskError(
+          taskId,
+          error instanceof Error ? error.message : '重试失败'
+        )
+      }
+      return
     }
 
     const file = fileCache.get(taskId)
@@ -898,6 +1223,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     const hasActiveTasks = Array.from(tasks.values()).some(
       (task) =>
         task.status === 'uploading' ||
+        task.status === 'downloading' ||
         task.status === 'checking' ||
         task.status === 'merging'
     )
@@ -915,6 +1241,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       const activeTasks = Array.from(tasks.values()).filter(
         (task) =>
           task.status === 'uploading' ||
+          task.status === 'downloading' ||
           task.status === 'checking' ||
           task.status === 'merging'
       )

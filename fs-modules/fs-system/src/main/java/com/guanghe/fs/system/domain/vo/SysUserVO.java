@@ -38,9 +38,6 @@ public class SysUserVO implements Serializable {
     @Schema(description = "头像")
     private String avatar;
 
-    @Schema(description = "邮箱地址")
-    private String email;
-
     @Schema(description = "状态")
     private Integer status;
 

@@ -17,7 +17,6 @@
     "pageDescription": "Review new user registrations. Approved users can sign in",
     "refresh": "Refresh",
     "colUser": "User",
-    "colEmail": "Email",
     "colRegisteredAt": "Registered",
     "colActions": "Actions",
     "loading": "Loading...",
@@ -88,6 +87,11 @@
     "langZh": "简体中文",
     "langEn": "English",
     "languageUpdated": "Language updated",
+    "thumbnailsLabel": "Thumbnails",
+    "thumbnailsDescription": "Show preview thumbnails in the file list and grid views. When off, file type icons are shown instead.",
+    "thumbnailsOn": "On",
+    "thumbnailsOff": "Off",
+    "thumbnailsUpdated": "Thumbnail preference updated",
     "validation": {
       "layout": "Please select a layout",
       "theme": "Please select a theme",
@@ -100,14 +104,6 @@
     "loadFailed": "Failed to load transfer settings",
     "saved": "Saved",
     "saveFailed": "Failed to save",
-    "downloadLocation": "Download folder",
-    "downloadLocationDesc": "Enter a full local folder path where downloaded files are saved.",
-    "downloadLocationPlaceholder": "C:\\Users\\name\\Desktop or /home/name/Desktop",
-    "pathHintTitle": "Use a full folder path",
-    "pathHintWin": "Windows example: C:\\Users\\name\\Desktop",
-    "pathHintUnix": "Linux/Mac example: /home/name/Desktop",
-    "defaultPath": "Always use this path",
-    "defaultPathDesc": "If off, you’ll be asked where to save each download.",
     "speedLimit": "Download speed limit",
     "speedLimitDesc": "Limit maximum bandwidth used when downloading.",
     "unlimited": "Unlimited",
@@ -120,11 +116,7 @@
     "concurrentDownloadDesc": "How many files to download at the same time",
     "chunkSize": "Chunk size",
     "chunkSizeDesc": "Upload chunk size; 5 MB is recommended",
-    "unitCount": "{{count}}",
-    "validation": {
-      "downloadRequired": "Enter a download folder path",
-      "pathInvalid": "Invalid path format"
-    }
+    "unitCount": "{{count}}"
   },
   "profile": {
     "pageTitle": "Profile",
@@ -152,8 +144,6 @@
     }
   },
   "account": {
-    "email": "Email",
-    "notSet": "Not set",
     "password": "Password",
     "passwordHint": "Set a password for sign-in and sensitive actions.",
     "setPassword": "Set password",

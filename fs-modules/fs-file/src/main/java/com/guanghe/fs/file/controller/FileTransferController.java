@@ -23,6 +23,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
@@ -35,8 +36,8 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -164,40 +165,26 @@ public class FileTransferController {
 
     @GetMapping("/download/chunk")
     @Operation(summary = "下载分片", description = "下载指定分片，返回206 Partial Content")
-    public ResponseEntity<StreamingResponseBody> downloadChunk(@Validated DownloadChunkQry qry) {
-        try {
-            // 获取任务信息
-            com.guanghe.fs.file.domain.FileTransferTask task = fileTransferTaskService.getTask(qry.getTaskId());
-            
-            // 计算字节范围
-            long startByte = (long) qry.getChunkIndex() * task.getChunkSize();
-            long endByte = Math.min(startByte + task.getChunkSize() - 1, task.getFileSize() - 1);
-            long contentLength = endByte - startByte + 1;
-            
-            // 创建流式响应
-            StreamingResponseBody responseBody = outputStream -> {
-                try (InputStream inputStream = fileTransferTaskService.downloadChunk(
-                        qry.getTaskId(), qry.getChunkIndex())) {
-                    IOUtils.copy(inputStream, outputStream);
-                    outputStream.flush();
-                } catch (Exception e) {
-                    log.error("下载分片失败: taskId={}, chunkIndex={}", qry.getTaskId(), qry.getChunkIndex(), e);
-                    throw new RuntimeException("下载分片失败", e);
-                }
-            };
-            
-            // 设置响应头
-            return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
-                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_OCTET_STREAM_VALUE)
-                    .header(HttpHeaders.CONTENT_RANGE, 
-                            String.format("bytes %d-%d/%d", startByte, endByte, task.getFileSize()))
-                    .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(contentLength))
-                    .header(HttpHeaders.CONTENT_DISPOSITION, 
-                            "attachment; filename=\"" + URLEncoder.encode(task.getFileName(), StandardCharsets.UTF_8) + "\"")
-                    .body(responseBody);
-        } catch (Exception e) {
-            log.error("下载分片失败: taskId={}, chunkIndex={}", qry.getTaskId(), qry.getChunkIndex(), e);
-            throw new RuntimeException("下载分片失败", e);
+    public void downloadChunk(@Validated DownloadChunkQry qry, HttpServletResponse response) throws IOException {
+        com.guanghe.fs.file.domain.FileTransferTask task = fileTransferTaskService.getTask(qry.getTaskId());
+
+        long startByte = (long) qry.getChunkIndex() * task.getChunkSize();
+        long endByte = Math.min(startByte + task.getChunkSize() - 1, task.getFileSize() - 1);
+        long contentLength = endByte - startByte + 1;
+
+        // 必须在请求线程内打开分片流：限速读取依赖 Sa-Token 请求上下文，
+        // 若放入 StreamingResponseBody 会在异步线程执行并丢失上下文
+        try (InputStream inputStream = fileTransferTaskService.downloadChunk(
+                qry.getTaskId(), qry.getChunkIndex())) {
+            response.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);
+            response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
+            response.setHeader(HttpHeaders.CONTENT_RANGE,
+                    String.format("bytes %d-%d/%d", startByte, endByte, task.getFileSize()));
+            response.setContentLengthLong(contentLength);
+            response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=\"" + URLEncoder.encode(task.getFileName(), StandardCharsets.UTF_8) + "\"");
+            IOUtils.copy(inputStream, response.getOutputStream());
+            response.getOutputStream().flush();
         }
     }
 

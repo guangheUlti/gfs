@@ -31,7 +31,9 @@
     "emptyDesc": "Upload or create a folder to get started",
     "uploadFile": "Upload",
     "newFolder": "New folder",
-    "newTextFile": "New text file",
+    "newTextFile": "New TXT",
+    "newTextJson": "New JSON",
+    "newTextMd": "New Markdown",
     "fileActions": "Create",
     "refresh": "Refresh",
     "noMore": "No more items"
@@ -51,7 +53,9 @@
     "rename": "Rename",
     "move": "Move to",
     "detail": "Details",
-    "trash": "Move to trash"
+    "trash": "Move to trash",
+    "delete": "Delete",
+    "deleteForever": "Delete permanently"
   },
   "breadcrumb": {
     "allFiles": "Files"
@@ -89,26 +93,24 @@
     "multi": "Move {{count}} selected items to trash? You can restore from trash.",
     "batch": "Move selected items to trash? You can restore from trash."
   },
+  "deleteForeverDialog": {
+    "title": "Delete permanently",
+    "confirm": "Delete permanently",
+    "single": "Permanently delete \"{{name}}\"? It will not go to trash and cannot be restored.",
+    "multi": "Permanently delete {{count}} selected items? They will not go to trash and cannot be restored.",
+    "batch": "Permanently delete selected items? They will not go to trash and cannot be restored."
+  },
   "createFolder": {
     "title": "New folder",
     "placeholder": "Folder name",
     "cancel": "Cancel",
     "confirm": "OK"
   },
-"createText": {
-    "title": "New text file",
+  "createText": {
+    "title": "New {{type}}",
     "placeholder": "File name",
     "cancel": "Cancel",
     "confirm": "OK"
-  },
-  "textEditor": {
-    "description": "Edit plain text content online",
-    "unsaved": "(unsaved)",
-    "save": "Save",
-    "cancel": "Cancel",
-    "saveOk": "Saved",
-    "saveFail": "Save failed",
-    "loadFail": "Failed to read file content"
   },
   "rename": {
     "title": "Rename",
@@ -290,8 +292,6 @@
     "mkdirFail": "Could not create folder",
     "createTextOk": "Text file created",
     "createTextFail": "Could not create text file",
-    "saveTextOk": "Text saved",
-    "saveTextFail": "Could not save text",
     "renameOk": "Renamed",
     "renameFail": "Rename failed",
     "moveOk": "Moved",
@@ -299,8 +299,9 @@
     "trashOne": "Moved to trash",
     "trashMany": "Moved {{count}} items to trash",
     "trashFail": "Delete failed",
-    "downloadOne": "Download started",
-    "downloadMany": "Downloading {{count}} files",
+    "deleteForeverOne": "Permanently deleted",
+    "deleteForeverMany": "Permanently deleted {{count}} items",
+    "deleteForeverFail": "Permanent delete failed",
     "favOk": "Added to favorites",
     "unfavOk": "Removed from favorites",
     "favFail": "Could not favorite",
@@ -329,5 +330,29 @@
     "pauseAll": "Pause all",
     "resumeAll": "Resume",
     "cancelAll": "Cancel all"
+  },
+  "preview": {
+    "close": "Close Preview",
+    "title": "File Preview",
+    "unsupported": "Preview is not supported for this file type",
+    "unsaved": "(unsaved)",
+    "loadFail": "Failed to load file content",
+    "save": "Save",
+    "saveOk": "Saved successfully",
+    "saveFail": "Failed to save",
+    "modeEdit": "Edit Online",
+    "modePreview": "Preview Online",
+    "wrap": "Wrap Lines",
+    "themeSystem": "System",
+    "prev": "Previous",
+    "next": "Next",
+    "rotate": "Rotate Right",
+    "collapseList": "Collapse Thumbnails",
+    "expandList": "Expand Thumbnails",
+    "playlist": "Playlist",
+    "autoNext": "Auto Play Next",
+    "play": "Play",
+    "pause": "Pause",
+    "embedFail": "Failed to load embedded preview page. Try again later."
   }
 }

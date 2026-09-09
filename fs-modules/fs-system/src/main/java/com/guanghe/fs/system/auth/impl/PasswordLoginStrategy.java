@@ -35,8 +35,6 @@ public class PasswordLoginStrategy implements LoginStrategy {
 
     private final LoginGuardService loginGuardService;
 
-    private final static String emailRegex = "^[A-Za-z0-9+_.-]+@(.+)$";
-
     @Override
     public LoginType getLoginType() {
         return LoginType.password;
@@ -49,11 +47,7 @@ public class PasswordLoginStrategy implements LoginStrategy {
         // 防暴力：账号+IP 锁定期内直接拒绝
         loginGuardService.checkLoginAllowed(account);
         QueryWrapper queryWrapper = new QueryWrapper();
-        if (account.matches(emailRegex)) {
-            queryWrapper.where(SYS_USER.EMAIL.eq(account));
-        } else {
-            queryWrapper.where(SYS_USER.USERNAME.eq(account));
-        }
+        queryWrapper.where(SYS_USER.USERNAME.eq(account));
         SysUser user = userMapper.selectOneByQuery(queryWrapper);
         if (user == null) {
             loginGuardService.recordLoginFailure(account);

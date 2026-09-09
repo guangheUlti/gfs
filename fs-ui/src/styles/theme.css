@@ -56,6 +56,15 @@
   --shadow-2xl: 0px 4px 8px -1px hsl(0 0% 0% / 0.25);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
+  /* 代码编辑器（CodeMirror）语法高亮，跟随明暗主题自动切换 */
+  --editor-keyword: oklch(0.5106 0.2301 263.2919);
+  --editor-string: oklch(0.4751 0.1239 152.5835);
+  --editor-comment: oklch(0.551 0.0234 264.3637);
+  --editor-number: oklch(0.5547 0.1359 47.3603);
+  --editor-function: oklch(0.4696 0.1869 293.7802);
+  --editor-type: oklch(0.4949 0.1 200);
+  --editor-tag: oklch(0.577 0.245 27.3247);
+  --editor-attribute: oklch(0.5547 0.1359 80);
 }
 
 .dark {
@@ -119,6 +128,14 @@
   --shadow-xl:
     0px 4px 8px -1px hsl(0 0% 0% / 0.1), 0px 8px 10px -2px hsl(0 0% 0% / 0.1);
   --shadow-2xl: 0px 4px 8px -1px hsl(0 0% 0% / 0.25);
+  --editor-keyword: oklch(0.7463 0.16 263.2919);
+  --editor-string: oklch(0.7463 0.13 152.5835);
+  --editor-comment: oklch(0.7137 0 0);
+  --editor-number: oklch(0.79 0.12 47.3603);
+  --editor-function: oklch(0.7463 0.14 293.7802);
+  --editor-type: oklch(0.7463 0.11 200);
+  --editor-tag: oklch(0.72 0.17 27.3247);
+  --editor-attribute: oklch(0.79 0.12 80);
 }
 
 @theme inline {

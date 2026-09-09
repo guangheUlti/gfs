@@ -4,15 +4,16 @@ import type { FileItem } from '@/types/file'
 import { toast } from 'sonner'
 import {
   deleteFiles,
+  permanentlyDeleteFiles,
   renameFile,
   moveFiles,
   createFolder,
   createTextFile,
-  updateTextContent,
   favoriteFile,
   unfavoriteFile,
 } from '@/api/file'
-import { openFilePreviewWithToken } from '@/utils/preview'
+import { usePreviewStore } from '@/store/preview'
+import { useTransferStore } from '@/store/transfer'
 
 export function useFileOperations(
   refreshCallback: () => void,
@@ -25,11 +26,14 @@ export function useFileOperations(
   const [createFolderModalVisible, setCreateFolderModalVisible] =
     useState(false)
   const [createTextModalVisible, setCreateTextModalVisible] = useState(false)
-  const [textEditorVisible, setTextEditorVisible] = useState(false)
+  // 当前新建文本的类型（txt/json/md），由菜单入口决定
+  const [createTextSuffix, setCreateTextSuffix] = useState('txt')
   const [renameModalVisible, setRenameModalVisible] = useState(false)
   const [moveModalVisible, setMoveModalVisible] = useState(false)
   const [shareModalVisible, setShareModalVisible] = useState(false)
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false)
+  const [permanentDeleteDialogVisible, setPermanentDeleteDialogVisible] =
+    useState(false)
   const [detailModalVisible, setDetailModalVisible] = useState(false)
 
   // 操作的文件
@@ -39,9 +43,10 @@ export function useFileOperations(
   const [sharingFile, setSharingFile] = useState<FileItem | null>(null)
   const [sharingFiles, setSharingFiles] = useState<FileItem[]>([])
   const [deletingFiles, setDeletingFiles] = useState<FileItem[]>([])
+  const [permanentlyDeletingFiles, setPermanentlyDeletingFiles] = useState<
+    FileItem[]
+  >([])
   const [detailFile, setDetailFile] = useState<FileItem | null>(null)
-  // 正在在线编辑的文本文件
-  const [editingTextFile, setEditingTextFile] = useState<FileItem | null>(null)
 
   /**
    * 打开创建文件夹弹窗
@@ -69,19 +74,20 @@ export function useFileOperations(
   )
 
   /**
-   * 打开新建纯文本弹窗
+   * 打开新建文本弹窗（suffix 由菜单入口决定：txt/json/md）
    */
-  const openCreateTextModal = useCallback(() => {
+  const openCreateTextModal = useCallback((suffix: string = 'txt') => {
+    setCreateTextSuffix(suffix)
     setCreateTextModalVisible(true)
   }, [])
 
   /**
-   * 新建纯文本文件
+   * 新建文本文件
    */
   const handleCreateText = useCallback(
     async (fileName: string, parentId?: string) => {
       try {
-        await createTextFile({ fileName, parentId })
+        await createTextFile({ fileName, suffix: createTextSuffix, parentId })
         toast.success(t('operations.createTextOk'))
         setCreateTextModalVisible(false)
         onCreateFolderSuccess?.()
@@ -90,34 +96,15 @@ export function useFileOperations(
         toast.error(t('operations.createTextFail'))
       }
     },
-    [refreshCallback, onCreateFolderSuccess, t]
+    [refreshCallback, onCreateFolderSuccess, t, createTextSuffix]
   )
 
   /**
-   * 打开文本在线编辑弹窗（仅 .txt）
+   * 在线编辑（文本/代码/Markdown 类）：复用预览弹窗，直接进入编辑模式
    */
   const openTextEditor = useCallback((file: FileItem) => {
-    setEditingTextFile(file)
-    setTextEditorVisible(true)
+    usePreviewStore.getState().openPreview([file], 0, { edit: true })
   }, [])
-
-  /**
-   * 保存文本编辑内容
-   */
-  const handleSaveText = useCallback(
-    async (fileId: string, content: string) => {
-      try {
-        await updateTextContent(fileId, content)
-        toast.success(t('operations.saveTextOk'))
-        setTextEditorVisible(false)
-        setEditingTextFile(null)
-        refreshCallback()
-      } catch (error) {
-        toast.error(t('operations.saveTextFail'))
-      }
-    },
-    [refreshCallback, t]
-  )
 
   /**
    * 打开重命名弹窗
@@ -240,39 +227,49 @@ export function useFileOperations(
   }, [])
 
   /**
-   * 下载文件
+   * 永久删除文件（不经回收站，不可恢复）
+   */
+  const handlePermanentDelete = useCallback(async () => {
+    const fileIds = permanentlyDeletingFiles.map((f) => f.id)
+    try {
+      await permanentlyDeleteFiles(fileIds)
+      const successMsg =
+        fileIds.length === 1
+          ? t('operations.deleteForeverOne')
+          : t('operations.deleteForeverMany', { count: fileIds.length })
+      toast.success(successMsg)
+      setPermanentDeleteDialogVisible(false)
+      setPermanentlyDeletingFiles([])
+      clearSelectionCallback?.()
+      refreshCallback()
+    } catch (error) {
+      toast.error(t('operations.deleteForeverFail'))
+    }
+  }, [permanentlyDeletingFiles, refreshCallback, clearSelectionCallback, t])
+
+  /**
+   * 打开永久删除确认对话框
+   */
+  const openPermanentDeleteConfirm = useCallback((file: FileItem) => {
+    setPermanentlyDeletingFiles([file])
+    setPermanentDeleteDialogVisible(true)
+  }, [])
+
+  /**
+   * 打开批量永久删除确认对话框
+   */
+  const openBatchPermanentDeleteConfirm = useCallback((files: FileItem[]) => {
+    setPermanentlyDeletingFiles(files)
+    setPermanentDeleteDialogVisible(true)
+  }, [])
+
+  /**
+   * 下载文件：走任务式分片下载，进度在「传输列表-下载中」展示
    */
   const handleDownload = useCallback((files: FileItem | FileItem[]) => {
     const fileArray = Array.isArray(files) ? files : [files]
-    const token =
-      localStorage.getItem('accessToken') ||
-      sessionStorage.getItem('accessToken')
-
-    // 使用延迟下载避免浏览器阻止多个下载
-    fileArray.forEach((file, index) => {
-      setTimeout(() => {
-        // 构建下载链接，浏览器直接下载带不了请求头，把 token 放到 URL 参数中
-        const params = new URLSearchParams()
-        params.set('Authorization', `Bearer ${token}`)
-
-        const downloadUrl = `${import.meta.env.VITE_API_BASE_URL}/apis/transfer/download/${file.id}?${params.toString()}`
-
-        const link = document.createElement('a')
-        link.href = downloadUrl
-        link.download = file.displayName
-        link.style.display = 'none'
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-      }, index * 200) // 每个文件延迟 200ms
-    })
-
-    const successMsg =
-      fileArray.length === 1
-        ? t('operations.downloadOne')
-        : t('operations.downloadMany', { count: fileArray.length })
-    toast.success(successMsg)
-  }, [t])
+    void useTransferStore.getState().createDownloadTasks(fileArray)
+  }, [])
 
   /**
    * 收藏/取消收藏
@@ -307,10 +304,11 @@ export function useFileOperations(
   )
 
   /**
-   * 预览文件
+   * 预览文件（本窗口全屏弹窗，fileList 用于同类型文件切换）
    */
-  const openPreview = useCallback(async (file: FileItem) => {
-    await openFilePreviewWithToken(file.id, import.meta.env.VITE_API_BASE_URL)
+  const openPreview = useCallback((file: FileItem, fileList: FileItem[]) => {
+    const index = fileList.findIndex((f) => f.id === file.id)
+    usePreviewStore.getState().openPreview(fileList, Math.max(index, 0))
   }, [])
 
   /**
@@ -327,8 +325,7 @@ export function useFileOperations(
     setCreateFolderModalVisible,
     createTextModalVisible,
     setCreateTextModalVisible,
-    textEditorVisible,
-    setTextEditorVisible,
+    createTextSuffix,
     renameModalVisible,
     setRenameModalVisible,
     moveModalVisible,
@@ -337,6 +334,8 @@ export function useFileOperations(
     setShareModalVisible,
     deleteDialogVisible,
     setDeleteDialogVisible,
+    permanentDeleteDialogVisible,
+    setPermanentDeleteDialogVisible,
     detailModalVisible,
     setDetailModalVisible,
 
@@ -347,8 +346,8 @@ export function useFileOperations(
     sharingFile,
     sharingFiles,
     deletingFiles,
+    permanentlyDeletingFiles,
     detailFile,
-    editingTextFile,
 
     // 操作方法
     openCreateFolderModal,
@@ -356,7 +355,6 @@ export function useFileOperations(
     openCreateTextModal,
     handleCreateText,
     openTextEditor,
-    handleSaveText,
     openRenameModal,
     handleRename,
     openMoveModal,
@@ -367,6 +365,9 @@ export function useFileOperations(
     openDeleteConfirm,
     openBatchDeleteConfirm,
     handleDelete,
+    openPermanentDeleteConfirm,
+    openBatchPermanentDeleteConfirm,
+    handlePermanentDelete,
     handleDownload,
     handleFavorite,
     openPreview,

@@ -17,7 +17,6 @@
     "pageDescription": "审核新注册用户的注册申请，通过后即可登录系统",
     "refresh": "刷新",
     "colUser": "用户",
-    "colEmail": "邮箱",
     "colRegisteredAt": "注册时间",
     "colActions": "操作",
     "loading": "加载中...",
@@ -88,6 +87,11 @@
     "langZh": "简体中文",
     "langEn": "English",
     "languageUpdated": "语言已更新",
+    "thumbnailsLabel": "缩略图",
+    "thumbnailsDescription": "在文件列表和网格视图中显示图片等文件的预览缩略图；关闭后统一显示文件类型图标。",
+    "thumbnailsOn": "启用",
+    "thumbnailsOff": "关闭",
+    "thumbnailsUpdated": "缩略图设置已更新",
     "validation": {
       "layout": "请选择布局",
       "theme": "请选择主题",
@@ -100,14 +104,6 @@
     "loadFailed": "加载传输设置失败",
     "saved": "已保存",
     "saveFailed": "保存失败",
-    "downloadLocation": "文件下载位置",
-    "downloadLocationDesc": "请输入完整的本地文件夹路径，用于保存下载的文件。",
-    "downloadLocationPlaceholder": "C:\\Users\\用户名\\Desktop 或 /home/username/Desktop",
-    "pathHintTitle": "请输入完整的文件夹路径",
-    "pathHintWin": "Windows 示例: C:\\Users\\用户名\\Desktop",
-    "pathHintUnix": "Linux/Mac 示例: /home/username/Desktop",
-    "defaultPath": "默认使用此路径",
-    "defaultPathDesc": "如果不勾选，每次下载时会询问保存地址",
     "speedLimit": "下载速率限制",
     "speedLimitDesc": "限制下载时的最大带宽占用",
     "unlimited": "不限制",
@@ -120,11 +116,7 @@
     "concurrentDownloadDesc": "同时进行下载的文件数量",
     "chunkSize": "分片大小",
     "chunkSizeDesc": "上传文件时的分片大小，推荐 5 MB",
-    "unitCount": "{{count}} 个",
-    "validation": {
-      "downloadRequired": "请输入文件下载位置",
-      "pathInvalid": "路径格式不正确"
-    }
+    "unitCount": "{{count}} 个"
   },
   "profile": {
     "pageTitle": "个人资料",
@@ -152,8 +144,6 @@
     }
   },
   "account": {
-    "email": "邮件地址",
-    "notSet": "未设置",
     "password": "密码",
     "passwordHint": "为你的账号设置密码，用于登录与敏感操作验证",
     "setPassword": "设置密码",

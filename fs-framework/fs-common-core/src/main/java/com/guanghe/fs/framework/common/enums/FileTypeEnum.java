@@ -209,6 +209,14 @@ public enum FileTypeEnum {
     }
 
     /**
+     * 判断后缀是否属于可在线编辑的文本类（文本/代码/Markdown）
+     */
+    public static boolean isEditableTextType(String extension) {
+        FileTypeEnum fileType = fromSuffix(extension);
+        return fileType == TEXT || fileType == CODE || fileType == MARKDOWN;
+    }
+
+    /**
      * 判断文件扩展名是否为图片
      */
     public static boolean isImageFile(String extension) {
