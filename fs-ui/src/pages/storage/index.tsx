@@ -1,7 +1,7 @@
 import { type ChangeEvent, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { RefreshCw, Plus, Search } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { getUserStorageSettings } from '@/api/storage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -49,7 +49,7 @@ export default function StoragePage() {
       {/* 顶部工具栏：窄屏时标题独占一行，搜索与按钮同处第二行 */}
       <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 py-3 sm:px-6 sm:py-4'>
         {/* 标题 */}
-        <div className='w-full min-w-0 sm:w-auto sm:flex-1'>
+        <div className='flex h-9 w-full min-w-0 items-center sm:w-auto sm:flex-1'>
           <h2 className='text-xl font-semibold tracking-tight'>
             {t('page.title')}
           </h2>
@@ -89,14 +89,14 @@ export default function StoragePage() {
       </div>
 
       {/* 次级工具栏：统计信息 */}
-      <div className='inset-divider flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 sm:px-6 sm:py-3'>
+      <div className='flex flex-wrap items-center justify-between gap-2 px-3 pt-2 pb-1.5 sm:px-6 sm:pt-2.5'>
         <span className='text-sm text-muted-foreground'>
           {tc('listTotalItems', { count: filteredSettings.length })}
         </span>
       </div>
 
       {/* 主内容区域 */}
-      <div className='flex-1 overflow-auto p-3 sm:p-6'>
+      <div className='flex-1 overflow-auto px-3 pt-1 pb-3 sm:px-6 sm:pt-1.5 sm:pb-6'>
         {isLoading ? (
           <div className='flex h-64 items-center justify-center'>
             <p className='text-muted-foreground'>{tc('loading')}</p>

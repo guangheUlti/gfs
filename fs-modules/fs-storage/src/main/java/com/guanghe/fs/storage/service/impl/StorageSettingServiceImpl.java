@@ -3,6 +3,7 @@ package com.guanghe.fs.storage.service.impl;
 import cn.hutool.core.collection.CollUtil;
 import com.guanghe.fs.framework.common.constant.CommonConstant;
 import com.guanghe.fs.framework.common.exception.BusinessException;
+import com.guanghe.fs.framework.common.utils.ErrorMessageUtils;
 import com.guanghe.fs.framework.common.utils.I18nUtils;
 import com.guanghe.fs.framework.common.utils.JsonUtils;
 import com.guanghe.fs.storage.domain.StoragePlatform;
@@ -15,6 +16,8 @@ import com.guanghe.fs.storage.domain.vo.StorageSettingUserVO;
 import com.guanghe.fs.storage.facade.StorageServiceFacade;
 import com.guanghe.fs.storage.mapper.StorageSettingMapper;
 import com.guanghe.fs.storage.plugin.boot.StoragePluginRegistry;
+import com.guanghe.fs.storage.plugin.core.IStorageOperationService;
+import com.guanghe.fs.storage.plugin.core.config.StorageConfig;
 import com.guanghe.fs.storage.plugin.core.context.StoragePlatformContextHolder;
 import com.guanghe.fs.storage.plugin.core.dto.StoragePluginMetadata;
 import com.guanghe.fs.storage.plugin.core.utils.StorageUtils;
@@ -53,6 +56,16 @@ import static com.guanghe.fs.storage.domain.table.StorageSettingTableDef.STORAGE
 public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper, StorageSetting> implements StorageSettingService {
 
     private static final String SECRET_MASK = "********";
+
+    /**
+     * 挂载卸载回调（由 fs-file 在启动时注入，避免 fs-storage 反向依赖 fs-file）。
+     * 参数为挂载设置 ID；回调内负责持挂载锁并删除网盘索引。
+     */
+    private volatile java.util.function.Consumer<String> mountUnmountConsumer;
+
+    public void setMountUnmountConsumer(java.util.function.Consumer<String> consumer) {
+        this.mountUnmountConsumer = consumer;
+    }
 
     private final Converter converter;
 
@@ -172,6 +185,8 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
         if (exists) {
             throw new BusinessException(I18nUtils.getMessage("storage.config.duplicate"));
         }
+        // 保存前真实连接测试：配置错误即拒绝保存，DB 无残留行
+        testStorageConnection(cmd.getPlatformIdentifier(), cmd.getConfigData());
         StorageSetting storageSetting = new StorageSetting();
         storageSetting.setPlatformIdentifier(cmd.getPlatformIdentifier());
         storageSetting.setConfigData(cmd.getConfigData());
@@ -221,11 +236,46 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
         if (exists) {
             throw new BusinessException(I18nUtils.getMessage("storage.config.duplicate"));
         }
+        // 用合并后的配置做真实连接测试（掩码占位符不会被当真实密码），失败整单回滚
+        testStorageConnection(storageSetting.getPlatformIdentifier(), mergedConfigData);
         storageSetting.setConfigData(mergedConfigData);
         storageSetting.setRemark(cmd.getRemark());
         this.updateById(storageSetting);
         // 刷新缓存
         storageServiceFacade.refreshInstance(cmd.getSettingId());
+    }
+
+    /**
+     * 保存前存储连接测试
+     * 用原型工厂创建配置化实例（validateConfig + initialize 真实建连），失败即抛业务异常拒绝保存。
+     * configId 传 null 避免测试实例进入缓存；Local 平台跳过（内置单例有自己的目录保障）。
+     */
+    private void testStorageConnection(String platformIdentifier, String configData) {
+        if (StorageUtils.isLocalConfig(platformIdentifier)
+                || StorageUtils.LOCAL_PLATFORM_IDENTIFIER.equals(platformIdentifier)) {
+            return;
+        }
+        StorageConfig cfg = StorageConfig.builder()
+                .configId(null)
+                .platformIdentifier(platformIdentifier)
+                .properties(parseConfig(configData))
+                .build();
+        IStorageOperationService instance = null;
+        try {
+            instance = storagePluginRegistry.getPrototype(platformIdentifier)
+                    .createConfiguredInstance(cfg);
+        } catch (Exception e) {
+            log.warn("存储连接测试失败: platform={}, error={}", platformIdentifier, e.getMessage());
+            throw new BusinessException(I18nUtils.getMessage("storage.config.test.failed",
+                    new Object[]{ErrorMessageUtils.extractUserFriendlyMessage(e)}));
+        } finally {
+            if (instance != null) {
+                try {
+                    instance.close();
+                } catch (Exception ignore) {
+                }
+            }
+        }
     }
 
     /**
@@ -266,6 +316,15 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
 
         this.removeById(id);
         storageServiceFacade.removeInstance(id);
+
+        // 挂载平台删除：卸载 = 只清网盘索引（含挂载点与回收站记录），绝不碰真实文件（8.4-⑧）
+        if ("LocalMount".equals(storageSetting.getPlatformIdentifier())) {
+            try {
+                mountUnmountConsumer.accept(id);
+            } catch (Exception e) {
+                log.error("挂载卸载清理索引失败: settingId={}", id, e);
+            }
+        }
 
         log.info("存储配置已删除并移除缓存: settingId={}", id);
     }

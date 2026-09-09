@@ -63,6 +63,9 @@
     "toggleEnableDesc": "Enabling \"{{name}}\" will disable other active configs. Continue?",
     "processing": "Working…",
     "confirmToggle": "Confirm {{action}}",
-    "toastEnterField": "Enter {{label}}"
+    "toastEnterField": "Enter {{label}}",
+    "rescan": "Rescan",
+    "rescanOk": "Scan triggered, refresh later to see results",
+    "rescanFail": "Failed to trigger scan, please try again"
   }
 }

@@ -106,8 +106,9 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
             File targetFile = new File(fullPath);
 
             File parentDir = targetFile.getParentFile();
-            if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
-                throw new StorageOperationException("无法创建目录: " + parentDir);
+            if (parentDir != null) {
+                // 并发上传同一天目录时 mkdirs 会因目录已被其他线程创建而误报失败，createDirectories 幂等
+                Files.createDirectories(parentDir.toPath());
             }
 
             try (FileOutputStream fos = new FileOutputStream(targetFile)) {
@@ -363,10 +364,9 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
 
             // 确保父目录存在
             File parentDir = targetFile.getParentFile();
-            if (parentDir != null && !parentDir.exists()) {
-                if (!parentDir.mkdirs()) {
-                    throw new StorageOperationException("无法创建目录: " + parentDir.getAbsolutePath());
-                }
+            if (parentDir != null) {
+                // 并发合并同一天目录时 mkdirs 会因目录已被其他线程创建而误报失败，createDirectories 幂等
+                Files.createDirectories(parentDir.toPath());
             }
 
             // 合并分片文件

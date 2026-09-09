@@ -13,7 +13,7 @@
     <description>基础 bom 文件，管理整个项目的依赖版本</description>
 
     <properties>
-        <revision>2.3.1</revision>
+        <revision>3.0.0</revision>
         <flatten-maven-plugin.version>1.6.0</flatten-maven-plugin.version>
 
         <spring-boot.version>4.0.3</spring-boot.version>
@@ -25,8 +25,10 @@
         <aliyun-sdk-oss.version>3.18.1</aliyun-sdk-oss.version>
         <minio.version>8.5.7</minio.version>
         <s3.version>2.25.27</s3.version>
-        <qiniu-java.version>7.19.0</qiniu-java.version>
-        <huaweicloud.version>3.23.9</huaweicloud.version>
+        <smbj.version>0.14.0</smbj.version>
+        <sshj.version>0.38.0</sshj.version>
+        <sardine.version>5.12</sardine.version>
+        <commons-net.version>3.11.0</commons-net.version>
         <sa-token.version>1.45.0</sa-token.version>
         <springdoc.version>3.0.2</springdoc.version>
         <tika.version>2.7.0</tika.version>
@@ -157,7 +159,27 @@
             </dependency>
             <dependency>
                 <groupId>com.guanghe.fs</groupId>
-                <artifactId>storage-plugin-obs</artifactId>
+                <artifactId>storage-plugin-smb</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.guanghe.fs</groupId>
+                <artifactId>storage-plugin-webdav</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.guanghe.fs</groupId>
+                <artifactId>storage-plugin-sftp</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.guanghe.fs</groupId>
+                <artifactId>storage-plugin-ftp</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.guanghe.fs</groupId>
+                <artifactId>storage-plugin-localmount</artifactId>
                 <version>${revision}</version>
             </dependency>
             <!-- ORM  -->
@@ -219,18 +241,26 @@
                 <version>${s3.version}</version>
             </dependency>
 
-            <!-- 七牛 Java SDK -->
+            <!-- 远程协议存储插件依赖（SMB/SFTP/WebDAV/FTP） -->
             <dependency>
-                <groupId>com.qiniu</groupId>
-                <artifactId>qiniu-java-sdk</artifactId>
-                <version>${qiniu-java.version}</version>
+                <groupId>com.hierynomus</groupId>
+                <artifactId>smbj</artifactId>
+                <version>${smbj.version}</version>
             </dependency>
-
-            <!-- 华为云OBS Java SDK -->
             <dependency>
-                <groupId>com.huaweicloud</groupId>
-                <artifactId>esdk-obs-java-bundle</artifactId>
-                <version>${huaweicloud.version}</version>
+                <groupId>com.hierynomus</groupId>
+                <artifactId>sshj</artifactId>
+                <version>${sshj.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.lookfirst</groupId>
+                <artifactId>sardine</artifactId>
+                <version>${sardine.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-net</groupId>
+                <artifactId>commons-net</artifactId>
+                <version>${commons-net.version}</version>
             </dependency>
 
             <!-- 如果jdk大于1.8，则还需导入下面依赖-->

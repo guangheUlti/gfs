@@ -1,6 +1,8 @@
 package com.guanghe.fs.storage.plugin.core;
 
+import com.guanghe.fs.framework.common.exception.StorageOperationException;
 import com.guanghe.fs.storage.plugin.core.config.StorageConfig;
+import com.guanghe.fs.storage.plugin.core.model.StorageObjectEntry;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -154,6 +156,46 @@ public interface IStorageOperationService extends Closeable {
      */
     default Long getAvailableSpace() {
         return null;
+    }
+
+    /**
+     * 是否为挂载式存储（目录树镜像真实文件系统）。
+     * <p>
+     * 业务代码一律用能力位判断，勿比较 identifier 字符串。
+     * 仅 {@code LocalMount} 类挂载插件返回 true。
+     *
+     * @return 是否挂载式
+     */
+    default boolean isMountMode() {
+        return false;
+    }
+
+    /**
+     * 创建目录（含逐级父链）。仅挂载式实现
+     *
+     * @param dirKey 目录相对键（posix '/' 分隔、无前导 '/'）
+     */
+    default void mkdirDirectory(String dirKey) {
+        throw new StorageOperationException("当前存储平台不支持创建目录");
+    }
+
+    /**
+     * 列举一层目录内容（挂载同步器用）。仅挂载式实现
+     *
+     * @param dirKey 目录相对键，posix '/' 分隔、无前导 '/'，空串表示根
+     * @return 一层目录条目列表
+     */
+    default List<StorageObjectEntry> listObjects(String dirKey) {
+        throw new StorageOperationException("当前存储平台不支持目录列举");
+    }
+
+    /**
+     * 删除目录（递归，含内部文件）。仅挂载式实现，供永久删除清理真实目录
+     *
+     * @param dirKey 目录相对键
+     */
+    default void deleteDirectory(String dirKey) {
+        throw new StorageOperationException("当前存储平台不支持删除目录");
     }
 
     /**

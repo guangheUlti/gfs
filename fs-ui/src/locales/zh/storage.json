@@ -63,6 +63,9 @@
     "toggleEnableDesc": "启用后将自动切换到 \"{{name}}\" 存储平台，其他已启用的配置将被禁用。确定要继续吗？",
     "processing": "处理中...",
     "confirmToggle": "确认{{action}}",
-    "toastEnterField": "请输入{{label}}"
+    "toastEnterField": "请输入{{label}}",
+    "rescan": "重新扫描",
+    "rescanOk": "扫描已触发，稍后刷新查看结果",
+    "rescanFail": "触发扫描失败，请稍后重试"
   }
 }

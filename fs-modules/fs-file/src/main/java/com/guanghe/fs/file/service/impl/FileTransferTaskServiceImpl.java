@@ -22,6 +22,8 @@ import com.guanghe.fs.file.enums.TransferTaskType;
 import com.guanghe.fs.file.handler.UploadTaskExceptionHandler;
 import com.guanghe.fs.file.handler.DownloadTaskExceptionHandler;
 import com.guanghe.fs.file.mapper.FileTransferTaskMapper;
+import com.guanghe.fs.file.mount.MountManager;
+import com.guanghe.fs.file.mount.MountPathResolver;
 import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.file.service.FileObjectReferenceService;
 import com.guanghe.fs.file.service.FileTransferTaskService;
@@ -99,6 +101,8 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     @Qualifier("fileMergeExecutor")
     private final TaskExecutor fileMergeExecutor;
     private final StorageServiceFacade storageServiceFacade;
+    private final MountPathResolver mountPathResolver;
+    private final MountManager mountManager;
     private final SysUserService sysUserService;
     private final SysUserTransferSettingService userTransferSettingService;
     private final SysOperationLogService operationLogService;
@@ -260,7 +264,6 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             String taskId = IdUtil.fastSimpleUUID();
             String suffix = FileUtils.extName(cmd.getFileName());
             String tempFileName = IdUtil.fastSimpleUUID() + "." + suffix;
-            String objectKey = FileUtils.generateObjectKey(userId, tempFileName);
             String displayName = fileInfoService.generateUniqueName(
                     userId,
                     cmd.getParentId(),
@@ -269,6 +272,22 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                     null,
                     storagePlatformSettingId
             );
+            // 挂载式：objectKey 不走 generateObjectKey，按挂载相对路径预占（8.4-⑯ 平台一致性校验）
+            String objectKey;
+            if (isMountStorage(storagePlatformSettingId)) {
+                if (StringUtils.isNotBlank(cmd.getParentId())) {
+                    FileInfo parent = fileInfoService.getAuthorizedFile(cmd.getParentId());
+                    if (!storagePlatformSettingId.equals(parent.getStoragePlatformSettingId())) {
+                        throw new BusinessException(I18nUtils.getMessage("mount.platform.mismatch"));
+                    }
+                    String parentKey = mountPathResolver.resolveRelativeKey(parent, storagePlatformSettingId);
+                    objectKey = parentKey.isEmpty() ? displayName : parentKey + "/" + displayName;
+                } else {
+                    objectKey = displayName;
+                }
+            } else {
+                objectKey = FileUtils.generateObjectKey(userId, tempFileName);
+            }
             FileTransferTask task = new FileTransferTask();
             task.setTaskId(taskId);
             task.setUserId(userId);
@@ -301,6 +320,19 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
         }
     }
 
+    /** 当前配置是否为挂载式存储（能力位判断，勿比较 identifier 字符串） */
+    private boolean isMountStorage(String settingId) {
+        if (StringUtils.isBlank(settingId)) {
+            return false;
+        }
+        try {
+            return storageServiceFacade.getStorageService(settingId).isMountMode();
+        } catch (Exception e) {
+            log.warn("判断挂载存储失败，按非挂载处理: settingId={}", settingId, e);
+            return false;
+        }
+    }
+
     @Override
     public CheckUploadResultVO checkUpload(CheckUploadCmd cmd) {
         String userId = StpUtil.getLoginIdAsString();
@@ -317,26 +349,35 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
 
             transferSseService.sendStatusEvent(userId, taskId,
                     TransferTaskStatus.checking.name(), I18nUtils.getMessage("task.checking"));
-            // 相同存储配置中的相同内容全局复用；回收站记录也属于有效引用。
-            try (FileObjectReferenceService.ReferenceLock ignored =
-                         objectReferenceService.acquireContentLock(
-                                 storagePlatformSettingId,
-                                 cmd.getFileMd5(),
-                                 task.getFileSize())) {
-                FileInfo existFile = objectReferenceService.findReusableFile(
-                        cmd.getFileMd5(), task.getFileSize(), storagePlatformSettingId);
-                if (existFile != null) {
-                    try (FileObjectReferenceService.ReferenceLock objectLock =
-                                 objectReferenceService.acquireObjectLock(
-                                         existFile.getStoragePlatformSettingId(), existFile.getObjectKey())) {
-                        return handleQuickUpload(task, existFile, cmd.getFileMd5(), storagePlatformSettingId);
-                    }
-                }
-
-                // 0 字节文件不需要分片上传，但仍在内容锁内创建，避免并发产生重复对象。
+            if (isMountStorage(storagePlatformSettingId)) {
+                // 挂载式安全底线：跳过秒传查询——引用计数按 platform+objectKey 记账，
+                // 复用 uuid 对象会摧毁路径映射（8.4 定案设计，故意不简化）。
                 if (task.getFileSize() == null || task.getFileSize() == 0) {
-                    log.info("检测到空文件上传，直接执行快速完成逻辑: taskId={}", taskId);
-                    return handleEmptyFileUpload(task, cmd.getFileMd5(), storagePlatformSettingId);
+                    log.info("挂载式空文件上传，直写真实路径: taskId={}", taskId);
+                    return handleMountEmptyFileUpload(task, storagePlatformSettingId);
+                }
+            } else {
+                // 相同存储配置中的相同内容全局复用；回收站记录也属于有效引用。
+                try (FileObjectReferenceService.ReferenceLock ignored =
+                             objectReferenceService.acquireContentLock(
+                                     storagePlatformSettingId,
+                                     cmd.getFileMd5(),
+                                     task.getFileSize())) {
+                    FileInfo existFile = objectReferenceService.findReusableFile(
+                            cmd.getFileMd5(), task.getFileSize(), storagePlatformSettingId);
+                    if (existFile != null) {
+                        try (FileObjectReferenceService.ReferenceLock objectLock =
+                                     objectReferenceService.acquireObjectLock(
+                                             existFile.getStoragePlatformSettingId(), existFile.getObjectKey())) {
+                            return handleQuickUpload(task, existFile, cmd.getFileMd5(), storagePlatformSettingId);
+                        }
+                    }
+
+                    // 0 字节文件不需要分片上传，但仍在内容锁内创建，避免并发产生重复对象。
+                    if (task.getFileSize() == null || task.getFileSize() == 0) {
+                        log.info("检测到空文件上传，直接执行快速完成逻辑: taskId={}", taskId);
+                        return handleEmptyFileUpload(task, cmd.getFileMd5(), storagePlatformSettingId);
+                    }
                 }
             }
             // 不是秒传，需要正常上传
@@ -384,6 +425,54 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             return handleQuickUpload(task, emptyFileInfo, fileMd5, storagePlatformSettingId);
         } catch (Exception e) {
             log.error("空文件处理失败: taskId={}", taskId, e);
+            throw new StorageOperationException(I18nUtils.getMessage("task.empty.file.failed"), e);
+        }
+    }
+
+    /**
+     * 挂载式空文件：跳过引用计数，直写真实路径并落 file_info（md5 保持 NULL，与扫描器导入行为一致）
+     */
+    private CheckUploadResultVO handleMountEmptyFileUpload(FileTransferTask task, String storagePlatformSettingId) {
+        String taskId = task.getTaskId();
+        IStorageOperationService storageService = storageServiceFacade.getStorageService(storagePlatformSettingId);
+        try {
+            mountManager.locks().callWithLock(storagePlatformSettingId, () -> {
+                storageService.uploadFile(new ByteArrayInputStream(new byte[0]), task.getObjectKey());
+                LocalDateTime now = LocalDateTime.now();
+                FileInfo fileInfo = new FileInfo();
+                fileInfo.setId(IdUtil.fastSimpleUUID());
+                fileInfo.setObjectKey(task.getObjectKey());
+                fileInfo.setOriginalName(task.getFileName());
+                fileInfo.setDisplayName(task.getFileName());
+                fileInfo.setSuffix(task.getSuffix());
+                fileInfo.setSize(task.getFileSize());
+                fileInfo.setMimeType(task.getMimeType());
+                fileInfo.setIsDir(false);
+                fileInfo.setParentId(task.getParentId());
+                fileInfo.setUserId(task.getUserId());
+                fileInfo.setStoragePlatformSettingId(storagePlatformSettingId);
+                fileInfo.setUploadTime(now);
+                fileInfo.setUpdateTime(now);
+                fileInfo.setIsDeleted(false);
+                fileInfoService.save(fileInfo);
+
+                task.setStatus(TransferTaskStatus.completed);
+                task.setUploadedChunks(task.getTotalChunks());
+                task.setCompleteTime(now);
+                this.updateById(task);
+                return null;
+            });
+            cacheManager.cleanTask(taskId);
+            transferSseService.sendCompleteEvent(task.getUserId(), taskId, taskId,
+                    task.getFileName(), task.getFileSize());
+            log.info("挂载式空文件上传完成: taskId={}, objectKey={}", taskId, task.getObjectKey());
+            return CheckUploadResultVO.builder()
+                    .isQuickUpload(false)
+                    .taskId(taskId)
+                    .message(I18nUtils.getMessage("task.check.complete"))
+                    .build();
+        } catch (Exception e) {
+            log.error("挂载式空文件处理失败: taskId={}", taskId, e);
             throw new StorageOperationException(I18nUtils.getMessage("task.empty.file.failed"), e);
         }
     }
@@ -843,10 +932,23 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                     partETags
             );
 
-            LocalDateTime completeTime = LocalDateTime.now();
-            String uploadedObjectKey = task.getObjectKey();
+            final LocalDateTime completeTime = LocalDateTime.now();
+            final String uploadedObjectKey = task.getObjectKey();
+            final FileTransferTask mergedTask = task;
             FileInfo fileInfo;
 
+            if (isMountStorage(task.getStoragePlatformSettingId())) {
+                // 挂载式安全底线：跳过合并后二次去重（引用计数按 platform+objectKey 记账，
+                // 复用 uuid 对象会摧毁路径映射）。合并写真实文件与 file_info 落库都在 MountLocks 内，
+                // 与扫描器串行化（8.4-②）。
+                fileInfo = mountManager.locks().callWithLock(task.getStoragePlatformSettingId(), () -> {
+                    FileInfo fi = buildUploadedFileInfo(mergedTask, uploadedObjectKey, completeTime);
+                    // 挂载记录不参与秒传引用，md5 置空
+                    fi.setContentMd5(null);
+                    fileInfoService.save(fi);
+                    return fi;
+                });
+            } else {
             // 合并完成后再次去重，解决多个相同文件并发上传时都未命中秒传的问题。
             try (FileObjectReferenceService.ReferenceLock ignored =
                          objectReferenceService.acquireContentLock(
@@ -878,6 +980,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                     log.warn("删除并发上传产生的重复对象失败: taskId={}, objectKey={}",
                             taskId, uploadedObjectKey, deleteError);
                 }
+            }
             }
 
             task.setStatus(TransferTaskStatus.completed);

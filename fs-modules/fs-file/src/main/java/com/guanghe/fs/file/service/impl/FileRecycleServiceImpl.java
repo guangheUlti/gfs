@@ -17,6 +17,8 @@ import com.guanghe.fs.file.service.FileUserFavoritesService;
 import com.guanghe.fs.framework.common.domain.PageResult;
 import com.guanghe.fs.framework.common.exception.BusinessException;
 import com.guanghe.fs.framework.common.utils.I18nUtils;
+import com.guanghe.fs.storage.facade.StorageServiceFacade;
+import com.guanghe.fs.storage.plugin.core.IStorageOperationService;
 import com.guanghe.fs.storage.plugin.core.context.StoragePlatformContextHolder;
 import io.github.linpeilie.Converter;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +53,8 @@ public class FileRecycleServiceImpl implements FileRecycleService {
     private final FileUserFavoritesService fileUserFavoritesService;
 
     private final FileObjectReferenceService objectReferenceService;
+
+    private final StorageServiceFacade storageServiceFacade;
 
     @Override
     public PageResult<FileRecycleVO> getRecyclePages(FileRecycleQry qry) {
@@ -205,6 +209,20 @@ public class FileRecycleServiceImpl implements FileRecycleService {
                 ))
                 .values().stream().toList();
 
+        // 挂载式：目录记录不走秒传引用链路，afterCommit 直接 deleteDirectory 清真实目录（8.4：真实目录随永久删除清理）
+        Map<String, List<FileInfo>> mountDirDeletes = allFiles.stream()
+                .filter(file -> Boolean.TRUE.equals(file.getIsDir())
+                        && StrUtil.isNotBlank(file.getObjectKey())
+                        && isMountStorage(file.getStoragePlatformSettingId()))
+                .collect(Collectors.groupingBy(FileInfo::getStoragePlatformSettingId));
+        physicalObjects = physicalObjects.stream()
+                .filter(file -> !(Boolean.TRUE.equals(file.getIsDir())
+                        && mountDirDeletes.containsKey(String.valueOf(file.getStoragePlatformSettingId()))
+                        && StrUtil.isNotBlank(file.getObjectKey())))
+                .toList();
+        final Map<String, List<FileInfo>> mountDirDeletesFinal = mountDirDeletes;
+        final List<FileInfo> physicalObjectsFinal = physicalObjects;
+
         fileInfoService.removeByIds(allFileIds);
 
         fileUserFavoritesService.removeByFileIds(allFileIds, userId);
@@ -213,16 +231,46 @@ public class FileRecycleServiceImpl implements FileRecycleService {
                 new TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        for (FileInfo file : physicalObjects) {
+                        for (FileInfo file : physicalObjectsFinal) {
                             try {
                                 objectReferenceService.deletePhysicalFileIfUnreferencedWithLock(file);
                             } catch (Exception e) {
                                 log.error("删除无引用物理文件失败: {}", file.getObjectKey(), e);
                             }
                         }
+                        // 挂载目录：直接删真实目录树（幂等，真实目录已不存在时静默通过）
+                        for (Map.Entry<String, List<FileInfo>> entry : mountDirDeletesFinal.entrySet()) {
+                            try {
+                                IStorageOperationService storageService =
+                                        storageServiceFacade.getStorageService(entry.getKey());
+                                for (FileInfo dir : entry.getValue()) {
+                                    try {
+                                        storageService.deleteDirectory(dir.getObjectKey());
+                                        log.info("挂载目录永久删除完成: objectKey={}", dir.getObjectKey());
+                                    } catch (Exception e) {
+                                        log.error("挂载目录永久删除失败: {}", dir.getObjectKey(), e);
+                                    }
+                                }
+                            } catch (Exception e) {
+                                log.error("获取挂载存储实例失败，跳过目录删除: settingId={}", entry.getKey(), e);
+                            }
+                        }
                     }
                 }
         );
+    }
+
+    /** 当前配置是否为挂载式存储（能力位判断，勿比较 identifier 字符串） */
+    private boolean isMountStorage(String settingId) {
+        if (StrUtil.isBlank(settingId)) {
+            return false;
+        }
+        try {
+            return storageServiceFacade.getStorageService(settingId).isMountMode();
+        } catch (Exception e) {
+            log.warn("判断挂载存储失败，按非挂载处理: settingId={}", settingId, e);
+            return false;
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)

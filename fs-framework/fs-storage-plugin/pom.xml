@@ -21,7 +21,10 @@
         <module>storage-plugin-minio</module>
         <module>storage-plugin-aliyunoss</module>
         <module>storage-plugin-rustfs</module>
-        <module>storage-plugin-kodo</module>
-        <module>storage-plugin-obs</module>
+        <module>storage-plugin-smb</module>
+        <module>storage-plugin-webdav</module>
+        <module>storage-plugin-sftp</module>
+        <module>storage-plugin-ftp</module>
+        <module>storage-plugin-localmount</module>
     </modules>
 </project>

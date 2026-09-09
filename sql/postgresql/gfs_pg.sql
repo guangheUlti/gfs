@@ -13,7 +13,7 @@ SET session_replication_role = 'replica';
 DROP TABLE IF EXISTS "file_info";
 CREATE TABLE "file_info" (
     "id" varchar(128) NOT NULL,
-    "object_key" varchar(128) DEFAULT NULL,
+    "object_key" varchar(512) DEFAULT NULL,
     "original_name" varchar(128) NOT NULL,
     "display_name" varchar(128) NOT NULL,
     "suffix" varchar(20) DEFAULT NULL,
@@ -137,7 +137,7 @@ CREATE TABLE "file_transfer_task" (
     "collection_id" varchar(128) DEFAULT NULL,
     "collection_submission_id" varchar(128) DEFAULT NULL,
     "storage_platform_setting_id" varchar(255) DEFAULT NULL,
-    "object_key" varchar(255) NOT NULL,
+    "object_key" varchar(512) NOT NULL,
     "file_id" varchar(128) DEFAULT NULL,
     "file_name" varchar(255) NOT NULL,
     "file_size" bigint NOT NULL,
@@ -288,10 +288,6 @@ INSERT INTO "storage_platform" ("name", "identifier", "config_scheme", "icon", "
  '[{"label": "Access-Key", "dataType": "string", "identifier": "accessKey", "validation": {"required": true}}, {"label": "Secret-key", "dataType": "string", "identifier": "secretKey", "validation": {"required": true}}, {"label": "服务器端点", "dataType": "string", "identifier": "endpoint", "validation": {"required": true}}, {"label": "存储桶名", "dataType": "string", "identifier": "bucket", "validation": {"required": true}}, {"label": "区域", "dataType": "string", "identifier": "region", "validation": {"required": true}}]',
  'icon-aliyun1', 'https://www.aliyun.com/product/oss', 0,
  '阿里云对象存储 OSS（Object Storage Service）是一款海量、安全、低成本、高可靠的云存储服务'),
-('华为云OBS', 'Obs',
- '[{"label": "Access-Key", "dataType": "string", "identifier": "accessKey", "validation": {"required": true}}, {"label": "Secret-key", "dataType": "string", "identifier": "secretKey", "validation": {"required": true}}, {"label": "服务器端点", "dataType": "string", "identifier": "endpoint", "validation": {"required": true}}, {"label": "存储桶名", "dataType": "string", "identifier": "bucket", "validation": {"required": true}}]',
- 'icon-storage', 'https://support.huaweicloud.com/obs/index.html', 0,
- '对象存储服务（Object Storage Service，OBS）提供海量、安全、高可靠、低成本的数据存储能力，可供用户存储任意类型和大小的数据。适合企业备份/归档、视频点播、视频监控等多种数据存储场景。'),
 ('RustFS对象存储', 'RustFS',
  '[{"label": "Access-Key", "dataType": "string", "identifier": "accessKey", "validation": {"required": true}}, {"label": "Secret-key", "dataType": "string", "identifier": "secretKey", "validation": {"required": true}}, {"label": "服务器端点", "dataType": "string", "identifier": "endpoint", "validation": {"required": true}}, {"label": "存储桶名", "dataType": "string", "identifier": "bucket", "validation": {"required": true}}]',
  'icon-bendicunchu1', 'https://github.com/rustfs/rustfs', 0,

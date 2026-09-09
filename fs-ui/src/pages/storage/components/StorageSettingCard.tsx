@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { StorageSetting, ConfigScheme } from '@/types/storage'
 import {
   Database,
@@ -10,12 +9,15 @@ import {
   Copy,
   Check,
   AlertCircle,
+  RefreshCw,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
   deleteStorageSetting,
   toggleStorageSetting,
   updateStorageSetting,
+  scanMountStorage,
 } from '@/api/storage'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -43,6 +45,7 @@ import {
   DescriptionFieldValue,
   DescriptionFieldValueRow,
 } from '@/components/field-layout'
+import { isSensitiveField } from '../utils'
 
 interface StorageSettingCardProps {
   setting: StorageSetting
@@ -64,6 +67,9 @@ export function StorageSettingCard({
   const [editErrors, setEditErrors] = useState<Record<string, string>>({})
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [copiedConfig, setCopiedConfig] = useState(false)
+  const [isRescanning, setIsRescanning] = useState(false)
+
+  const isMountPlatform = setting.storagePlatform?.identifier === 'LocalMount'
 
   const schemes: ConfigScheme[] = JSON.parse(
     setting.storagePlatform.configScheme
@@ -205,6 +211,19 @@ export function StorageSettingCard({
     }
   }
 
+  // 触发本地挂载重新扫描
+  const handleRescan = async () => {
+    setIsRescanning(true)
+    try {
+      await scanMountStorage(setting.id)
+      toast.success(t('card.rescanOk'))
+    } catch (error) {
+      toast.error(t('card.rescanFail'))
+    } finally {
+      setIsRescanning(false)
+    }
+  }
+
   const handleToggle = async () => {
     const action = setting.enabled === 1 ? 0 : 1
     setIsLoading(true)
@@ -248,9 +267,7 @@ export function StorageSettingCard({
                 : ''
             }
           >
-            {setting.enabled === 1
-              ? t('card.statusOn')
-              : t('card.statusOff')}
+            {setting.enabled === 1 ? t('card.statusOn') : t('card.statusOff')}
           </Badge>
         </div>
 
@@ -296,7 +313,7 @@ export function StorageSettingCard({
             variant='outline'
             size='sm'
             onClick={() => setViewModalOpen(true)}
-            className='flex-1 min-w-[70px]'
+            className='min-w-[70px] flex-1'
           >
             <Eye className='mr-1.5 h-3 w-3' />
             {t('card.view')}
@@ -305,7 +322,7 @@ export function StorageSettingCard({
             variant='outline'
             size='sm'
             onClick={handleOpenEdit}
-            className='flex-1 min-w-[70px]'
+            className='min-w-[70px] flex-1'
           >
             <Settings className='mr-1.5 h-3 w-3' />
             {t('card.edit')}
@@ -314,11 +331,25 @@ export function StorageSettingCard({
             variant='outline'
             size='sm'
             onClick={() => setDeleteDialogOpen(true)}
-            className='flex-1 min-w-[70px] text-red-600 hover:border-red-300 hover:text-red-700'
+            className='min-w-[70px] flex-1 text-red-600 hover:border-red-300 hover:text-red-700'
           >
             <Trash2 className='mr-1.5 h-3 w-3' />
             {t('card.delete')}
           </Button>
+          {isMountPlatform && (
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={handleRescan}
+              disabled={isRescanning}
+              className='min-w-[70px] flex-1'
+            >
+              <RefreshCw
+                className={`mr-1.5 h-3 w-3 ${isRescanning ? 'animate-spin' : ''}`}
+              />
+              {t('card.rescan')}
+            </Button>
+          )}
         </div>
       </li>
 
@@ -395,7 +426,7 @@ export function StorageSettingCard({
 
       {/* Edit Modal */}
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
-        <DialogContent className='max-h-[85vh] sm:max-w-2xl overflow-y-auto'>
+        <DialogContent className='max-h-[85vh] overflow-y-auto sm:max-w-2xl'>
           <DialogHeader>
             <DialogTitle>{t('card.editTitle')}</DialogTitle>
           </DialogHeader>
@@ -410,6 +441,14 @@ export function StorageSettingCard({
                 </Label>
                 <Input
                   id={`edit-${field.identifier}`}
+                  type={
+                    isSensitiveField(field.identifier) ? 'password' : 'text'
+                  }
+                  autoComplete={
+                    isSensitiveField(field.identifier)
+                      ? 'new-password'
+                      : undefined
+                  }
                   value={editFormData[field.identifier] || ''}
                   onChange={(e) => {
                     setEditFormData({
@@ -500,9 +539,7 @@ export function StorageSettingCard({
             ? t('card.processing')
             : t('card.confirmToggle', {
                 action:
-                  setting.enabled === 1
-                    ? t('card.disable')
-                    : t('card.enable'),
+                  setting.enabled === 1 ? t('card.disable') : t('card.enable'),
               })
         }
         cancelBtnText={t('card.cancel')}

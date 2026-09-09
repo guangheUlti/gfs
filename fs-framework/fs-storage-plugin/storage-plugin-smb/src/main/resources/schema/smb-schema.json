@@ -1,0 +1,9 @@
+[
+  {"label":"服务器地址","dataType":"string","identifier":"smbHost","validation":{"required":true}},
+  {"label":"端口","dataType":"string","identifier":"smbPort","validation":{"required":false}},
+  {"label":"域","dataType":"string","identifier":"smbDomain","validation":{"required":false}},
+  {"label":"共享名","dataType":"string","identifier":"smbShare","validation":{"required":true}},
+  {"label":"用户名","dataType":"string","identifier":"smbUsername","validation":{"required":true}},
+  {"label":"密码","dataType":"string","identifier":"smbPassword","validation":{"required":true}},
+  {"label":"分片临时目录","dataType":"string","identifier":"tempPath","validation":{"required":false}}
+]

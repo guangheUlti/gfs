@@ -32,10 +32,35 @@
             <artifactId>storage-plugin-rustfs</artifactId>
         </dependency>
 
-        <!-- 华为云OBS插件（可选，根据需要添加） -->
+        <!-- SMB 插件 -->
         <dependency>
             <groupId>com.guanghe.fs</groupId>
-            <artifactId>storage-plugin-obs</artifactId>
+            <artifactId>storage-plugin-smb</artifactId>
         </dependency>
+
+        <!-- WebDAV 插件 -->
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>storage-plugin-webdav</artifactId>
+        </dependency>
+
+        <!-- SFTP 插件 -->
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>storage-plugin-sftp</artifactId>
+        </dependency>
+
+        <!-- FTP/FTPS 插件 -->
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>storage-plugin-ftp</artifactId>
+        </dependency>
+
+        <!-- 本地目录挂载插件 -->
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>storage-plugin-localmount</artifactId>
+        </dependency>
+
     </dependencies>
 </project>

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import type { ConfigScheme } from '@/types/storage'
 import { Info, AlertCircle, Tag } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
   getStoragePlatforms,
@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { isSensitiveField } from '../utils'
 
 interface AddStorageModalProps {
   open: boolean
@@ -167,7 +168,7 @@ export function AddStorageModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-h-[85vh] sm:max-w-2xl overflow-y-auto'>
+      <DialogContent className='max-h-[85vh] overflow-y-auto sm:max-w-2xl'>
         <DialogHeader>
           <DialogTitle>{t('addModal.title')}</DialogTitle>
         </DialogHeader>
@@ -229,6 +230,14 @@ export function AddStorageModal({
                   </Label>
                   <Input
                     id={field.identifier}
+                    type={
+                      isSensitiveField(field.identifier) ? 'password' : 'text'
+                    }
+                    autoComplete={
+                      isSensitiveField(field.identifier)
+                        ? 'new-password'
+                        : undefined
+                    }
                     value={formData[field.identifier] || ''}
                     onChange={(e) => {
                       setFormData({

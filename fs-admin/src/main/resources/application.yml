@@ -163,3 +163,8 @@ springdoc:
 fs:
   cors:
     allowed-origins: ${FS_CORS_ALLOWED_ORIGINS:http://localhost,http://127.0.0.1,http://localhost:5173,http://127.0.0.1:5173}
+  file:
+    mount:
+      scan-enabled: true        # 挂载扫描总开关
+      scan-interval: 300000     # 扫描间隔 ms，默认 5 分钟
+      scan-max-entries: 50000   # 单轮扫描保险丝

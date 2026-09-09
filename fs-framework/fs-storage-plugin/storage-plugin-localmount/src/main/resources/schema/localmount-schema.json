@@ -1,0 +1,6 @@
+[
+  {"label":"挂载显示名","dataType":"string","identifier":"mountName","validation":{"required":false}},
+  {"label":"挂载根路径","dataType":"string","identifier":"rootPath","validation":{"required":true}},
+  {"label":"跟随符号链接","dataType":"string","identifier":"followSymlinks","validation":{"required":false}},
+  {"label":"扫描间隔（秒）","dataType":"string","identifier":"rescanIntervalSeconds","validation":{"required":false}}
+]

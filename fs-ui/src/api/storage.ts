@@ -62,3 +62,10 @@ export function getStoragePlatformsSettings(identifier: string) {
 export function getActiveStoragePlatforms() {
   return request.get<ActiveStoragePlatform[]>('/apis/storage/active-platforms')
 }
+
+/**
+ * 触发本地挂载存储重新扫描
+ */
+export function scanMountStorage(settingId: number | string) {
+  return request.post(`/apis/file/mount/scan/${settingId}`)
+}

@@ -6,6 +6,7 @@ import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import com.mybatisflex.core.paginate.Page;
+import com.mybatisflex.core.update.UpdateChain;
 import com.mybatisflex.core.util.UpdateEntity;
 import com.guanghe.fs.file.domain.FileInfo;
 import com.guanghe.fs.file.domain.dto.CopyFileCmd;
@@ -20,6 +21,9 @@ import com.guanghe.fs.file.domain.table.FileUserFavoritesTableDef;
 import com.guanghe.fs.file.domain.vo.FileDetailVO;
 import com.guanghe.fs.file.domain.vo.FileVO;
 import com.guanghe.fs.file.mapper.FileInfoMapper;
+import com.guanghe.fs.file.mount.MountManager;
+import com.guanghe.fs.file.mount.MountPathResolver;
+import com.guanghe.fs.file.mount.MountPointService;
 import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.file.service.FileObjectReferenceService;
 import com.guanghe.fs.framework.common.domain.PageResult;
@@ -76,6 +80,32 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     // FileObjectReferenceService 反向依赖 FileInfoService，用 ObjectProvider 延迟获取避免启动期循环依赖
     @Autowired
     private ObjectProvider<FileObjectReferenceService> objectReferenceServiceProvider;
+
+    // 挂载集成组件（MountPointService 反向依赖 FileInfoService，字段注入容忍循环依赖）
+    @Autowired
+    private MountPathResolver mountPathResolver;
+
+    @Autowired
+    private MountPointService mountPointService;
+
+    @Autowired
+    private MountManager mountManager;
+
+    @Autowired
+    private com.guanghe.fs.storage.service.StorageSettingService storageSettingService;
+
+    /** 当前配置是否为挂载式存储（能力位判断，勿比较 identifier 字符串） */
+    private boolean isMountStorage(String settingId) {
+        if (StrUtil.isBlank(settingId)) {
+            return false;
+        }
+        try {
+            return storageServiceFacade.getStorageService(settingId).isMountMode();
+        } catch (Exception e) {
+            log.warn("判断挂载存储失败，按非挂载处理: settingId={}", settingId, e);
+            return false;
+        }
+    }
 
     @Override
     public FileInfo getAuthorizedFile(String fileId) {
@@ -150,6 +180,12 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         LocalDateTime now = LocalDateTime.now();
 
         for (FileInfo fileInfo : fileInfoList) {
+            // 挂载点记录本身禁止删除（⑭）：它代表与真实目录的映射关系
+            if (isMountStorage(fileInfo.getStoragePlatformSettingId())
+                    && Boolean.TRUE.equals(fileInfo.getIsDir())
+                    && StrUtil.isEmpty(fileInfo.getParentId())) {
+                throw new BusinessException(I18nUtils.getMessage("mount.point.protected"));
+            }
             if (!fileInfo.getIsDeleted()) {
                 toDeleteList.add(fileInfo);
 
@@ -229,6 +265,20 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
                 null,
                 platformConfigId
         );
+        // 挂载式：先真实 mkdir（成功后再插 DB，失败不落库）
+        if (isMountStorage(platformConfigId)) {
+            IStorageOperationService storageService = storageServiceFacade.getStorageService(platformConfigId);
+            if (StrUtil.isNotBlank(cmd.getParentId())) {
+                FileInfo parent = getAuthorizedFile(cmd.getParentId());
+                String parentKey = mountPathResolver.resolveRelativeKey(parent, platformConfigId);
+                String dirKey = parentKey.isEmpty() ? finalName : parentKey + "/" + finalName;
+                mountManager.locks().callWithLock(platformConfigId, () ->
+                        storageService.mkdirDirectory(dirKey));
+            } else {
+                // 根下建目录：仅挂载点自身在根层，正常流程不允许其它根层目录，保持 DB 行为
+                log.debug("挂载平台根层创建目录（不触碰真实 FS，等待挂载点逻辑）: {}", finalName);
+            }
+        }
         FileInfo dirInfo = new FileInfo();
         dirInfo.setId(folderId);
         dirInfo.setOriginalName(finalName);
@@ -415,6 +465,11 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
             return;
         }
         String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
+        // 挂载点记录禁止改名（它会破坏挂载点判定）
+        if (Boolean.TRUE.equals(fileInfo.getIsDir()) && StrUtil.isEmpty(fileInfo.getParentId())
+                && isMountStorage(fileInfo.getStoragePlatformSettingId())) {
+            throw new BusinessException(I18nUtils.getMessage("mount.point.protected"));
+        }
         String newName = cmd.getDisplayName().trim();
         String finalName = generateUniqueName(
                 fileInfo.getUserId(),
@@ -424,11 +479,42 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
                 fileId,
                 storagePlatformSettingId
         );
+        // 挂载式：算旧/新相对路径 → 真实 rename → 改 display_name + 本记录 object_key；目录还要子树前缀替换
+        boolean mountRename = isMountStorage(fileInfo.getStoragePlatformSettingId())
+                && StrUtil.isNotEmpty(fileInfo.getStoragePlatformSettingId());
+        String oldKey = null;
+        String newKey = null;
+        final String lockedOldKey;
+        final String lockedNewKey;
+        if (mountRename) {
+            IStorageOperationService storageService =
+                    storageServiceFacade.getStorageService(fileInfo.getStoragePlatformSettingId());
+            oldKey = mountPathResolver.resolveRelativeKey(fileInfo, fileInfo.getStoragePlatformSettingId());
+            String parentKey = StrUtil.isEmpty(fileInfo.getParentId()) ? ""
+                    : mountPathResolver.resolveRelativeKey(
+                            getAuthorizedFile(fileInfo.getParentId()), fileInfo.getStoragePlatformSettingId());
+            newKey = parentKey.isEmpty() ? finalName : parentKey + "/" + finalName;
+            lockedOldKey = oldKey;
+            lockedNewKey = newKey;
+            mountManager.locks().callWithLock(fileInfo.getStoragePlatformSettingId(), () ->
+                    storageService.rename(lockedOldKey, lockedNewKey));
+        } else {
+            lockedOldKey = null;
+            lockedNewKey = null;
+        }
         fileInfo.setDisplayName(finalName);
         LocalDateTime now = LocalDateTime.now();
         fileInfo.setUpdateTime(now);
         fileInfo.setLastAccessTime(now);
+        if (mountRename && StrUtil.isNotEmpty(fileInfo.getObjectKey())) {
+            fileInfo.setObjectKey(newKey);
+        }
         updateById(fileInfo);
+        // 目录改名：子树 objectKey 前缀批量替换
+        if (mountRename && Boolean.TRUE.equals(fileInfo.getIsDir())) {
+            replaceSubtreeObjectKeyPrefix(fileInfo.getStoragePlatformSettingId(), oldKey, newKey);
+            log.info("挂载目录改名完成，子树前缀已替换: {} -> {}", oldKey, newKey);
+        }
     }
 
     @Override
@@ -452,6 +538,15 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
                 .where(FILE_INFO.ID.in(cmd.getFileIds()))
                 .and(FILE_INFO.USER_ID.eq(userId))
                 .and(FILE_INFO.IS_DELETED.eq(false)));
+
+        // 挂载式：仅允许同一挂载设置内移动；挂载点本身不可移动；真实 rename + 子树前缀替换 + parent_id 更新
+        boolean anyMount = fileInfos.stream()
+                .anyMatch(f -> isMountStorage(f.getStoragePlatformSettingId()));
+        if (anyMount) {
+            moveMountedFiles(fileInfos, targetDirId);
+            return;
+        }
+
         List<FileInfo> updateList = new ArrayList<>();
 
         for (FileInfo fileInfo : fileInfos) {
@@ -484,6 +579,97 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
 
         if (!updateList.isEmpty()) {
             this.updateBatch(updateList);
+        }
+    }
+
+    /**
+     * 挂载式移动：同挂载设置内真实 rename + 子树前缀替换 + parent_id 更新
+     * 跨设置/挂载点本身移动拒绝（mount.move.unsupported / mount.point.protected）。
+     */
+    private void moveMountedFiles(List<FileInfo> fileInfos, String targetDirId) {
+        String targetSettingId = null;
+        if (targetDirId != null) {
+            FileInfo targetDir = getAuthorizedFile(targetDirId);
+            targetSettingId = targetDir.getStoragePlatformSettingId();
+        }
+        for (FileInfo fileInfo : fileInfos) {
+            String settingId = fileInfo.getStoragePlatformSettingId();
+            if (!isMountStorage(settingId)) {
+                // 挂载与普通平台混选：拒绝（普通平台之间保持原逻辑，不混批）
+                throw new BusinessException(I18nUtils.getMessage("mount.move.unsupported"));
+            }
+            // 挂载点记录本身不可移动
+            if (Boolean.TRUE.equals(fileInfo.getIsDir()) && StrUtil.isEmpty(fileInfo.getParentId())) {
+                throw new BusinessException(I18nUtils.getMessage("mount.point.protected"));
+            }
+            // 目标必须是同挂载设置的目录（根层 = 同设置即可）
+            if (targetDirId != null && !settingId.equals(targetSettingId)) {
+                throw new BusinessException(I18nUtils.getMessage("mount.move.unsupported"));
+            }
+            if (targetDirId != null && fileInfo.getIsDir()
+                    && (fileInfo.getId().equals(targetDirId) || isSubDirectory(fileInfo.getId(), targetDirId))) {
+                throw new BusinessException(I18nUtils.getMessage("file.cannot.move.to.self",
+                        new Object[]{fileInfo.getDisplayName()}));
+            }
+        }
+        for (FileInfo fileInfo : fileInfos) {
+            String settingId = fileInfo.getStoragePlatformSettingId();
+            IStorageOperationService storageService = storageServiceFacade.getStorageService(settingId);
+            String oldKey = mountPathResolver.resolveRelativeKey(fileInfo, settingId);
+            String parentKey = StrUtil.isEmpty(fileInfo.getParentId()) ? ""
+                    : mountPathResolver.resolveRelativeKey(
+                            getAuthorizedFile(fileInfo.getParentId()), settingId);
+            String targetParentKey = targetDirId == null ? ""
+                    : mountPathResolver.resolveRelativeKey(getAuthorizedFile(targetDirId), settingId);
+            String newKey = targetParentKey.isEmpty()
+                    ? fileInfo.getDisplayName()
+                    : targetParentKey + "/" + fileInfo.getDisplayName();
+            if (oldKey.equals(newKey)) {
+                continue;
+            }
+            String finalNewKey = newKey;
+            mountManager.locks().callWithLock(settingId, () ->
+                    storageService.rename(oldKey, finalNewKey));
+            // DB 更新：parent_id + display_name + object_key
+            fileInfo.setParentId(targetDirId);
+            fileInfo.setUpdateTime(LocalDateTime.now());
+            if (StrUtil.isNotEmpty(fileInfo.getObjectKey())) {
+                fileInfo.setObjectKey(newKey);
+            }
+            updateById(fileInfo);
+            // 目录：子树 objectKey 前缀替换
+            if (Boolean.TRUE.equals(fileInfo.getIsDir())) {
+                replaceSubtreeObjectKeyPrefix(settingId, oldKey, newKey);
+            }
+            log.info("挂载移动完成: {} -> {}", oldKey, finalNewKey);
+        }
+    }
+
+    /**
+     * 目录改名/移动后的子树 objectKey 前缀替换。
+     * 用 Java 侧 startswith 精确过滤（避开 SQL LIKE 中 _/% 通配符与转义方言差异），
+     * 也避免使用 REPLACE() 等数据库方言函数。调用方必须已持 MountLocks。
+     */
+    private void replaceSubtreeObjectKeyPrefix(String settingId, String oldPrefix, String newPrefix) {
+        String likeEscaped = oldPrefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+        List<FileInfo> subtree = list(new QueryWrapper()
+                .where(FILE_INFO.OBJECT_KEY.like(likeEscaped + "/%"))
+                .and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.eq(settingId)));
+        List<FileInfo> updates = new ArrayList<>();
+        for (FileInfo record : subtree) {
+            String key = record.getObjectKey();
+            // like 只是粗筛，通配符可能误命中，二次精确校验
+            if (key == null || !key.startsWith(oldPrefix + "/")) {
+                continue;
+            }
+            FileInfo updateEntity = UpdateEntity.of(FileInfo.class, record.getId());
+            updateEntity.setObjectKey(newPrefix + key.substring(oldPrefix.length()));
+            updates.add(updateEntity);
+        }
+        if (!updates.isEmpty()) {
+            updateBatch(updates);
+            log.info("挂载子树前缀替换完成: settingId={}, {} -> {}, rows={}",
+                    settingId, oldPrefix, newPrefix, updates.size());
         }
     }
 
@@ -795,6 +981,22 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     public PageResult<FileVO> getList(FileQry qry) {
         String userId = StpUtil.getLoginIdAsString();
         String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
+
+        // 根列表入口懒创建挂载点记录（文档 8.3：FileHomeServiceImpl 根列表入口，此处在根视图统一触发）
+        if (StrUtil.isNotBlank(storagePlatformSettingId) && qry.getParentId() == null
+                && !Boolean.TRUE.equals(qry.getIsRecents()) && isMountStorage(storagePlatformSettingId)) {
+            try {
+                Map<String, Object> settingMap = new HashMap<>();
+                var setting = storageSettingService.getById(storagePlatformSettingId);
+                if (setting != null) {
+                    settingMap.put("id", setting.getId());
+                    settingMap.put("configData", setting.getConfigData());
+                }
+                mountPointService.ensureMountPoint(userId, settingMap);
+            } catch (Exception e) {
+                log.warn("挂载点懒创建失败，不影响本次列表: settingId={}", storagePlatformSettingId, e);
+            }
+        }
 
         int pageNum = qry.getPage() == null ? 1 : qry.getPage();
         int pageSize = qry.getPageSize() == null ? 10 : qry.getPageSize();

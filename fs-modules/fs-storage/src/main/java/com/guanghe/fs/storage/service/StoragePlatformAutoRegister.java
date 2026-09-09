@@ -1,10 +1,14 @@
 package com.guanghe.fs.storage.service;
 
 import com.guanghe.fs.storage.domain.StoragePlatform;
+import com.guanghe.fs.storage.domain.StorageSetting;
+import com.guanghe.fs.storage.facade.StorageServiceFacade;
 import com.guanghe.fs.storage.mapper.StoragePlatformMapper;
+import com.guanghe.fs.storage.mapper.StorageSettingMapper;
 import com.guanghe.fs.storage.plugin.boot.StoragePluginRegistry;
 import com.guanghe.fs.storage.plugin.core.dto.StoragePluginMetadata;
 import com.guanghe.fs.storage.plugin.core.utils.StorageUtils;
+import com.mybatisflex.core.query.QueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -15,7 +19,12 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static com.guanghe.fs.storage.domain.table.StorageSettingTableDef.STORAGE_SETTING;
 
 /**
  * 存储平台自动注册服务
@@ -33,7 +42,10 @@ public class StoragePlatformAutoRegister implements ApplicationRunner {
 
     private final StoragePluginRegistry pluginRegistry;
     private final StoragePlatformMapper storagePlatformMapper;
+    private final StorageSettingMapper storageSettingMapper;
     private final ObjectMapper objectMapper;
+    private final StorageSettingService storageSettingService;
+    private final StorageServiceFacade storageServiceFacade;
 
     @Override
     public void run(@NonNull ApplicationArguments args) {
@@ -80,6 +92,38 @@ public class StoragePlatformAutoRegister implements ApplicationRunner {
 
         log.info("存储插件同步完成，新增: {}, 更新: {}, 跳过: {}",
                 insertCount, updateCount, skipCount);
+
+        cleanupOrphanPlatforms(allMetadata);
+    }
+
+    /**
+     * 清理孤儿平台行：平台行的真相来源是代码插件清单，
+     * 插件被移除后残留的平台行（及其全部配置）一并清理，避免前端下拉出现已下线平台。
+     */
+    private void cleanupOrphanPlatforms(Collection<StoragePluginMetadata> allMetadata) {
+        Set<String> activeIdentifiers = allMetadata.stream()
+                .map(StoragePluginMetadata::getIdentifier)
+                .collect(Collectors.toSet());
+        List<StoragePlatform> allPlatforms = storagePlatformMapper.selectListByQuery(QueryWrapper.create());
+        for (StoragePlatform row : allPlatforms) {
+            if (StorageUtils.LOCAL_PLATFORM_IDENTIFIER.equals(row.getIdentifier())
+                    || activeIdentifiers.contains(row.getIdentifier())) {
+                continue;
+            }
+            // 先删引用该平台的配置（含禁用的，避免 getStorageSettingsByUser 组装 VO 时 NPE），再删平台行
+            try {
+                List<StorageSetting> settings = storageSettingMapper.selectListByQuery(
+                        QueryWrapper.create().where(STORAGE_SETTING.PLATFORM_IDENTIFIER.eq(row.getIdentifier())));
+                for (StorageSetting setting : settings) {
+                    storageServiceFacade.removeInstance(setting.getId());
+                    storageSettingService.removeById(setting.getId());
+                }
+                storagePlatformMapper.deleteById(row.getId());
+                log.warn("清理孤儿存储平台: {}", row.getIdentifier());
+            } catch (Exception e) {
+                log.error("清理孤儿存储平台失败: {}", row.getIdentifier(), e);
+            }
+        }
     }
 
     /**
