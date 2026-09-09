@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
 import {
   flexRender,
   getCoreRowModel,
@@ -8,6 +7,7 @@ import {
 } from '@tanstack/react-table'
 import type { FileRecycleItem } from '@/types/file'
 import { Undo2, Trash2, FileText } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
   getRecyclePage,
@@ -18,6 +18,7 @@ import {
 import { cn } from '@/lib/utils'
 import { formatFileSize, formatFileListDisplayTime } from '@/utils/format'
 import { usePermission } from '@/hooks/use-permission'
+import { useToolbarSearch } from '@/hooks/useToolbarSearch'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,7 +29,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { BulkSelectionBar } from '@/components/bulk-selection-bar'
 import { Button } from '@/components/ui/button'
 import {
   ContextMenu,
@@ -37,6 +37,13 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Empty,
   EmptyDescription,
@@ -57,19 +64,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { FileIcon } from '@/components/file-icon'
-import { useToolbarSearch } from '@/hooks/useToolbarSearch'
-import { FileBreadcrumb } from './FileBreadcrumb'
-import { Toolbar } from './Toolbar'
-import { FileListRowActionIcon } from './FileListView'
+import { BulkSelectionBar } from '@/components/bulk-selection-bar'
 import { DataTablePagination } from '@/components/data-table'
+import { FileIcon } from '@/components/file-icon'
+import { FileBreadcrumb } from './FileBreadcrumb'
+import { FileListRowActionIcon } from './FileListView'
+import { Toolbar } from './Toolbar'
 
 const RECYCLE_TABLE_HEAD: Record<string, string> = {
   displayName: '',
@@ -269,7 +269,12 @@ export default function RecycleBinView() {
     }
 
     void fetchRecyclePage()
-  }, [searchKeyword, pagination.pageIndex, pagination.pageSize, fetchRecyclePage])
+  }, [
+    searchKeyword,
+    pagination.pageIndex,
+    pagination.pageSize,
+    fetchRecyclePage,
+  ])
 
   const pageIds = fileList.map((f) => f.id)
   const isAllPageSelected =
@@ -314,26 +319,23 @@ export default function RecycleBinView() {
         accessorKey: 'deletedTime',
         header: t('recycle.colDeleted'),
         cell: ({ row }) => (
-          <span className='text-sm tabular-nums whitespace-nowrap text-muted-foreground'>
+          <span className='text-sm whitespace-nowrap text-muted-foreground tabular-nums'>
             {formatFileListDisplayTime(row.original.deletedTime)}
           </span>
         ),
       },
       {
         id: 'actions',
-        header: () => <span className='sr-only'>{t('recycle.colActions')}</span>,
+        header: () => (
+          <span className='sr-only'>{t('recycle.colActions')}</span>
+        ),
         cell: ({ row }) => {
           const file = row.original
           return (
-            <div
-              className='text-center'
-              onClick={(e) => e.stopPropagation()}
-            >
+            <div className='text-center' onClick={(e) => e.stopPropagation()}>
               <DropdownMenu
                 modal={false}
-                onOpenChange={(open) =>
-                  setOpenMenuId(open ? file.id : null)
-                }
+                onOpenChange={(open) => setOpenMenuId(open ? file.id : null)}
               >
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -343,8 +345,7 @@ export default function RecycleBinView() {
                       'size-8 rounded-lg text-muted-foreground transition-colors',
                       'hover:bg-primary/10 hover:text-primary',
                       'group-hover:text-primary',
-                      openMenuId === file.id &&
-                        'bg-primary/10 text-primary'
+                      openMenuId === file.id && 'bg-primary/10 text-primary'
                     )}
                     onClick={(e) => e.stopPropagation()}
                     aria-label={t('recycle.ariaMore')}
@@ -385,14 +386,7 @@ export default function RecycleBinView() {
         enableSorting: false,
       },
     ],
-    [
-      canDelete,
-      canOperateRecycle,
-      canRestore,
-      fileList,
-      openMenuId,
-      t,
-    ]
+    [canDelete, canOperateRecycle, canRestore, fileList, openMenuId, t]
   )
 
   const pageCount = Math.max(
@@ -454,7 +448,7 @@ export default function RecycleBinView() {
         </div>
       </div>
 
-      <div className='inset-divider flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2.5 sm:px-6 sm:py-3'>
+      <div className='flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 pt-2 pb-1.5 sm:px-6 sm:pt-2.5'>
         <div className='flex items-center gap-2'>
           {/* 与文件页一致：用文字按钮全选，选中态由行背景色表达 */}
           {fileList.length > 0 && (
@@ -477,8 +471,8 @@ export default function RecycleBinView() {
         </div>
       </div>
 
-      {/* 顶部留白放这层：滚动容器内不留 pt，粘性表头才能一上来就贴住分隔线 */}
-      <div className='flex-1 overflow-hidden pt-3 sm:pt-6'>
+      {/* 顶部留白放这层：滚动容器内不留 pt，粘性表头才能一上来就贴住工具行 */}
+      <div className='flex-1 overflow-hidden pt-1 sm:pt-1.5'>
         <div className='flex h-full min-h-0 flex-col'>
           {loading ? (
             <div className='flex h-full items-center justify-center'>
@@ -503,121 +497,119 @@ export default function RecycleBinView() {
           ) : (
             <>
               <div className='min-h-0 flex-1 overflow-auto px-3 pb-3 sm:px-6 sm:pb-6'>
-                <div className='rounded-md border'>
-                  {/* 窄屏不压缩列宽，改为横向滚动保留全部列；
-                      containerClassName 必须清掉自带的 overflow-auto，否则它就成了粘性表头最近的滚动祖先 */}
-                  <Table
-                    className='min-w-[40rem]'
-                    containerClassName='overflow-visible'
-                  >
-                    {/* sticky 加在 th 而非 thead（Firefox 不支持 table-section 级 sticky），不画表头底线 */}
-                    <TableHeader className='[&_tr]:border-0 [&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-background'>
-                      {table.getHeaderGroups().map((headerGroup) => (
-                        <TableRow key={headerGroup.id}>
-                          {headerGroup.headers.map((header) => (
-                            <TableHead
-                              key={header.id}
-                              className={cn(
-                                'font-medium text-muted-foreground',
-                                RECYCLE_TABLE_HEAD[header.column.id] ?? ''
-                              )}
-                            >
-                              {header.isPlaceholder
-                                ? null
-                                : flexRender(
-                                    header.column.columnDef.header,
-                                    header.getContext()
-                                  )}
-                            </TableHead>
-                          ))}
-                        </TableRow>
-                      ))}
-                    </TableHeader>
-                    <TableBody>
-                      {table.getRowModel().rows.length > 0 ? (
-                        table.getRowModel().rows.map((row, rowIndex) => (
-                          <ContextMenu key={row.id}>
-                            <ContextMenuTrigger asChild>
-                              <TableRow
-                                className={cn(
-                                  'group border-b-0 transition-colors',
-                                  'hover:bg-primary/[0.06]',
-                                  selectedIds.includes(row.original.id) &&
-                                    'bg-primary/[0.08]'
+                {/* 窄屏不压缩列宽，改为横向滚动保留全部列；
+                    containerClassName 必须清掉自带的 overflow-auto，否则它就成了粘性表头最近的滚动祖先 */}
+                <Table
+                  className='min-w-[40rem]'
+                  containerClassName='overflow-visible'
+                >
+                  {/* sticky 加在 th 而非 thead（Firefox 不支持 table-section 级 sticky），不画表头底线 */}
+                  <TableHeader className='[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-background [&_tr]:border-0'>
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <TableRow key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => (
+                          <TableHead
+                            key={header.id}
+                            className={cn(
+                              'font-medium text-muted-foreground',
+                              RECYCLE_TABLE_HEAD[header.column.id] ?? ''
+                            )}
+                          >
+                            {header.isPlaceholder
+                              ? null
+                              : flexRender(
+                                  header.column.columnDef.header,
+                                  header.getContext()
                                 )}
-                                onClick={(e) =>
-                                  handleRowClick(rowIndex, row.original.id, e)
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableHeader>
+                  <TableBody>
+                    {table.getRowModel().rows.length > 0 ? (
+                      table.getRowModel().rows.map((row, rowIndex) => (
+                        <ContextMenu key={row.id}>
+                          <ContextMenuTrigger asChild>
+                            <TableRow
+                              className={cn(
+                                'group border-b-0 transition-colors',
+                                'hover:bg-primary/[0.06]',
+                                selectedIds.includes(row.original.id) &&
+                                  'bg-primary/[0.08]'
+                              )}
+                              onClick={(e) =>
+                                handleRowClick(rowIndex, row.original.id, e)
+                              }
+                            >
+                              {row.getVisibleCells().map((cell) => (
+                                <TableCell
+                                  key={cell.id}
+                                  className={cn(
+                                    // 操作列只在触屏出现：鼠标端靠右键，与文件页一致
+                                    cell.column.id === 'actions' &&
+                                      'hoverable:hidden'
+                                  )}
+                                  onClick={
+                                    cell.column.id === 'actions'
+                                      ? (e) => e.stopPropagation()
+                                      : undefined
+                                  }
+                                >
+                                  {flexRender(
+                                    cell.column.columnDef.cell,
+                                    cell.getContext()
+                                  )}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          </ContextMenuTrigger>
+                          <ContextMenuContent>
+                            {canRestore && (
+                              <ContextMenuItem
+                                onClick={() =>
+                                  handleRestoreSingle(
+                                    row.original.id,
+                                    row.original.displayName
+                                  )
                                 }
                               >
-                                {row.getVisibleCells().map((cell) => (
-                                  <TableCell
-                                    key={cell.id}
-                                    className={cn(
-                                      // 操作列只在触屏出现：鼠标端靠右键，与文件页一致
-                                      cell.column.id === 'actions' &&
-                                        'hoverable:hidden'
-                                    )}
-                                    onClick={
-                                      cell.column.id === 'actions'
-                                        ? (e) => e.stopPropagation()
-                                        : undefined
-                                    }
-                                  >
-                                    {flexRender(
-                                      cell.column.columnDef.cell,
-                                      cell.getContext()
-                                    )}
-                                  </TableCell>
-                                ))}
-                              </TableRow>
-                            </ContextMenuTrigger>
-                            <ContextMenuContent>
-                              {canRestore && (
-                                <ContextMenuItem
-                                  onClick={() =>
-                                    handleRestoreSingle(
-                                      row.original.id,
-                                      row.original.displayName
-                                    )
-                                  }
-                                >
-                                  <Undo2 className='size-4' />
-                                  {t('recycle.menuRestore')}
-                                </ContextMenuItem>
-                              )}
-                              {canRestore && canDelete && (
-                                <ContextMenuSeparator />
-                              )}
-                              {canDelete && (
-                                <ContextMenuItem
-                                  className='text-destructive focus:text-destructive'
-                                  onClick={() =>
-                                    handleDeleteSingle(
-                                      row.original.id,
-                                      row.original.displayName
-                                    )
-                                  }
-                                >
-                                  <Trash2 className='size-4' />
-                                  {t('recycle.menuDeleteForever')}
-                                </ContextMenuItem>
-                              )}
-                            </ContextMenuContent>
-                          </ContextMenu>
-                        ))
-                      ) : (
-                        <TableRow>
-                          <TableCell
-                            colSpan={columns.length}
-                            className='h-24 text-center'
-                          >
-                            {t('recycle.noData')}
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                                <Undo2 className='size-4' />
+                                {t('recycle.menuRestore')}
+                              </ContextMenuItem>
+                            )}
+                            {canRestore && canDelete && (
+                              <ContextMenuSeparator />
+                            )}
+                            {canDelete && (
+                              <ContextMenuItem
+                                className='text-destructive focus:text-destructive'
+                                onClick={() =>
+                                  handleDeleteSingle(
+                                    row.original.id,
+                                    row.original.displayName
+                                  )
+                                }
+                              >
+                                <Trash2 className='size-4' />
+                                {t('recycle.menuDeleteForever')}
+                              </ContextMenuItem>
+                            )}
+                          </ContextMenuContent>
+                        </ContextMenu>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          colSpan={columns.length}
+                          className='h-24 text-center'
+                        >
+                          {t('recycle.noData')}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
               </div>
               {/* 分页组件靠名为 content 的容器查询做窄屏折叠，此处必须提供容器 */}
               <div className='@container/content shrink-0 border-t px-3 py-3 sm:px-6'>
@@ -678,7 +670,9 @@ export default function RecycleBinView() {
       <AlertDialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('recycle.confirmRestoreTitle')}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t('recycle.confirmRestoreTitle')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {operatingItem
                 ? t('recycle.confirmRestoreOne', {
@@ -701,7 +695,9 @@ export default function RecycleBinView() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('recycle.confirmDeleteTitle')}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t('recycle.confirmDeleteTitle')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {operatingItem
                 ? t('recycle.confirmDeleteOne', {
@@ -727,7 +723,9 @@ export default function RecycleBinView() {
       <AlertDialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('recycle.confirmEmptyTitle')}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t('recycle.confirmEmptyTitle')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {t('recycle.confirmEmptyDesc')}
             </AlertDialogDescription>

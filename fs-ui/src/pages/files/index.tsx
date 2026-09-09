@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { FileItem } from '@/types/file'
 import {
   List,
@@ -10,11 +9,11 @@ import {
   FolderPlus,
   RefreshCw,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { usePermission } from '@/hooks/use-permission'
 import { Button } from '@/components/ui/button'
-import { NoPermission } from '@/components/no-permission'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -22,7 +21,6 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
-import { usePermission } from '@/hooks/use-permission'
 import {
   Empty,
   EmptyContent,
@@ -32,6 +30,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { NoPermission } from '@/components/no-permission'
 import {
   Toolbar,
   FileBreadcrumb,
@@ -102,12 +101,17 @@ export default function FilesPage() {
       onChange: setSelectedKeys,
     })
 
-  const operations = useFileOperations(fileList.refresh, clearSelection, () => {
-    // 在特殊视图中创建文件夹后，返回全部文件页面
-    if (isFavoritesView || isRecentsView || isTypeFilter || isDirFilter) {
-      navigate(`/files?viewMode=${viewMode}`)
-    }
-  }, fileList.updateFileItems)
+  const operations = useFileOperations(
+    fileList.refresh,
+    clearSelection,
+    () => {
+      // 在特殊视图中创建文件夹后，返回全部文件页面
+      if (isFavoritesView || isRecentsView || isTypeFilter || isDirFilter) {
+        navigate(`/files?viewMode=${viewMode}`)
+      }
+    },
+    fileList.updateFileItems
+  )
 
   // 计算当前视图类型
   const viewType = searchParams.get('view')
@@ -141,13 +145,7 @@ export default function FilesPage() {
     if (fileType === 'audio') return t('index.viewAudio')
     if (fileType === 'other') return t('index.viewOther')
     return undefined
-  }, [
-    isFavoritesView,
-    isRecentsView,
-    isDirFilter,
-    fileType,
-    t,
-  ])
+  }, [isFavoritesView, isRecentsView, isDirFilter, fileType, t])
 
   // 判断文件夹
   const selectedFiles = fileList.fileList.filter((file) =>
@@ -251,22 +249,6 @@ export default function FilesPage() {
   /**
    * 批量操作
    */
-  const handleBatchDownload = () => {
-    const downloadableFiles = selectedFiles.filter((f) => !f.isDir)
-    if (downloadableFiles.length === 0) {
-      toast.warning(t('index.toastNoDownload'))
-      return
-    }
-    operations.handleDownload(downloadableFiles)
-    clearSelection()
-  }
-
-  const handleBatchRename = () => {
-    if (!canWrite) return
-    if (selectedFiles.length !== 1) return
-    operations.openRenameModal(selectedFiles[0])
-  }
-
   const handleBatchShare = () => {
     if (selectedFiles.length === 0) return
     operations.openBatchShareModal(selectedFiles)
@@ -329,7 +311,7 @@ export default function FilesPage() {
 
   return (
     <div className='flex h-full flex-col'>
-      {/* 顶部工具栏：窄屏时标题与工具栏各占一行，分隔线两端内缩与内容对齐 */}
+      {/* 顶部工具栏：窄屏时标题与工具栏各占一行；行内上下留白对称，分隔线离标题的间距与标题距顶一致 */}
       <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 py-3 sm:px-6 sm:py-4'>
         {/* 面包屑导航 */}
         <div className='w-full min-w-0 sm:w-auto sm:flex-1'>
@@ -364,8 +346,50 @@ export default function FilesPage() {
         />
       </div>
 
-      {/* 主内容区域：顶部留白放在这一层而不是滚动容器里，表头才能一上来就贴住工具栏、没有上浮行程 */}
-      <div className='relative flex-1 overflow-hidden pt-3 sm:pt-6'>
+      {/* 固定行：全选/计数与视图切换，紧贴列表上方（类资源管理器），不随列表滚动 */}
+      <div className='flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 pt-2 pb-1.5 sm:px-6 sm:pt-2.5'>
+        <div className='flex items-center gap-2'>
+          {/* 用文字按钮而非复选框：选中态已由行/卡片背景色表达 */}
+          {fileList.fileList.length > 0 && (
+            <Button
+              variant='ghost'
+              size='sm'
+              className='text-muted-foreground hover:text-foreground'
+              onClick={() => handleSelectAll(!isAllSelected)}
+            >
+              {isAllSelected ? t('index.deselectAll') : t('index.selectAll')}
+            </Button>
+          )}
+          <span className='text-sm text-muted-foreground'>
+            {selectedKeys.length > 0
+              ? t('index.selectedCount', { count: selectedKeys.length })
+              : t('index.totalCount', { total: fileList.total })}
+          </span>
+        </div>
+        <ToggleGroup
+          type='single'
+          value={viewMode}
+          onValueChange={(value) => value && setViewMode(value as ViewMode)}
+        >
+          <ToggleGroupItem
+            value='list'
+            aria-label={t('index.ariaList')}
+            size='sm'
+          >
+            <List className='h-4 w-4' />
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value='grid'
+            aria-label={t('index.ariaGrid')}
+            size='sm'
+          >
+            <LayoutGrid className='h-4 w-4' />
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+
+      {/* 主内容区域：滚动只发生在这一层的文件列表上，顶部留白放在滚动容器外，表头才能一上来就贴住固定区 */}
+      <div className='relative flex-1 overflow-hidden pt-1 sm:pt-1.5'>
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div
@@ -443,7 +467,9 @@ export default function FilesPage() {
                       onMove={operations.openMoveModal}
                       onMoveFiles={handleMoveFiles}
                       onFavorite={operations.handleFavorite}
-                      onPreview={(file) => operations.openPreview(file, fileList.fileList)}
+                      onPreview={(file) =>
+                        operations.openPreview(file, fileList.fileList)
+                      }
                       onEdit={operations.openTextEditor}
                       onDetail={operations.openDetail}
                       onDragStateChange={handleDragStateChange}
@@ -474,7 +500,9 @@ export default function FilesPage() {
                       onMove={operations.openMoveModal}
                       onMoveFiles={handleMoveFiles}
                       onFavorite={operations.handleFavorite}
-                      onPreview={(file) => operations.openPreview(file, fileList.fileList)}
+                      onPreview={(file) =>
+                        operations.openPreview(file, fileList.fileList)
+                      }
                       onEdit={operations.openTextEditor}
                       onDetail={operations.openDetail}
                       onDragStateChange={handleDragStateChange}
@@ -503,7 +531,9 @@ export default function FilesPage() {
               </ContextMenuItem>
             )}
             {canWrite && (
-              <ContextMenuItem onClick={() => operations.openCreateTextModal('txt')}>
+              <ContextMenuItem
+                onClick={() => operations.openCreateTextModal('txt')}
+              >
                 <FilePlus className='mr-2 h-4 w-4' />
                 {t('index.newTextFile')}
               </ContextMenuItem>
@@ -514,9 +544,7 @@ export default function FilesPage() {
                 {t('index.uploadFile')}
               </ContextMenuItem>
             )}
-            {canWrite && (
-              <ContextMenuSeparator />
-            )}
+            {canWrite && <ContextMenuSeparator />}
             <ContextMenuItem onClick={() => fileList.refresh()}>
               <RefreshCw className='mr-2 h-4 w-4' />
               {t('index.refresh')}
@@ -537,46 +565,12 @@ export default function FilesPage() {
         )}
       </div>
 
-      {/* 底部状态栏：全选、统计信息和视图切换，置于文件区最下方（无分隔线） */}
-      <div className='flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2.5 sm:px-6'>
-        <div className='flex items-center gap-2'>
-          {/* 用文字按钮而非复选框：选中态已由行/卡片背景色表达 */}
-          {fileList.fileList.length > 0 && (
-            <Button
-              variant='ghost'
-              size='sm'
-              className='text-muted-foreground hover:text-foreground'
-              onClick={() => handleSelectAll(!isAllSelected)}
-            >
-              {isAllSelected ? t('index.deselectAll') : t('index.selectAll')}
-            </Button>
-          )}
-          <span className='text-sm text-muted-foreground'>
-            {selectedKeys.length > 0
-              ? t('index.selectedCount', { count: selectedKeys.length })
-              : t('index.totalCount', { total: fileList.total })}
-          </span>
-        </div>
-        <ToggleGroup
-          type='single'
-          value={viewMode}
-          onValueChange={(value) => value && setViewMode(value as ViewMode)}
-        >
-          <ToggleGroupItem value='list' aria-label={t('index.ariaList')} size='sm'>
-            <List className='h-4 w-4' />
-          </ToggleGroupItem>
-          <ToggleGroupItem value='grid' aria-label={t('index.ariaGrid')} size='sm'>
-            <LayoutGrid className='h-4 w-4' />
-          </ToggleGroupItem>
-        </ToggleGroup>
-      </div>
-
       {/* 拖拽移动提示：fixed 底部，避免插入文档流导致布局抖动 */}
       {dragTargetName && (
         <div
           className={cn(
             'pointer-events-none fixed left-1/2 z-[90] -translate-x-1/2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 shadow-md dark:border-blue-900 dark:bg-blue-950/40',
-            selectedKeys.length > 0 ? 'bottom-28' : 'bottom-16'
+            selectedKeys.length > 1 ? 'bottom-28' : 'bottom-16'
           )}
           role='status'
           aria-live='polite'
@@ -620,8 +614,6 @@ export default function FilesPage() {
       <FileBulkSelectionBar
         selectedCount={selectedKeys.length}
         hasUnfavorited={hasUnfavorited}
-        onDownload={handleBatchDownload}
-        onRename={handleBatchRename}
         onShare={handleBatchShare}
         onFavorite={handleBatchFavorite}
         onMove={handleBatchMove}

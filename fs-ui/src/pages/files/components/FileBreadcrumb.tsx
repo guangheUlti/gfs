@@ -33,8 +33,8 @@ export function FileBreadcrumb({
   }
 
   return (
-    // 窄屏下外层已有内边距，不再叠加，避免标题行过高
-    <div className='py-0 sm:py-3'>
+    // 不再自带内边距：顶栏已移除，各页面顶部工具栏的 py 统一控制标题距顶距离
+    <div>
       <Breadcrumb>
         <BreadcrumbList>
           {/* 根目录 */}

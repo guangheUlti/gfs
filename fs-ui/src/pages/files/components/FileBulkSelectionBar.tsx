@@ -1,7 +1,5 @@
 import { useTranslation } from 'react-i18next'
 import {
-  Download,
-  Edit,
   Share2,
   Heart,
   Move,
@@ -19,8 +17,6 @@ import { RequirePermission } from '@/components/require-permission'
 interface FileBulkSelectionBarProps {
   selectedCount: number
   hasUnfavorited: boolean
-  onDownload: () => void
-  onRename: () => void
   onShare: () => void
   onFavorite: () => void
   onMove: () => void
@@ -31,8 +27,6 @@ interface FileBulkSelectionBarProps {
 export function FileBulkSelectionBar({
   selectedCount,
   hasUnfavorited,
-  onDownload,
-  onRename,
   onShare,
   onFavorite,
   onMove,
@@ -40,6 +34,8 @@ export function FileBulkSelectionBar({
   onClear,
 }: FileBulkSelectionBarProps) {
   const { t } = useTranslation('files')
+  // 单选不出批量工具条：单文件操作都在右键/卡片菜单里
+  if (selectedCount <= 1) return null
   return (
     <BulkSelectionBar
       selectedCount={selectedCount}
@@ -47,49 +43,6 @@ export function FileBulkSelectionBar({
       ariaLabel={t('bulk.ariaBar')}
       className='bottom-14 sm:bottom-16'
     >
-      {selectedCount === 1 ? (
-        <>
-          <RequirePermission code='file:read'>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type='button'
-                  variant='outline'
-                  size='icon'
-                  className='size-8 shrink-0'
-                  onClick={onDownload}
-                  aria-label={t('bulk.ariaDownload')}
-                >
-                  <Download />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{t('rowMenu.download')}</p>
-              </TooltipContent>
-            </Tooltip>
-          </RequirePermission>
-          <RequirePermission code='file:write'>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type='button'
-                  variant='outline'
-                  size='icon'
-                  className='size-8 shrink-0'
-                  onClick={onRename}
-                  aria-label={t('bulk.ariaRename')}
-                >
-                  <Edit />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{t('rowMenu.rename')}</p>
-              </TooltipContent>
-            </Tooltip>
-          </RequirePermission>
-        </>
-      ) : null}
-
       <RequirePermission code='file:share'>
         <Tooltip>
           <TooltipTrigger asChild>

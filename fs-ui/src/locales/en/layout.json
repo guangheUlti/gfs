@@ -22,9 +22,7 @@
     }
   },
   "navUser": {
-    "logout": "Log out"
-  },
-  "header": {
+    "logout": "Log out",
     "lightMode": "Light mode",
     "darkMode": "Dark mode"
   }

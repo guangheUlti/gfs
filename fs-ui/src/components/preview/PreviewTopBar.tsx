@@ -7,15 +7,18 @@ interface PreviewTopBarProps {
   title: string
   /** 未保存标记（代码/Markdown 编辑中） */
   dirty?: boolean
+  /** 标题左侧工具（如缩略图列表开关） */
+  leading?: ReactNode
   /** 右侧工具区（序号、旋转、保存等，随 viewer 而定） */
   children?: ReactNode
 }
 
-export function PreviewTopBar({ title, dirty, children }: PreviewTopBarProps) {
+export function PreviewTopBar({ title, dirty, leading, children }: PreviewTopBarProps) {
   const { t } = useTranslation('files')
   const closePreview = usePreviewStore((state) => state.closePreview)
   return (
     <div className='flex h-12 shrink-0 items-center gap-4 border-b bg-background px-4 text-foreground'>
+      {leading}
       <span className='min-w-0 flex-1 truncate text-base' title={title}>
         {title}
         {dirty && (

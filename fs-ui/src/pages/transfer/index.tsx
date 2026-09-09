@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useTransferStore } from '@/store/transfer'
 import { RefreshCw, Upload, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -141,7 +141,7 @@ export default function TransferPage() {
     <div className='flex h-full flex-col'>
       {/* 顶部工具栏：窄屏放不下时自动换行 */}
       <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 py-3 sm:px-6 sm:py-4'>
-        <div className='min-w-0 flex-1'>
+        <div className='flex h-9 min-w-0 flex-1 items-center'>
           <h2 className='text-xl font-semibold tracking-tight'>
             {t('page.title')}
           </h2>
@@ -171,7 +171,7 @@ export default function TransferPage() {
       </div>
 
       {/* 标签页和操作按钮 */}
-      <div className='inset-divider flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2.5 sm:px-6 sm:py-3'>
+      <div className='flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 pt-2 pb-1.5 sm:px-6 sm:pt-2.5'>
         <Tabs
           value={activeTab}
           onValueChange={setActiveTab}
@@ -200,7 +200,7 @@ export default function TransferPage() {
       </div>
 
       {/* 主内容区域 */}
-      <div className='flex-1 overflow-auto p-3 sm:p-6'>
+      <div className='flex-1 overflow-auto px-3 pt-1 pb-3 sm:px-6 sm:pt-1.5 sm:pb-6'>
         {loading ? (
           <div className='flex h-full items-center justify-center'>
             <p className='text-muted-foreground'>{tc('loading')}</p>

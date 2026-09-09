@@ -11,6 +11,7 @@ import {
   SidebarHeader,
   SidebarRail,
   SidebarSeparator,
+  SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { sidebarData } from './data/sidebar-data'
 import { NavGroup } from './nav-group'
@@ -58,8 +59,10 @@ export function AppSidebar() {
 
   return (
     <Sidebar variant='sidebar' collapsible='icon'>
-      <SidebarHeader>
+      {/* 折叠/展开开关融入侧栏自身：展开时贴用户行右缘，折叠时居于头像下方 */}
+      <SidebarHeader className='relative'>
         <NavUser user={user} />
+        <SidebarTrigger className='absolute end-2 top-1/2 -translate-y-1/2 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:static group-data-[collapsible=icon]:translate-y-0 group-data-[collapsible=icon]:self-center' />
       </SidebarHeader>
       <SidebarContent>
         {navGroups.map((group, index) => (

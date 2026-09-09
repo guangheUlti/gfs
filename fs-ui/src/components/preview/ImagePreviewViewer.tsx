@@ -39,8 +39,10 @@ function ImagePreviewBody({ file, files, index, onSwitch }: ImagePreviewBodyProp
   const { t } = useTranslation('files')
   const [zoom, setZoom] = useState(100)
   const [rotate, setRotate] = useState(0)
+  // 默认收起缩略图列表；用户展开过则记住（localStorage 'false' = 展开）。
+  // 切换图片时组件按 file.id 重挂载，偏好靠这里跨图保持。
   const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem(LIST_COLLAPSED_KEY) === 'true'
+    () => localStorage.getItem(LIST_COLLAPSED_KEY) !== 'false'
   )
   const areaRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
@@ -89,15 +91,23 @@ function ImagePreviewBody({ file, files, index, onSwitch }: ImagePreviewBodyProp
 
   return (
     <div className='flex h-full flex-col'>
-      <PreviewTopBar title={file.displayName}>
-        <button
-          type='button'
-          title={collapsed ? t('preview.expandList') : t('preview.collapseList')}
-          onClick={toggleCollapsed}
-          className='cursor-pointer opacity-90 transition-opacity hover:opacity-60'
-        >
-          {collapsed ? <PanelLeftOpen className='h-5 w-5' /> : <PanelLeftClose className='h-5 w-5' />}
-        </button>
+      <PreviewTopBar
+        title={file.displayName}
+        leading={
+          <button
+            type='button'
+            title={collapsed ? t('preview.expandList') : t('preview.collapseList')}
+            onClick={toggleCollapsed}
+            className='cursor-pointer opacity-90 transition-opacity hover:opacity-60'
+          >
+            {collapsed ? (
+              <PanelLeftOpen className='h-5 w-5' />
+            ) : (
+              <PanelLeftClose className='h-5 w-5' />
+            )}
+          </button>
+        }
+      >
         <span className='text-sm tabular-nums'>
           {index + 1} / {files.length}
         </span>

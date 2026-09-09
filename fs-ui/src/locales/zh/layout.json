@@ -22,9 +22,7 @@
     }
   },
   "navUser": {
-    "logout": "退出登录"
-  },
-  "header": {
+    "logout": "退出登录",
     "lightMode": "明亮模式",
     "darkMode": "暗黑模式"
   }

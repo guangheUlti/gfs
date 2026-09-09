@@ -1,11 +1,4 @@
-import {
-  useState,
-  useEffect,
-  useMemo,
-  useCallback,
-  useRef,
-} from 'react'
-import { useTranslation } from 'react-i18next'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   flexRender,
   getCoreRowModel,
@@ -23,6 +16,7 @@ import {
   Check,
   Trash2,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
   getMySharePage,
@@ -34,6 +28,7 @@ import {
 import { cn } from '@/lib/utils'
 import { formatFileListDisplayTime, formatFileTime } from '@/utils/format'
 import { usePermission } from '@/hooks/use-permission'
+import { useToolbarSearch } from '@/hooks/useToolbarSearch'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,7 +56,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { BulkSelectionBar } from '@/components/bulk-selection-bar'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Empty,
   EmptyDescription,
@@ -82,6 +83,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { BulkSelectionBar } from '@/components/bulk-selection-bar'
+import { DataTablePagination } from '@/components/data-table'
 import {
   DescriptionField,
   DescriptionFieldLabel,
@@ -89,18 +92,9 @@ import {
   DescriptionFieldValue,
   DescriptionFieldValueRow,
 } from '@/components/field-layout'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { useToolbarSearch } from '@/hooks/useToolbarSearch'
-import { FileListRowActionIcon } from './FileListView'
 import { FileBreadcrumb } from './FileBreadcrumb'
+import { FileListRowActionIcon } from './FileListView'
 import { Toolbar } from './Toolbar'
-import { DataTablePagination } from '@/components/data-table'
 
 const SHARE_TABLE_HEAD: Record<string, string> = {
   shareName: '',
@@ -295,7 +289,9 @@ export function MySharesView() {
     if (!currentShare) return
 
     const detailText: string[] = []
-    detailText.push(t('myShares.copyLineName', { name: currentShare.shareName }))
+    detailText.push(
+      t('myShares.copyLineName', { name: currentShare.shareName })
+    )
 
     const shareUrl = getShareUrl(currentShare)
     if (shareUrl) {
@@ -372,7 +368,9 @@ export function MySharesView() {
   const confirmBatchCancel = async () => {
     try {
       await cancelShares(selectedKeys)
-      toast.success(t('myShares.toastCancelMany', { count: selectedKeys.length }))
+      toast.success(
+        t('myShares.toastCancelMany', { count: selectedKeys.length })
+      )
       setBatchDeleteDialogVisible(false)
       setSelectedKeys([])
       void fetchSharePage()
@@ -553,21 +551,20 @@ export function MySharesView() {
         accessorKey: 'createdAt',
         header: t('myShares.colCreated'),
         cell: ({ row }) => (
-          <span className='text-sm tabular-nums whitespace-nowrap text-muted-foreground'>
+          <span className='text-sm whitespace-nowrap text-muted-foreground tabular-nums'>
             {formatFileListDisplayTime(row.original.createdAt)}
           </span>
         ),
       },
       {
         id: 'actions',
-        header: () => <span className='sr-only'>{t('myShares.colActions')}</span>,
+        header: () => (
+          <span className='sr-only'>{t('myShares.colActions')}</span>
+        ),
         cell: ({ row }) => {
           const share = row.original
           return (
-            <div
-              className='text-center'
-              onClick={(e) => e.stopPropagation()}
-            >
+            <div className='text-center' onClick={(e) => e.stopPropagation()}>
               <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -637,14 +634,7 @@ export function MySharesView() {
         enableSorting: false,
       },
     ],
-    [
-      canCancelShare,
-      shareList,
-      t,
-      formatExpireTime,
-      formatScopeText,
-      isExpired,
-    ]
+    [canCancelShare, shareList, t, formatExpireTime, formatScopeText, isExpired]
   )
 
   const pageCount = Math.max(
@@ -706,7 +696,7 @@ export function MySharesView() {
       </div>
 
       {/* 次级工具栏：统计信息 */}
-      <div className='inset-divider flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2.5 sm:px-6 sm:py-3'>
+      <div className='flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 pt-2 pb-1.5 sm:px-6 sm:pt-2.5'>
         <div className='flex items-center gap-2'>
           {/* 与文件页一致：用文字按钮全选，选中态由行背景色表达 */}
           {shareList.length > 0 && (
@@ -729,8 +719,8 @@ export function MySharesView() {
         </div>
       </div>
 
-      {/* 顶部留白放这层：滚动容器内不留 pt，粘性表头才能一上来就贴住分隔线 */}
-      <div className='flex-1 overflow-hidden pt-3 sm:pt-6'>
+      {/* 顶部留白放这层：滚动容器内不留 pt，粘性表头才能一上来就贴住工具行 */}
+      <div className='flex-1 overflow-hidden pt-1 sm:pt-1.5'>
         <div className='flex h-full min-h-0 flex-col'>
           {loading ? (
             <div className='flex h-full items-center justify-center'>
@@ -755,125 +745,123 @@ export function MySharesView() {
           ) : (
             <>
               <div className='min-h-0 flex-1 overflow-auto px-3 pb-3 sm:px-6 sm:pb-6'>
-                <div className='rounded-md border'>
-                  {/* 窄屏不压缩列宽，改为横向滚动保留全部列；
-                      containerClassName 必须清掉自带的 overflow-auto，否则它就成了粘性表头最近的滚动祖先 */}
-                  <Table
-                    className='min-w-[60rem]'
-                    containerClassName='overflow-visible'
-                  >
-                    {/* sticky 加在 th 而非 thead（Firefox 不支持 table-section 级 sticky），不画表头底线 */}
-                    <TableHeader className='[&_tr]:border-0 [&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-background'>
-                      {table.getHeaderGroups().map((headerGroup) => (
-                        <TableRow key={headerGroup.id}>
-                          {headerGroup.headers.map((header) => (
-                            <TableHead
-                              key={header.id}
-                              className={cn(
-                                'font-medium text-muted-foreground',
-                                SHARE_TABLE_HEAD[header.column.id] ?? ''
-                              )}
-                            >
-                              {header.isPlaceholder
-                                ? null
-                                : flexRender(
-                                    header.column.columnDef.header,
-                                    header.getContext()
-                                  )}
-                            </TableHead>
-                          ))}
-                        </TableRow>
-                      ))}
-                    </TableHeader>
-                    <TableBody>
-                      {table.getRowModel().rows.length > 0 ? (
-                        table.getRowModel().rows.map((row, rowIndex) => (
-                          <ContextMenu key={row.id}>
-                            <ContextMenuTrigger asChild>
-                              <TableRow
-                                className={cn(
-                                  'group border-b-0 transition-colors',
-                                  'hover:bg-primary/[0.06]',
-                                  selectedKeys.includes(row.original.id) &&
-                                    'bg-primary/[0.08]'
-                                )}
-                                onClick={(e) =>
-                                  handleRowClick(rowIndex, row.original.id, e)
-                                }
-                              >
-                                {row.getVisibleCells().map((cell) => (
-                                  <TableCell
-                                    key={cell.id}
-                                    className={cn(
-                                      // 操作列只在触屏出现：鼠标端靠右键，与文件页一致
-                                      cell.column.id === 'actions' &&
-                                        'hoverable:hidden'
-                                    )}
-                                    onClick={
-                                      cell.column.id === 'actions'
-                                        ? (e) => e.stopPropagation()
-                                        : undefined
-                                    }
-                                  >
-                                    {flexRender(
-                                      cell.column.columnDef.cell,
-                                      cell.getContext()
-                                    )}
-                                  </TableCell>
-                                ))}
-                              </TableRow>
-                            </ContextMenuTrigger>
-                            <ContextMenuContent>
-                              <ContextMenuItem
-                                onClick={() => handleQuickCopy(row.original)}
-                              >
-                                <Copy className='size-4' />
-                                {t('myShares.quickCopy')}
-                              </ContextMenuItem>
-                              <ContextMenuItem
-                                onClick={() => handleViewShare(row.original)}
-                              >
-                                <Eye className='size-4' />
-                                {t('myShares.viewDetail')}
-                              </ContextMenuItem>
-                              <ContextMenuItem
-                                onClick={() =>
-                                  handleViewAccessRecords(row.original)
-                                }
-                              >
-                                <FileText className='size-4' />
-                                {t('myShares.accessRecordsMenu')}
-                              </ContextMenuItem>
-                              {canCancelShare && (
-                                <>
-                                  <ContextMenuSeparator />
-                                  <ContextMenuItem
-                                    className='text-destructive focus:text-destructive'
-                                    onClick={() =>
-                                      handleCancelShare(row.original)
-                                    }
-                                  >
-                                    <RouteOff className='size-4' />
-                                    {t('myShares.cancelShareMenu')}
-                                  </ContextMenuItem>
-                                </>
-                              )}
-                            </ContextMenuContent>
-                          </ContextMenu>
-                        ))
-                      ) : (
-                        <TableRow>
-                          <TableCell
-                            colSpan={columns.length}
-                            className='h-24 text-center'
+                {/* 窄屏不压缩列宽，改为横向滚动保留全部列；
+                    containerClassName 必须清掉自带的 overflow-auto，否则它就成了粘性表头最近的滚动祖先 */}
+                <Table
+                  className='min-w-[60rem]'
+                  containerClassName='overflow-visible'
+                >
+                  {/* sticky 加在 th 而非 thead（Firefox 不支持 table-section 级 sticky），不画表头底线 */}
+                  <TableHeader className='[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-background [&_tr]:border-0'>
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <TableRow key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => (
+                          <TableHead
+                            key={header.id}
+                            className={cn(
+                              'font-medium text-muted-foreground',
+                              SHARE_TABLE_HEAD[header.column.id] ?? ''
+                            )}
                           >
-                            {t('myShares.noData')}
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                            {header.isPlaceholder
+                              ? null
+                              : flexRender(
+                                  header.column.columnDef.header,
+                                  header.getContext()
+                                )}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableHeader>
+                  <TableBody>
+                    {table.getRowModel().rows.length > 0 ? (
+                      table.getRowModel().rows.map((row, rowIndex) => (
+                        <ContextMenu key={row.id}>
+                          <ContextMenuTrigger asChild>
+                            <TableRow
+                              className={cn(
+                                'group border-b-0 transition-colors',
+                                'hover:bg-primary/[0.06]',
+                                selectedKeys.includes(row.original.id) &&
+                                  'bg-primary/[0.08]'
+                              )}
+                              onClick={(e) =>
+                                handleRowClick(rowIndex, row.original.id, e)
+                              }
+                            >
+                              {row.getVisibleCells().map((cell) => (
+                                <TableCell
+                                  key={cell.id}
+                                  className={cn(
+                                    // 操作列只在触屏出现：鼠标端靠右键，与文件页一致
+                                    cell.column.id === 'actions' &&
+                                      'hoverable:hidden'
+                                  )}
+                                  onClick={
+                                    cell.column.id === 'actions'
+                                      ? (e) => e.stopPropagation()
+                                      : undefined
+                                  }
+                                >
+                                  {flexRender(
+                                    cell.column.columnDef.cell,
+                                    cell.getContext()
+                                  )}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          </ContextMenuTrigger>
+                          <ContextMenuContent>
+                            <ContextMenuItem
+                              onClick={() => handleQuickCopy(row.original)}
+                            >
+                              <Copy className='size-4' />
+                              {t('myShares.quickCopy')}
+                            </ContextMenuItem>
+                            <ContextMenuItem
+                              onClick={() => handleViewShare(row.original)}
+                            >
+                              <Eye className='size-4' />
+                              {t('myShares.viewDetail')}
+                            </ContextMenuItem>
+                            <ContextMenuItem
+                              onClick={() =>
+                                handleViewAccessRecords(row.original)
+                              }
+                            >
+                              <FileText className='size-4' />
+                              {t('myShares.accessRecordsMenu')}
+                            </ContextMenuItem>
+                            {canCancelShare && (
+                              <>
+                                <ContextMenuSeparator />
+                                <ContextMenuItem
+                                  className='text-destructive focus:text-destructive'
+                                  onClick={() =>
+                                    handleCancelShare(row.original)
+                                  }
+                                >
+                                  <RouteOff className='size-4' />
+                                  {t('myShares.cancelShareMenu')}
+                                </ContextMenuItem>
+                              </>
+                            )}
+                          </ContextMenuContent>
+                        </ContextMenu>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          colSpan={columns.length}
+                          className='h-24 text-center'
+                        >
+                          {t('myShares.noData')}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
               </div>
               {/* 分页组件靠名为 content 的容器查询做窄屏折叠，此处必须提供容器 */}
               <div className='@container/content shrink-0 border-t px-3 py-3 sm:px-6'>
@@ -940,7 +928,10 @@ export function MySharesView() {
                         {t('myShares.labelShareLink')}
                       </DescriptionFieldLabel>
                       <DescriptionFieldValueRow>
-                        <DescriptionFieldValue className='min-w-0 flex-1' breakAll>
+                        <DescriptionFieldValue
+                          className='min-w-0 flex-1'
+                          breakAll
+                        >
                           {getShareUrl(currentShare)}
                         </DescriptionFieldValue>
                         <Button
@@ -1072,7 +1063,7 @@ export function MySharesView() {
         open={accessRecordsVisible}
         onOpenChange={setAccessRecordsVisible}
       >
-        <DialogContent className='max-h-[85vh] sm:max-w-5xl overflow-y-auto'>
+        <DialogContent className='max-h-[85vh] overflow-y-auto sm:max-w-5xl'>
           <DialogHeader>
             <DialogTitle>
               {t('myShares.accessRecordsHeading', {
@@ -1150,7 +1141,9 @@ export function MySharesView() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('myShares.confirmCancelShareTitle')}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t('myShares.confirmCancelShareTitle')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {t('myShares.confirmCancelShareDesc', {
                 name: deletingShare?.shareName ?? '',
@@ -1176,7 +1169,9 @@ export function MySharesView() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('myShares.confirmClearAllTitle')}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t('myShares.confirmClearAllTitle')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {t('myShares.confirmClearAllDesc')}
             </AlertDialogDescription>
@@ -1200,7 +1195,9 @@ export function MySharesView() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('myShares.confirmBatchTitle')}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t('myShares.confirmBatchTitle')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {t('myShares.confirmBatchDesc', {
                 count: selectedKeys.length,
