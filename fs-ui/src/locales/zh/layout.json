@@ -3,12 +3,15 @@
     "userPlaceholder": "用户",
     "groups": {
       "files": "文件",
+      "services": "服务",
       "system": "系统"
     },
     "nav": {
       "allFiles": "文件",
       "transfer": "传输",
       "storage": "存储",
+      "webdav": "WebDAV",
+      "sftp": "SFTP",
       "favorites": "收藏",
       "recents": "历史",
       "shares": "分享",

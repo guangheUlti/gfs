@@ -15,6 +15,11 @@ spring:
     async:
       # Office 转 PDF 最长等待约 335 秒，避免提前关闭对象存储文件流
       request-timeout: 360s
+    formcontent:
+      filter:
+        # 关闭 FormContentFilter：本项目 API 均为 JSON；且它会在 PUT+form 编码时预读掉请求体，
+        # 导致 WebDAV PUT（curl 默认 Content-Type 为 x-www-form-urlencoded 时）读不到内容
+        enabled: false
   jackson:
     time-zone: GMT+8
     date-format: yyyy-MM-dd HH:mm:ss
@@ -168,3 +173,9 @@ fs:
       scan-enabled: true        # 挂载扫描总开关
       scan-interval: 300000     # 扫描间隔 ms，默认 5 分钟
       scan-max-entries: 50000   # 单轮扫描保险丝
+
+# 临时调试：抓 SFTP 子系统吞掉的异常栈（验证完成后删除）
+logging:
+  level:
+    org.apache.sshd: DEBUG
+    com.guanghe.fs.service.sftp: DEBUG

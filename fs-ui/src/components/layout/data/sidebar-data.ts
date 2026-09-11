@@ -5,6 +5,8 @@ import {
   RiDeleteBinLine,
   RiFolderOpenFill,
   RiFolderOpenLine,
+  RiGlobalFill,
+  RiGlobalLine,
   RiHistoryFill,
   RiHistoryLine,
   RiServerFill,
@@ -13,6 +15,8 @@ import {
   RiShareLine,
   RiStarFill,
   RiStarLine,
+  RiTerminalBoxFill,
+  RiTerminalBoxLine,
 } from '@remixicon/react'
 import { type SidebarData } from '../types'
 
@@ -60,6 +64,23 @@ export const sidebarData: SidebarData = {
           url: '/files?view=recycle',
           icon: { line: RiDeleteBinLine, fill: RiDeleteBinFill },
           permission: 'file:write',
+        },
+      ],
+    },
+    {
+      titleKey: 'sidebar.groups.services',
+      items: [
+        {
+          titleKey: 'sidebar.nav.webdav',
+          url: '/services/webdav',
+          icon: { line: RiGlobalLine, fill: RiGlobalFill },
+          permission: 'service:manage',
+        },
+        {
+          titleKey: 'sidebar.nav.sftp',
+          url: '/services/sftp',
+          icon: { line: RiTerminalBoxLine, fill: RiTerminalBoxFill },
+          permission: 'service:manage',
         },
       ],
     },

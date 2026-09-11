@@ -1,11 +1,9 @@
 {
   "page": {
-    "title": "Cloud storage",
+    "title": "Storage",
     "searchPlaceholder": "Search storage…",
     "add": "Add storage",
     "loading": "Loading…",
-    "empty": "No storage configured",
-    "addFirst": "Add your first storage",
     "noMatch": "No matching configuration"
   },
   "addModal": {
@@ -40,6 +38,7 @@
     "disabledToast": "{{name}} disabled. Switching default…",
     "statusOn": "Enabled",
     "statusOff": "Disabled",
+    "usingNow": "In use",
     "noDesc": "No description",
     "disable": "Disable",
     "enable": "Enable",

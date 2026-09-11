@@ -1,0 +1,67 @@
+{
+  "page": {
+    "title": "File services",
+    "description": "Expose your cloud drive over standard protocols and mount it as a local disk",
+    "loading": "Loading…",
+    "loadFailed": "Failed to load service settings",
+    "webdavDesc": "Reuses the main HTTP port (80) under /dav; supports Windows drive mapping",
+    "sftpDesc": "Standalone SFTP endpoint; works with sshfs mounts and clients like WinSCP"
+  },
+  "status": {
+    "running": "Running",
+    "stopped": "Stopped",
+    "stoppedUnavailable": "Not enabled",
+    "error": "Error",
+    "unknown": "Unknown"
+  },
+  "form": {
+    "enabled": "Enable service",
+    "port": "Port",
+    "portHint": "1024-65535, takes effect immediately after saving",
+    "bindAddress": "Bind address",
+    "bindAddressHint": "0.0.0.0 listens on all interfaces; recommended for LAN use only",
+    "bindAddressPh": "0.0.0.0",
+    "portPh": "9022",
+    "portInvalid": "Invalid port, allowed range is 1024-65535",
+    "bindAddressInvalid": "Invalid bind address"
+  },
+  "actions": {
+    "save": "Save",
+    "saving": "Saving…",
+    "start": "Start",
+    "stop": "Stop",
+    "restart": "Restart",
+    "starting": "Starting…",
+    "stopping": "Stopping…",
+    "restarting": "Restarting…"
+  },
+  "dialog": {
+    "enableTitle": "Confirm enable",
+    "enableDesc": "Once enabled, clients can access your files through this protocol. Continue?",
+    "disableTitle": "Confirm disable",
+    "disableDesc": "All client connections will be dropped immediately. Continue?",
+    "confirmEnable": "Enable",
+    "confirmDisable": "Disable"
+  },
+  "toast": {
+    "saveOk": "Settings saved",
+    "startOk": "Service started",
+    "stopOk": "Service stopped",
+    "restartOk": "Service restarted"
+  },
+  "usage": {
+    "title": "Usage tips",
+    "webdav": {
+      "windows": "Windows: enable the WebClient service, then run net use Z: http://<host>/dav in Explorer or a command prompt",
+      "rclone": "rclone: create a WebDAV remote with rclone config, set the URL to http://<host>/dav, and use your drive credentials",
+      "basic": "Credentials are your drive login; Basic auth is plain HTTP — put an HTTPS reverse proxy in front for production",
+      "lock": "LOCK is not implemented: Office online editing may fail to save; Explorer mounts are unaffected"
+    },
+    "sftp": {
+      "client": "OpenSSH: sftp -P {{port}} <user>@<host>",
+      "sshfs": "sshfs: sshfs <user>@<host>:/ /local/mountpoint -o port={{port}}",
+      "winscp": "WinSCP / FileZilla: choose SFTP, port {{port}}, and use your drive credentials",
+      "readonly": "SFTP supports sequential writes only; random writes, hard links and symlinks fail explicitly"
+    }
+  }
+}

@@ -36,6 +36,10 @@
             <groupId>com.guanghe.fs</groupId>
             <artifactId>fs-file</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>fs-service</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>com.zaxxer</groupId>

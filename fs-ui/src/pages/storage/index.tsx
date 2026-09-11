@@ -25,11 +25,13 @@ export default function StoragePage() {
     staleTime: 30_000,
   })
 
-  // 过滤配置，按平台名称升序保持列表稳定
+  // 过滤配置：内置本地存储固定首位，其余按平台名称升序保持列表稳定
   const filteredSettings = userSettings
-    .sort((a, b) =>
-      a.storagePlatform.name.localeCompare(b.storagePlatform.name)
-    )
+    .sort((a, b) => {
+      if (a.storagePlatform.identifier === 'Local') return -1
+      if (b.storagePlatform.identifier === 'Local') return 1
+      return a.storagePlatform.name.localeCompare(b.storagePlatform.name)
+    })
     .filter((s) => {
       if (!searchTerm) return true
       const keyword = searchTerm.toLowerCase()
@@ -100,16 +102,6 @@ export default function StoragePage() {
         {isLoading ? (
           <div className='flex h-64 items-center justify-center'>
             <p className='text-muted-foreground'>{tc('loading')}</p>
-          </div>
-        ) : userSettings.length === 0 ? (
-          <div className='flex h-64 flex-col items-center justify-center rounded-lg border-2 border-dashed'>
-            <p className='mb-4 text-muted-foreground'>{t('page.empty')}</p>
-            <RequirePermission code='storage:manage'>
-              <Button onClick={() => setAddModalVisible(true)}>
-                <Plus className='mr-2 h-4 w-4' />
-                {t('page.addFirst')}
-              </Button>
-            </RequirePermission>
           </div>
         ) : filteredSettings.length === 0 ? (
           <div className='flex h-64 items-center justify-center rounded-lg border-2 border-dashed'>

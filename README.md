@@ -31,23 +31,26 @@
 - **实时上传进度** - 实时推送上传进度，精确到分片级别
 - **秒传功能** - 基于 MD5 双重校验，相同文件秒级完成
 - **插件化存储** - SPI 机制热插拔，5 分钟接入一个新存储平台
+- **本地目录挂载** - 把服务器真实目录挂进网盘，写操作穿透真实文件系统，外部改动定时/手动扫描同步
+- **对外文件服务** - 系统自身对外充当 WebDAV / SFTP 服务端，客户端可把网盘直接挂载为本地磁盘
 - **国际化支持** - 中英文双语支持，轻松扩展更多语言
 - **虚拟线程** - 全面启用 Java 虚拟线程，异步任务、定时任务与预览队列高并发下更稳
 - **模块化架构** - 清晰的分层设计，易于维护和扩展
-- **在线预览** - 支持多种文件格式的在线预览，预览防盗链功能
+- **在线预览与编辑** - 支持多种文件格式的在线预览，文本/代码/Markdown 可直接编辑保存，预览防盗链功能
 - **安全可靠** - Sa-Token 会话认证（服务端可即时登出/踢人）、多端并发登录、会话存 Redis（重启不掉线、可多实例）、权限控制、文件完整性校验
 
 ### 功能特性
 
 - **文件管理**
-    - 文件上传（分片上传、断点续传、秒传）
-    - 文件预览
-    - 文件下载
+    - 文件上传（分片上传、断点续传、秒传，支持文件框选与外部文件拖入）
+    - 文件下载（任务式分片下载，支持限速、并发与进度展示）
+    - 文件预览与在线编辑（文本/代码/Markdown 直接编辑保存）
+    - 文本文件创建（TXT/JSON/Markdown，后端自动补后缀）
     - 文件夹创建与管理
     - 文件/文件夹重命名、移动
     - 文件列表右键菜单、双击预览
     - 文件分享/授权码分享
-    - 文件删除
+    - 文件删除（入回收站，或永久删除）
 
 - **国际化**
     - 中文简体
@@ -67,14 +70,23 @@
     - 自动清理机制
 
 - **存储平台**
-    - 支持多存储平台（本地、MinIO、阿里云 OSS、七牛云 Kodo、华为云 OBS、S3 体系等）
+    - 内置本地存储，支持 MinIO、阿里云 OSS、RustFS 等 S3 兼容对象存储
+    - 远程协议接入：SMB/CIFS（NAS 共享）、WebDAV（坚果云/Alist/Nextcloud）、SFTP（密码/私钥）、FTP/FTPS
+    - 本地目录挂载：真实目录挂进网盘，增删改直接作用于真实文件，外部改动可定时/手动扫描同步
     - 一键切换存储平台
-    - 平台配置管理
+    - 平台配置声明式生成（JSON Schema），保存前自动连接测试，密码等敏感字段掩码展示
     - 存储空间统计
+
+- **对外文件服务**（管理员可配，实时运行状态）
+    - **WebDAV 服务端**：复用主服务 HTTP 端口（80），路径前缀 `/dav`，支持 Windows 网络驱动器映射（`net use Z: http://<主机>/dav`）、rclone、davfs2 等客户端
+    - **SFTP 服务端**：独立端口（默认 9022，Apache MINA SSHD），支持 sshfs 挂载与 WinSCP / FileZilla / OpenSSH 客户端
+    - 认证复用网盘账号（BCrypt 校验），删除进回收站与 Web 端语义一致，内容级去重秒传
+    - 启用/停用热生效，服务重启后自动拉起；SFTP 主机密钥持久化，重启后客户端无指纹告警
+    - 已知限制：WebDAV 未实现 LOCK（Office 在线编辑保存可能失败，资源管理器映射不受影响）；SFTP 仅支持顺序写
 
 ### 预览支持
 
-**系统默认支持以下多种文件类型的预览**：
+**系统默认支持以下多种文件类型的预览，文本/代码/Markdown 支持在线编辑保存**：
 
 - 图片: jpg, jpeg, png, gif, bmp, webp, svg, tif, tiff
 - 文档: pdf, doc, docx, xls, xlsx, csv, ppt, pptx
@@ -176,6 +188,8 @@ bin\install-service.bat :: 注册开机自启（需管理员）
 | 文档 | 内容 |
 |------|------|
 | [`doc/login-auth-design.md`](doc/login-auth-design.md) | 登录认证链路设计、多端登录互不影响的原理、Sa-Token / security 配置项逐条含义 |
+| [`doc/storage-plugin-expansion-guide.md`](doc/storage-plugin-expansion-guide.md) | 存储插件扩展实施指南：SPI 接口与注册方式、插件配置 Schema、挂载扫描设计与孤儿平台清理 |
+| [`doc/webdav-sftp-service-guide.md`](doc/webdav-sftp-service-guide.md) | 对外文件服务实施指南：WebDAV / SFTP 服务端架构、Sa-Token 上下文桥接、流式直传与生命周期管理 |
 
 ---
 
@@ -213,18 +227,22 @@ gfs/
 │       ├── storage-plugin-boot/        # 插件核心管理模块
 │       ├── storage-plugin-core/        # 插件核心接口模块
 │       ├── storage-plugin-local/       # 本地存储插件
+│       ├── storage-plugin-localmount/  # 本地目录挂载插件
 │       ├── storage-plugin-aliyunoss/   # 阿里云 OSS 插件
-│       ├── storage-plugin-kodo/        # 七牛云 kodo 插件
-│       ├── storage-plugin-obs/         # 华为云 OBS 插件
 │       ├── storage-plugin-minio/       # MinIO 插件
-│       └── storage-plugin-rustfs/      # RustFS 插件
+│       ├── storage-plugin-rustfs/      # RustFS 插件
+│       ├── storage-plugin-smb/         # SMB/CIFS 网络存储插件
+│       ├── storage-plugin-webdav/      # WebDAV 插件
+│       ├── storage-plugin-sftp/        # SFTP 插件
+│       └── storage-plugin-ftp/         # FTP/FTPS 插件
 └── fs-modules/                  # 业务模块
     ├── fs-file/                 # 文件管理模块
+    ├── fs-service/              # 对外文件服务模块（WebDAV / SFTP 服务端）
     ├── fs-storage/              # 存储平台管理模块
     ├── fs-system/               # 系统管理模块（用户、注册审核、登录管理）
     └── fs-log/                  # 日志模块
 fs-ui/                           # Web 前端（React 19 + Vite）
-doc/                             # 设计文档（登录认证等）
+doc/                             # 设计文档（登录认证、存储插件扩展等）
 release/deploy-package/          # 免安装部署包（脚本 + 配置，运行时由脚本重建）
 script/                          # 构建/部署脚本（package-release.ps1、docker）
 sql/                             # 数据库初始化脚本

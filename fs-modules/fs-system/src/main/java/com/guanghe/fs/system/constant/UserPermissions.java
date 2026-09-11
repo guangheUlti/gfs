@@ -22,13 +22,14 @@ public final class UserPermissions {
     public static final String FILE_WRITE = "file:write";
     public static final String FILE_SHARE = "file:share";
     public static final String STORAGE_MANAGE = "storage:manage";
+    public static final String SERVICE_MANAGE = "service:manage";
     public static final String LOG_READ = "log:read";
 
     /** 所有登录用户都拥有的权限：文件读写与分享 */
     private static final List<String> BASE_PERMISSIONS = List.of(FILE_READ, FILE_WRITE, FILE_SHARE);
 
-    /** 仅系统管理员额外拥有的权限：存储平台管理与日志查看 */
-    private static final List<String> ADMIN_EXTRA_PERMISSIONS = List.of(STORAGE_MANAGE, LOG_READ);
+    /** 仅系统管理员额外拥有的权限：存储平台管理、对外文件服务管理与日志查看 */
+    private static final List<String> ADMIN_EXTRA_PERMISSIONS = List.of(STORAGE_MANAGE, SERVICE_MANAGE, LOG_READ);
 
     /**
      * 按是否系统管理员返回权限编码列表
@@ -40,7 +41,7 @@ public final class UserPermissions {
         if (!superAdmin) {
             return BASE_PERMISSIONS;
         }
-        return List.of(FILE_READ, FILE_WRITE, FILE_SHARE, STORAGE_MANAGE, LOG_READ);
+        return List.of(FILE_READ, FILE_WRITE, FILE_SHARE, STORAGE_MANAGE, SERVICE_MANAGE, LOG_READ);
     }
 
     /**

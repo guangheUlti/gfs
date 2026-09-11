@@ -359,6 +359,41 @@ LOCK TABLES `storage_settings` WRITE;
 UNLOCK TABLES;
 
 --
+-- Table structure for table `service_settings`
+--
+
+DROP TABLE IF EXISTS `service_settings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `service_settings` (
+  `id` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'id',
+  `service_type` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '服务类型：webdav / sftp',
+  `enabled` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否启用 0：否 1：是',
+  `port` int DEFAULT NULL COMMENT '监听端口（webdav 复用 HTTP 80 端口，此列为空）',
+  `bind_address` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '监听地址，默认 0.0.0.0',
+  `config_data` json DEFAULT NULL COMMENT '扩展配置（如 sftp 主机密钥路径）',
+  `created_at` datetime DEFAULT NULL COMMENT '创建时间',
+  `updated_at` datetime DEFAULT NULL COMMENT '更新时间',
+  `remark` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '备注',
+  `deleted` tinyint(1) DEFAULT '0' COMMENT '逻辑删除 0未删除 1已删除',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE KEY `uk_service_type` (`service_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC COMMENT='对外文件服务配置';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `service_settings`
+--
+
+LOCK TABLES `service_settings` WRITE;
+/*!40000 ALTER TABLE `service_settings` DISABLE KEYS */;
+INSERT INTO `service_settings` (`id`,`service_type`,`enabled`,`port`,`bind_address`) VALUES
+('svc-webdav','webdav',0,NULL,'0.0.0.0'),
+('svc-sftp','sftp',0,9022,'0.0.0.0');
+/*!40000 ALTER TABLE `service_settings` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `sys_login_log`
 --
 

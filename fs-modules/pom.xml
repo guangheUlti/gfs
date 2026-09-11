@@ -19,5 +19,6 @@
         <module>fs-system</module>
         <module>fs-log</module>
         <module>fs-file</module>
+        <module>fs-service</module>
     </modules>
 </project>

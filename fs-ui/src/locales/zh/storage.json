@@ -1,11 +1,9 @@
 {
   "page": {
-    "title": "云存储配置",
+    "title": "存储配置",
     "searchPlaceholder": "搜索存储配置...",
     "add": "添加存储",
     "loading": "加载中...",
-    "empty": "暂无存储配置",
-    "addFirst": "添加您的第一个存储配置",
     "noMatch": "暂无匹配的配置"
   },
   "addModal": {
@@ -40,6 +38,7 @@
     "disabledToast": "{{name}} 已禁用，正在切换到默认平台...",
     "statusOn": "已启用",
     "statusOff": "未启用",
+    "usingNow": "当前使用中",
     "noDesc": "暂无描述信息",
     "disable": "禁用",
     "enable": "启用",

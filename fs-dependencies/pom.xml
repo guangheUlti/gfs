@@ -30,6 +30,7 @@
         <sardine.version>5.12</sardine.version>
         <commons-net.version>3.11.0</commons-net.version>
         <sa-token.version>1.45.0</sa-token.version>
+        <sshd.version>2.13.2</sshd.version>
         <springdoc.version>3.0.2</springdoc.version>
         <tika.version>2.7.0</tika.version>
         <thumbnailator.version>0.4.19</thumbnailator.version>
@@ -90,6 +91,11 @@
             <dependency>
                 <groupId>com.guanghe.fs</groupId>
                 <artifactId>fs-file</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.guanghe.fs</groupId>
+                <artifactId>fs-service</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
@@ -182,6 +188,18 @@
                 <artifactId>storage-plugin-localmount</artifactId>
                 <version>${revision}</version>
             </dependency>
+            <!-- Apache MINA SSHD（对外 SFTP 服务端） -->
+            <dependency>
+                <groupId>org.apache.sshd</groupId>
+                <artifactId>sshd-core</artifactId>
+                <version>${sshd.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.sshd</groupId>
+                <artifactId>sshd-sftp</artifactId>
+                <version>${sshd.version}</version>
+            </dependency>
+
             <!-- ORM  -->
             <dependency>
                 <groupId>com.mybatis-flex</groupId>

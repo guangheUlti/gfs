@@ -1,0 +1,67 @@
+{
+  "page": {
+    "title": "对外文件服务",
+    "description": "将网盘挂载为本地磁盘：标准协议对外提供文件服务",
+    "loading": "加载中...",
+    "loadFailed": "服务配置加载失败",
+    "webdavDesc": "复用主服务 HTTP 端口（80），路径前缀 /dav，支持 Windows 网络驱动器映射",
+    "sftpDesc": "独立端口提供 SFTP 文件服务，支持 sshfs 挂载与 WinSCP 等客户端"
+  },
+  "status": {
+    "running": "运行中",
+    "stopped": "已停止",
+    "stoppedUnavailable": "未启用",
+    "error": "异常",
+    "unknown": "未知"
+  },
+  "form": {
+    "enabled": "启用服务",
+    "port": "监听端口",
+    "portHint": "范围 1024-65535，修改后保存立即生效",
+    "bindAddress": "监听地址",
+    "bindAddressHint": "0.0.0.0 表示监听所有网卡，仅建议内网使用",
+    "bindAddressPh": "0.0.0.0",
+    "portPh": "9022",
+    "portInvalid": "端口无效，允许范围 1024-65535",
+    "bindAddressInvalid": "监听地址格式无效"
+  },
+  "actions": {
+    "save": "保存",
+    "saving": "保存中...",
+    "start": "启动",
+    "stop": "停止",
+    "restart": "重启",
+    "starting": "启动中...",
+    "stopping": "停止中...",
+    "restarting": "重启中..."
+  },
+  "dialog": {
+    "enableTitle": "确认启用",
+    "enableDesc": "启用后，客户端即可通过该协议访问您的文件。确定要继续吗？",
+    "disableTitle": "确认停用",
+    "disableDesc": "停用后，所有客户端连接将立即断开，无法访问。确定要继续吗？",
+    "confirmEnable": "确认启用",
+    "confirmDisable": "确认停用"
+  },
+  "toast": {
+    "saveOk": "配置已保存",
+    "startOk": "服务已启动",
+    "stopOk": "服务已停止",
+    "restartOk": "服务已重启"
+  },
+  "usage": {
+    "title": "使用提示",
+    "webdav": {
+      "windows": "Windows：开启 WebClient 服务后，在资源管理器或命令行执行 net use Z: http://<主机>/dav",
+      "rclone": "rclone：rclone config 新建 WebDAV 类型 remote，地址填 http://<主机>/dav，账号密码为网盘登录账号",
+      "basic": "账号密码即网盘登录账号；Basic 认证走明文 HTTP，生产环境建议配置 HTTPS 反向代理",
+      "lock": "未实现 LOCK：Office 在线直接编辑保存可能失败，资源管理器挂载不受影响"
+    },
+    "sftp": {
+      "client": "OpenSSH：sftp -P {{port}} <账号>@<主机>",
+      "sshfs": "sshfs：sshfs <账号>@<主机>:/ /本地挂载点 -o port={{port}}",
+      "winscp": "WinSCP / FileZilla：协议选 SFTP，端口 {{port}}，账号密码为网盘登录账号",
+      "readonly": "SFTP 仅支持顺序写入；随机写、硬链接、符号链接会明确报错"
+    }
+  }
+}

@@ -459,6 +459,161 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public FileInfo writeFileContent(String parentId, String displayName, InputStream in, Long size) {
+        String userId = StpUtil.getLoginIdAsString();
+        if (StrUtil.isBlank(displayName) || !MountManager.isValidNameSegment(displayName)
+                || ".".equals(displayName) || "..".equals(displayName)) {
+            throw new BusinessException(I18nUtils.getMessage("file.name.invalid"));
+        }
+        FileInfo parent = null;
+        if (StrUtil.isNotBlank(parentId)) {
+            parent = getAuthorizedFile(parentId);
+            if (!Boolean.TRUE.equals(parent.getIsDir())) {
+                throw new BusinessException(I18nUtils.getMessage("file.target.dir.invalid"));
+            }
+        }
+        String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
+
+        // 同目录同名现有文件 = 覆盖语义；挂载式存储不支持流式直传（物理路径即对象键，覆盖会破坏引用计数），明确拒绝
+        boolean mountMode = isMountStorage(storagePlatformSettingId);
+        if (mountMode) {
+            throw new BusinessException(I18nUtils.getMessage("service.write.unsupported.mount"));
+        }
+        FileInfo existing = getOne(new QueryWrapper()
+                .where(FILE_INFO.USER_ID.eq(userId))
+                .and(FILE_INFO.IS_DELETED.eq(false))
+                .and(FILE_INFO.PARENT_ID.eq(StrUtil.emptyToNull(parentId)))
+                .and(FILE_INFO.DISPLAY_NAME.eq(displayName))
+                .and(FILE_INFO.IS_DIR.eq(false)));
+
+        String suffix = StrUtil.blankToDefault(FileUtils.extName(displayName), "bin").toLowerCase();
+        String mimeType = guessMimeType(displayName);
+        IStorageOperationService storageService = storageServiceFacade.getStorageService(storagePlatformSettingId);
+        FileObjectReferenceService referenceService = objectReferenceServiceProvider.getObject();
+        LocalDateTime now = LocalDateTime.now();
+
+        // 先把上传内容落为新物理对象（用一次性 objectKey，避免覆盖他人引用的键）
+        String newObjectKey = FileUtils.generateObjectKey(userId, IdUtil.fastSimpleUUID() + "." + suffix);
+        // spool 到临时文件：既算 md5 又支持异常回滚删孤儿对象；Content-MD5 在流读完前不可得
+        java.io.File tempFile = null;
+        String contentMd5;
+        long actualSize;
+        try {
+            tempFile = java.nio.file.Files.createTempFile("gfs-dav-", ".upload").toFile();
+            actualSize = java.nio.file.Files.copy(in, tempFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            contentMd5 = cn.hutool.crypto.digest.DigestUtil.md5Hex(tempFile);
+            if (size != null && size >= 0 && size != actualSize) {
+                throw new StorageOperationException(I18nUtils.getMessage("file.upload.failed"));
+            }
+        } catch (BusinessException | StorageOperationException e) {
+            cleanupTemp(tempFile);
+            throw e;
+        } catch (Exception e) {
+            cleanupTemp(tempFile);
+            throw new StorageOperationException(I18nUtils.getMessage("file.upload.failed"), e);
+        }
+
+        boolean reused = false;
+        try (FileObjectReferenceService.ReferenceLock ignored =
+                     referenceService.acquireContentLock(storagePlatformSettingId, contentMd5, actualSize)) {
+            FileInfo reusable = referenceService.findReusableFile(contentMd5, actualSize, storagePlatformSettingId);
+            if (reusable != null) {
+                newObjectKey = reusable.getObjectKey();
+                reused = true;
+            } else {
+                try (java.io.InputStream up = java.nio.file.Files.newInputStream(tempFile.toPath())) {
+                    storageService.uploadFile(up, newObjectKey);
+                }
+            }
+
+            FileInfo fileInfo;
+            if (existing != null) {
+                // 覆盖：切换引用后清理旧物理对象（若无其它引用）
+                String oldObjectKey = existing.getObjectKey();
+                String oldMd5 = existing.getContentMd5();
+                Long oldSize = existing.getSize();
+                existing.setObjectKey(newObjectKey);
+                existing.setContentMd5(contentMd5);
+                existing.setSize(actualSize);
+                existing.setSuffix(suffix);
+                existing.setMimeType(mimeType);
+                existing.setUploadTime(now);
+                existing.setUpdateTime(now);
+                updateById(existing);
+                fileInfo = existing;
+                if (oldObjectKey != null && !oldObjectKey.equals(newObjectKey)) {
+                    FileInfo oldRef = new FileInfo();
+                    oldRef.setObjectKey(oldObjectKey);
+                    oldRef.setContentMd5(oldMd5);
+                    oldRef.setSize(oldSize);
+                    oldRef.setStoragePlatformSettingId(storagePlatformSettingId);
+                    try {
+                        referenceService.deletePhysicalFileIfUnreferencedWithLock(oldRef);
+                    } catch (Exception e) {
+                        log.warn("流式直传覆盖后清理旧对象失败: fileId={}, objectKey={}", existing.getId(), oldObjectKey, e);
+                    }
+                }
+            } else {
+                fileInfo = new FileInfo();
+                fileInfo.setId(IdUtil.fastSimpleUUID());
+                fileInfo.setObjectKey(newObjectKey);
+                fileInfo.setOriginalName(displayName);
+                fileInfo.setDisplayName(displayName);
+                fileInfo.setSuffix(suffix);
+                fileInfo.setMimeType(mimeType);
+                fileInfo.setIsDir(false);
+                fileInfo.setParentId(StrUtil.emptyToNull(parentId));
+                fileInfo.setUserId(userId);
+                fileInfo.setStoragePlatformSettingId(storagePlatformSettingId);
+                fileInfo.setContentMd5(contentMd5);
+                fileInfo.setSize(actualSize);
+                fileInfo.setUploadTime(now);
+                fileInfo.setUpdateTime(now);
+                fileInfo.setIsDeleted(false);
+                save(fileInfo);
+            }
+            return fileInfo;
+        } catch (Exception e) {
+            // 已写的孤儿对象尽力清理（未复用且未落库时才有孤儿）
+            if (!reused) {
+                try {
+                    storageService.deleteFile(newObjectKey);
+                } catch (Exception ignore) {
+                }
+            }
+            if (e instanceof BusinessException be) {
+                throw be;
+            }
+            if (e instanceof StorageOperationException soe) {
+                throw soe;
+            }
+            throw new StorageOperationException(I18nUtils.getMessage("file.upload.failed"), e);
+        } finally {
+            cleanupTemp(tempFile);
+        }
+    }
+
+    private void cleanupTemp(java.io.File tempFile) {
+        if (tempFile != null && tempFile.exists()) {
+            try {
+                java.nio.file.Files.deleteIfExists(tempFile.toPath());
+            } catch (Exception ignore) {
+            }
+        }
+    }
+
+    private String guessMimeType(String fileName) {
+        String contentType = FileUtils.getContentType("." + StrUtil.subAfter(fileName, ".", true));
+        // FileUtils.getContentType 对未知后缀返回 image/jpg 兜底；协议端未知类型统一 octet-stream 更准确
+        String ext = StrUtil.subAfter(fileName, ".", true).toLowerCase();
+        if ("image/jpg".equals(contentType) && !List.of("jpg", "jpeg", "png", "bmp").contains(ext)) {
+            return "application/octet-stream";
+        }
+        return contentType;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void renameFile(String fileId, RenameFileCmd cmd) {
         FileInfo fileInfo = getAuthorizedFile(fileId);
         if (fileInfo.getDisplayName().equals(cmd.getDisplayName())) {

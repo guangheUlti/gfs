@@ -1,6 +1,5 @@
 package com.guanghe.fs.storage.service.impl;
 
-import cn.hutool.core.collection.CollUtil;
 import com.guanghe.fs.framework.common.constant.CommonConstant;
 import com.guanghe.fs.framework.common.exception.BusinessException;
 import com.guanghe.fs.framework.common.utils.ErrorMessageUtils;
@@ -40,7 +39,6 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static com.guanghe.fs.storage.domain.table.StorageSettingTableDef.STORAGE_SETTING;
 
@@ -83,17 +81,38 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
                 new QueryWrapper()
                         .orderBy(STORAGE_SETTING.ENABLED.desc())
         );
-        if (CollUtil.isEmpty(storageSettings)) {
-            return new ArrayList<>();
-        }
-        return storageSettings.stream().map(storageSetting -> {
+        List<StorageSettingUserVO> result = new ArrayList<>();
+        // 内置本地存储固定在列表首位：本地存储不落库，无启用配置行即代表当前正使用它
+        boolean hasEnabled = storageSettings.stream()
+                .anyMatch(s -> CommonConstant.Y.equals(s.getEnabled()));
+        result.add(buildLocalSettingVO(!hasEnabled));
+        storageSettings.stream().map(storageSetting -> {
             StorageSettingUserVO vo = converter.convert(storageSetting, StorageSettingUserVO.class);
             vo.setConfigData(maskSensitiveConfig(storageSetting.getConfigData()));
             StoragePlatform storagePlatform = storagePlatformService.getStoragePlatformByIdentifier(storageSetting.getPlatformIdentifier());
             StoragePlatformVO storagePlatformVO = converter.convert(storagePlatform, StoragePlatformVO.class);
             vo.setStoragePlatform(storagePlatformVO);
             return vo;
-        }).collect(Collectors.toList());
+        }).forEach(result::add);
+        return result;
+    }
+
+    /**
+     * 构造内置本地存储的展示行（不落库）：id 固定为 "Local"，供列表展示与"切换回本地存储"使用
+     */
+    private StorageSettingUserVO buildLocalSettingVO(boolean enabled) {
+        StorageSettingUserVO vo = new StorageSettingUserVO();
+        vo.setId(StorageUtils.LOCAL_PLATFORM_IDENTIFIER);
+        vo.setEnabled(enabled ? CommonConstant.Y : CommonConstant.N);
+        vo.setRemark(I18nUtils.getMessage("storage.system.default"));
+        StoragePlatformVO platform = new StoragePlatformVO();
+        platform.setIdentifier(StorageUtils.LOCAL_PLATFORM_IDENTIFIER);
+        platform.setName(I18nUtils.getMessage("storage.local.name"));
+        platform.setDesc(I18nUtils.getMessage("storage.local.desc"));
+        platform.setIcon("icon-bendicunchu1");
+        platform.setConfigScheme("[]");
+        vo.setStoragePlatform(platform);
+        return vo;
     }
 
     @Override
@@ -145,12 +164,27 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
             @CacheEvict(value = "storageActivePlatforms", key = "'global'")
     })
     public void enableOrDisableStoragePlatform(String settingId, Integer action) {
+        Integer newStatus = action == 0 ? CommonConstant.N : CommonConstant.Y;
+
+        // 内置本地存储没有数据库行：切换到它 = 清空全部启用行（无启用行即本地存储生效）
+        if (StorageUtils.LOCAL_PLATFORM_IDENTIFIER.equals(settingId)) {
+            if (CommonConstant.N.equals(newStatus)) {
+                throw new BusinessException(I18nUtils.getMessage("storage.local.disable.forbidden"));
+            }
+            List<StorageSetting> storageSettings = this.list(
+                    new QueryWrapper().where(STORAGE_SETTING.ENABLED.eq(CommonConstant.Y))
+            );
+            storageSettings.forEach(s -> s.setEnabled(CommonConstant.N));
+            if (!storageSettings.isEmpty()) {
+                this.updateBatch(storageSettings);
+            }
+            return;
+        }
+
         StorageSetting storageSetting = this.getById(settingId);
         if (storageSetting == null) {
             throw new BusinessException(I18nUtils.getMessage("storage.config.not.exist"));
         }
-
-        Integer newStatus = action == 0 ? CommonConstant.N : CommonConstant.Y;
 
         if (newStatus.equals(CommonConstant.Y)) {
             // 全系统同时只允许一个存储配置处于启用状态

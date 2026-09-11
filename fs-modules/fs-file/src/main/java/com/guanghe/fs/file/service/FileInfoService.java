@@ -171,4 +171,16 @@ public interface FileInfoService extends IService<FileInfo> {
      * @return
      */
     List<FileVO> getByFileIds(List<String> fileIds);
+
+    /**
+     * 流式直传：目标存在同名文件时覆盖（写新物理对象→切换引用→清理旧对象），不存在则新建记录。
+     * 供 WebDAV PUT 与 SFTP 写等协议端共用；不使用 generateUniqueName（协议端重名语义 = 覆盖）。
+     *
+     * @param parentId    父目录ID（空 = 用户根目录）
+     * @param displayName 目标文件名
+     * @param in          内容输入流
+     * @param size        期望字节数（未知传 null）
+     * @return 落库后的文件记录
+     */
+    FileInfo writeFileContent(String parentId, String displayName, InputStream in, Long size);
 }

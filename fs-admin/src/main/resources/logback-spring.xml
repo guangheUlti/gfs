@@ -51,6 +51,9 @@
             <!-- 输出到控制台 -->
             <appender-ref ref="CONSOLE"/>
         </root>
+        <!-- 临时：抓 SFTP 子系统吞掉的异常栈，验证完成后移除 -->
+        <logger name="org.apache.sshd.server.subsystem.sftp" level="DEBUG"/>
+        <logger name="com.guanghe.fs.service.sftp" level="DEBUG"/>
     </springProfile>
 
     <springProfile name="docker">

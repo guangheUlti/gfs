@@ -205,6 +205,34 @@ CREATE TABLE "storage_settings" (
 );
 COMMENT ON TABLE "storage_settings" IS '存储平台配置';
 
+-- 10.5 service_settings（对外文件服务配置）
+DROP TABLE IF EXISTS "service_settings";
+CREATE TABLE "service_settings" (
+    "id" varchar(128) NOT NULL,
+    "service_type" varchar(32) NOT NULL,
+    "enabled" boolean NOT NULL DEFAULT FALSE,
+    "port" int DEFAULT NULL,
+    "bind_address" varchar(64) DEFAULT NULL,
+    "config_data" jsonb DEFAULT NULL,
+    "created_at" timestamp DEFAULT NULL,
+    "updated_at" timestamp DEFAULT NULL,
+    "remark" varchar(255) DEFAULT NULL,
+    "deleted" smallint DEFAULT 0,
+    PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "uk_service_settings_type" ON "service_settings" ("service_type");
+COMMENT ON TABLE "service_settings" IS '对外文件服务配置';
+COMMENT ON COLUMN "service_settings"."service_type" IS '服务类型：webdav / sftp';
+COMMENT ON COLUMN "service_settings"."enabled" IS '是否启用';
+COMMENT ON COLUMN "service_settings"."port" IS '监听端口（webdav 复用 HTTP 80 端口，此列为空）';
+COMMENT ON COLUMN "service_settings"."bind_address" IS '监听地址，默认 0.0.0.0';
+COMMENT ON COLUMN "service_settings"."config_data" IS '扩展配置（如 sftp 主机密钥路径）';
+COMMENT ON COLUMN "service_settings"."deleted" IS '逻辑删除 0未删除 1已删除';
+
+INSERT INTO "service_settings" ("id","service_type","enabled","port","bind_address") VALUES
+('svc-webdav','webdav',FALSE,NULL,'0.0.0.0'),
+('svc-sftp','sftp',FALSE,9022,'0.0.0.0');
+
 -- 11. sys_login_log
 DROP TABLE IF EXISTS "sys_login_log";
 CREATE TABLE "sys_login_log" (

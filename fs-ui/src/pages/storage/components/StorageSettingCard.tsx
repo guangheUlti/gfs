@@ -70,6 +70,8 @@ export function StorageSettingCard({
   const [isRescanning, setIsRescanning] = useState(false)
 
   const isMountPlatform = setting.storagePlatform?.identifier === 'LocalMount'
+  // 内置本地存储是后端虚拟行（id=Local，不落库）：没有配置项，只支持"切换回本地存储"
+  const isBuiltinLocal = setting.storagePlatform?.identifier === 'Local'
 
   const schemes: ConfigScheme[] = JSON.parse(
     setting.storagePlatform.configScheme
@@ -247,18 +249,24 @@ export function StorageSettingCard({
       <li className='rounded-lg border p-4 hover:shadow-md'>
         {/* Header */}
         <div className='mb-8 flex items-center justify-between'>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className='flex size-10 cursor-help items-center justify-center rounded-lg bg-muted p-2'>
-                  <Database className='h-5 w-5' />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className='text-xs'>ID: {setting.id}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          {isBuiltinLocal ? (
+            <div className='flex size-10 items-center justify-center rounded-lg bg-muted p-2'>
+              <Database className='h-5 w-5' />
+            </div>
+          ) : (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className='flex size-10 cursor-help items-center justify-center rounded-lg bg-muted p-2'>
+                    <Database className='h-5 w-5' />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className='text-xs'>ID: {setting.id}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
           <Badge
             variant={setting.enabled === 1 ? 'default' : 'secondary'}
             className={
@@ -298,59 +306,81 @@ export function StorageSettingCard({
         </div>
 
         {/* Actions Menu */}
-        <div className='mt-4 flex flex-wrap items-center gap-2'>
-          <Button
-            variant={setting.enabled === 1 ? 'outline' : 'default'}
-            size='sm'
-            onClick={() => setToggleDialogOpen(true)}
-            disabled={isLoading}
-            className='min-w-[60px]'
-          >
-            {setting.enabled === 1 ? t('card.disable') : t('card.enable')}
-          </Button>
-          <div className='h-6 w-px bg-border' />
-          <Button
-            variant='outline'
-            size='sm'
-            onClick={() => setViewModalOpen(true)}
-            className='min-w-[70px] flex-1'
-          >
-            <Eye className='mr-1.5 h-3 w-3' />
-            {t('card.view')}
-          </Button>
-          <Button
-            variant='outline'
-            size='sm'
-            onClick={handleOpenEdit}
-            className='min-w-[70px] flex-1'
-          >
-            <Settings className='mr-1.5 h-3 w-3' />
-            {t('card.edit')}
-          </Button>
-          <Button
-            variant='outline'
-            size='sm'
-            onClick={() => setDeleteDialogOpen(true)}
-            className='min-w-[70px] flex-1 text-red-600 hover:border-red-300 hover:text-red-700'
-          >
-            <Trash2 className='mr-1.5 h-3 w-3' />
-            {t('card.delete')}
-          </Button>
-          {isMountPlatform && (
+        {isBuiltinLocal ? (
+          setting.enabled === 1 ? (
+            <div className='mt-4'>
+              <Badge variant='outline' className='text-muted-foreground'>
+                {t('card.usingNow')}
+              </Badge>
+            </div>
+          ) : (
+            <div className='mt-4 flex flex-wrap items-center gap-2'>
+              <Button
+                variant='default'
+                size='sm'
+                onClick={() => setToggleDialogOpen(true)}
+                disabled={isLoading}
+                className='min-w-[60px]'
+              >
+                {t('card.enable')}
+              </Button>
+            </div>
+          )
+        ) : (
+          <div className='mt-4 flex flex-wrap items-center gap-2'>
+            <Button
+              variant={setting.enabled === 1 ? 'outline' : 'default'}
+              size='sm'
+              onClick={() => setToggleDialogOpen(true)}
+              disabled={isLoading}
+              className='min-w-[60px]'
+            >
+              {setting.enabled === 1 ? t('card.disable') : t('card.enable')}
+            </Button>
+            <div className='h-6 w-px bg-border' />
             <Button
               variant='outline'
               size='sm'
-              onClick={handleRescan}
-              disabled={isRescanning}
+              onClick={() => setViewModalOpen(true)}
               className='min-w-[70px] flex-1'
             >
-              <RefreshCw
-                className={`mr-1.5 h-3 w-3 ${isRescanning ? 'animate-spin' : ''}`}
-              />
-              {t('card.rescan')}
+              <Eye className='mr-1.5 h-3 w-3' />
+              {t('card.view')}
             </Button>
-          )}
-        </div>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={handleOpenEdit}
+              className='min-w-[70px] flex-1'
+            >
+              <Settings className='mr-1.5 h-3 w-3' />
+              {t('card.edit')}
+            </Button>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={() => setDeleteDialogOpen(true)}
+              className='min-w-[70px] flex-1 text-red-600 hover:border-red-300 hover:text-red-700'
+            >
+              <Trash2 className='mr-1.5 h-3 w-3' />
+              {t('card.delete')}
+            </Button>
+            {isMountPlatform && (
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={handleRescan}
+                disabled={isRescanning}
+                className='min-w-[70px] flex-1'
+              >
+                <RefreshCw
+                  className={`mr-1.5 h-3 w-3 ${isRescanning ? 'animate-spin' : ''}`}
+                />
+                {t('card.rescan')}
+              </Button>
+            )}
+          </div>
+        )}
       </li>
 
       {/* View Modal */}

@@ -7,6 +7,7 @@ export const PermissionCode = {
   FILE_WRITE: 'file:write',
   FILE_SHARE: 'file:share',
   STORAGE_MANAGE: 'storage:manage',
+  SERVICE_MANAGE: 'service:manage',
   LOG_READ: 'log:read',
 } as const
 

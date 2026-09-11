@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.guanghe.fs</groupId>
+        <artifactId>fs-modules</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <artifactId>fs-service</artifactId>
+
+    <description>
+        fs-service - 对外文件服务模块，让系统对外充当 WebDAV / SFTP 服务端
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>fs-file</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>fs-system</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>fs-orm</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>fs-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>fs-swagger</artifactId>
+        </dependency>
+
+        <!-- Apache MINA SSHD（SFTP 服务端） -->
+        <dependency>
+            <groupId>org.apache.sshd</groupId>
+            <artifactId>sshd-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.sshd</groupId>
+            <artifactId>sshd-sftp</artifactId>
+        </dependency>
+    </dependencies>
+
+</project>

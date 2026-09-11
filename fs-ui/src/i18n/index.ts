@@ -7,6 +7,7 @@ import enFiles from '@/locales/en/files.json'
 import enLayout from '@/locales/en/layout.json'
 import enLogin from '@/locales/en/login.json'
 import enSettings from '@/locales/en/settings.json'
+import enServices from '@/locales/en/services.json'
 import enShare from '@/locales/en/share.json'
 import enStorage from '@/locales/en/storage.json'
 import enTransfer from '@/locales/en/transfer.json'
@@ -15,6 +16,7 @@ import zhFiles from '@/locales/zh/files.json'
 import zhLayout from '@/locales/zh/layout.json'
 import zhLogin from '@/locales/zh/login.json'
 import zhSettings from '@/locales/zh/settings.json'
+import zhServices from '@/locales/zh/services.json'
 import zhShare from '@/locales/zh/share.json'
 import zhStorage from '@/locales/zh/storage.json'
 import zhTransfer from '@/locales/zh/transfer.json'
@@ -48,6 +50,7 @@ void i18n
         layout: enLayout,
         login: enLogin,
         settings: enSettings,
+        services: enServices,
         share: enShare,
         storage: enStorage,
         transfer: enTransfer,
@@ -58,6 +61,7 @@ void i18n
         layout: zhLayout,
         login: zhLogin,
         settings: zhSettings,
+        services: zhServices,
         share: zhShare,
         storage: zhStorage,
         transfer: zhTransfer,
@@ -73,6 +77,7 @@ void i18n
       'layout',
       'login',
       'settings',
+      'services',
       'share',
       'storage',
       'transfer',

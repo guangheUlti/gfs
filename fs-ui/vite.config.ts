@@ -20,6 +20,10 @@ export default defineConfig(({ mode }) => {
           target: env.VITE_API_BASE_URL || 'http://localhost:80',
           changeOrigin: true,
         },
+        '/dav': {
+          target: env.VITE_API_BASE_URL || 'http://localhost:80',
+          changeOrigin: true,
+        },
       },
     },
   }

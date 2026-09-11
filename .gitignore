@@ -43,6 +43,8 @@ logs/
 
 .kiro/
 
+.freebuff/
+
 ### Frontend (fs-ui) ###
 node_modules/
 fs-ui/dist/
@@ -85,6 +87,9 @@ dump.rdb
 
 ### Local file storage (runtime uploads / avatars / temp written by the dev server) ###
 /storage/
+
+### Backend runtime data (SFTP host key, generated at first service start) ###
+/data/
 
 ### Session / credentials ###
 fs-ui/cookies.txt

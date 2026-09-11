@@ -3,12 +3,15 @@
     "userPlaceholder": "User",
     "groups": {
       "files": "Files",
+      "services": "Services",
       "system": "System"
     },
     "nav": {
       "allFiles": "Files",
       "transfer": "Transfer",
       "storage": "Storage",
+      "webdav": "WebDAV",
+      "sftp": "SFTP",
       "favorites": "Favorites",
       "recents": "History",
       "shares": "Shares",
