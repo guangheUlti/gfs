@@ -1,7 +1,6 @@
 {
   "page": {
     "title": "File services",
-    "description": "Expose your cloud drive over standard protocols and mount it as a local disk",
     "loading": "Loading…",
     "loadFailed": "Failed to load service settings",
     "webdavDesc": "Reuses the main HTTP port (80) under /dav; supports Windows drive mapping",

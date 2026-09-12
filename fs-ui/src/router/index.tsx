@@ -6,8 +6,7 @@ import FileManagerPage from '@/pages/files'
 import LoginPage from '@/pages/login'
 import SharePage from '@/pages/share'
 import StoragePage from '@/pages/storage'
-import SftpServicePage from '@/pages/services/sftp'
-import WebDavServicePage from '@/pages/services/webdav'
+import ServicesPage from '@/pages/services'
 import TransferPage from '@/pages/transfer'
 import {
   createBrowserRouter,
@@ -112,18 +111,10 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'services/webdav',
+        path: 'services',
         element: (
           <ProtectedRoute requiredPermission='service:manage'>
-            <WebDavServicePage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'services/sftp',
-        element: (
-          <ProtectedRoute requiredPermission='service:manage'>
-            <SftpServicePage />
+            <ServicesPage />
           </ProtectedRoute>
         ),
       },

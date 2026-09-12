@@ -1,7 +1,6 @@
 {
   "page": {
     "title": "对外文件服务",
-    "description": "将网盘挂载为本地磁盘：标准协议对外提供文件服务",
     "loading": "加载中...",
     "loadFailed": "服务配置加载失败",
     "webdavDesc": "复用主服务 HTTP 端口（80），路径前缀 /dav，支持 Windows 网络驱动器映射",

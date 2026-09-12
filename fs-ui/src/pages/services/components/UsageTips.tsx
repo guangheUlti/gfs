@@ -11,7 +11,7 @@ export function UsageTips({ serviceType }: { serviceType: 'webdav' | 'sftp' }) {
       : ['client', 'sshfs', 'winscp', 'readonly']
 
   return (
-    <div className='rounded-lg border bg-muted/40 px-5 py-4'>
+    <div className='border-t bg-muted/40 px-5 py-4'>
       <div className='flex items-center gap-2'>
         <Info className='h-4 w-4 text-muted-foreground' />
         <h4 className='text-sm font-medium'>{t('usage.title')}</h4>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Globe, SquareTerminal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -19,9 +19,10 @@ import { ServiceStatusBadge } from './ServiceStatusBadge'
 
 interface ServiceSettingCardProps {
   setting: ServiceSettingVO
+  children?: ReactNode
 }
 
-export function ServiceSettingCard({ setting }: ServiceSettingCardProps) {
+export function ServiceSettingCard({ setting, children }: ServiceSettingCardProps) {
   const { t } = useTranslation('services')
   const queryClient = useQueryClient()
   const isSftp = setting.serviceType === 'sftp'
@@ -110,7 +111,7 @@ export function ServiceSettingCard({ setting }: ServiceSettingCardProps) {
   const toggling = configMutation.isPending
 
   return (
-    <div className='rounded-lg border bg-card text-card-foreground shadow-sm'>
+    <div className='flex flex-col rounded-lg border bg-card text-card-foreground shadow-sm'>
       {/* 头部：图标 + 名称 + 状态徽标 */}
       <div className='flex items-start justify-between gap-3 border-b px-5 py-4'>
         <div className='flex min-w-0 items-center gap-3'>
@@ -133,8 +134,8 @@ export function ServiceSettingCard({ setting }: ServiceSettingCardProps) {
         <ServiceStatusBadge setting={setting} />
       </div>
 
-      {/* 配置表单 */}
-      <div className='space-y-4 px-5 py-4'>
+      {/* 配置表单：flex-1 撑开，让两张卡在网格里拉伸到等高、操作区贴底 */}
+      <div className='flex-1 space-y-4 px-5 py-4'>
         <div className='flex items-center justify-between'>
           <Label htmlFor={`${setting.serviceType}-enabled`} className='cursor-pointer'>
             {t('form.enabled')}
@@ -187,6 +188,8 @@ export function ServiceSettingCard({ setting }: ServiceSettingCardProps) {
           </p>
         )}
       </div>
+
+      {children}
 
       {/* 操作区 */}
       <div className='flex items-center gap-2 border-t px-5 py-3'>
