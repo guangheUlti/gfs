@@ -1,3 +1,7 @@
+server:
+  # 开发端口（部署包走 prod profile，仍为 80）
+  port: 2000
+
 spring:
   datasource:
     type: com.zaxxer.hikari.HikariDataSource
