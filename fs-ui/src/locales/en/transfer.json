@@ -19,7 +19,8 @@
     "toastClearOk": "Cleared completed tasks",
     "toastDownloadComplete": "Downloaded {{name}}",
     "toastDownloadQueued": "Added {{count}} download tasks",
-    "folderSkipHint": "{{count}} folders are not downloadable and were skipped"
+    "folderSkipHint": "{{count}} folders are not downloadable and were skipped",
+    "noMore": "No more items"
   },
   "table": {
     "colFileName": "File",
@@ -29,6 +30,7 @@
     "colActions": "Actions",
     "colCompletedAt": "Completed",
     "prep": "Preparing…",
+    "queued": "Queued",
     "checking": "Verifying…",
     "paused": "Paused",
     "merging": "Processing…",

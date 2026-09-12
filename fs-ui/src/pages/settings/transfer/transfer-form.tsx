@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useUserStore } from '@/store/user'
+import { useTransferStore } from '@/store/transfer'
 import { toast } from 'sonner'
 import { userApi } from '@/api/user'
 import {
@@ -113,6 +114,8 @@ export function TransferForm() {
       })
       toast.success(t('transfer.saved'))
       await loadTransferSetting()
+      // 设置即时生效：名额变化后立刻尝试继续排队中的上传任务
+      useTransferStore.getState().pumpUploadQueue()
     } catch (error) {
       toast.error(t('transfer.saveFailed'))
     } finally {

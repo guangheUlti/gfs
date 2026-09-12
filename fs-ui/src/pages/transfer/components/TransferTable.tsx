@@ -46,25 +46,22 @@ function formatRemainingTime(
   return tr('time.hour', { n: Math.round(seconds / 3600) })
 }
 
-const getStatusColor = (
-  status: TaskStatus
-): 'default' | 'secondary' | 'destructive' | 'outline' => {
-  const colorMap: Record<
-    TaskStatus,
-    'default' | 'secondary' | 'destructive' | 'outline'
-  > = {
-    idle: 'secondary',
-    initialized: 'secondary',
-    checking: 'default',
-    uploading: 'default',
-    downloading: 'default',
-    paused: 'outline',
-    merging: 'secondary',
-    completed: 'default',
-    failed: 'destructive',
-    cancelled: 'secondary',
+/** 状态徽章统一浅色调：不做实底/悬停反馈，避免看起来像可点按钮 */
+const getStatusBadgeClass = (status: TaskStatus): string => {
+  switch (status) {
+    case 'checking':
+    case 'uploading':
+    case 'downloading':
+      return 'border-transparent bg-primary/10 text-primary'
+    case 'completed':
+      return 'border-transparent bg-green-500/15 text-green-600 dark:text-green-500'
+    case 'paused':
+      return 'border-transparent bg-amber-500/15 text-amber-600 dark:text-amber-500'
+    case 'failed':
+      return 'border-transparent bg-destructive/15 text-destructive'
+    default:
+      return 'border-transparent bg-muted text-muted-foreground'
   }
-  return colorMap[status] || 'secondary'
 }
 
 export default function TransferTable({
@@ -77,7 +74,7 @@ export default function TransferTable({
   onRetry,
 }: TransferTableProps) {
   const { t } = useTranslation('transfer')
-  const { getDisplayData } = useTransferStore()
+  const { getDisplayData, uploadQueue } = useTransferStore()
 
   const statusMap = React.useMemo(
     () =>
@@ -114,30 +111,35 @@ export default function TransferTable({
     ].includes(status)
 
   return (
-    <div className='overflow-hidden rounded-xl border border-border/60'>
-      {/* 窄屏下不压缩列宽，改为表格内部横向滚动，保留全部列 */}
-      <Table className='min-w-[56rem]'>
-        <TableHeader className='bg-muted/30 [&_tr]:border-border/60'>
-          <TableRow className='border-border/60 hover:bg-transparent'>
+    <div className='rounded-xl bg-background'>
+      {/* 不加 overflow-hidden：那会成了 sticky 表头最近的滚动祖先，把粘性锁死在本块内 */}
+      {/* containerClassName 必须清掉自带的 overflow-auto，否则嵌套滚动容器同样锁死 sticky 表头；窄屏下不压缩列宽，横向滚动交给页面滚动容器 */}
+      {/* table-fixed：列宽由表头固定分配，文件名列吃剩余宽度并截断，避免各行宽窄不一 */}
+      <Table
+        className='min-w-[75rem] table-fixed'
+        containerClassName='overflow-visible'
+      >
+        <TableHeader className='[&_tr]:border-0 [&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-background'>
+          <TableRow className='border-0 hover:bg-transparent'>
             <TableHead className='text-muted-foreground h-11 px-4 font-medium'>
               {t('table.colFileName')}
             </TableHead>
-            <TableHead className='text-muted-foreground h-11 px-4 font-medium'>
+            <TableHead className='text-muted-foreground h-11 w-44 px-4 font-medium'>
               {t('table.colSize')}
             </TableHead>
-            <TableHead className='text-muted-foreground h-11 px-4 font-medium'>
+            <TableHead className='text-muted-foreground h-11 w-24 px-4 font-medium'>
               {t('table.colStatus')}
             </TableHead>
-            <TableHead className='text-muted-foreground h-11 min-w-[200px] px-4 font-medium'>
+            <TableHead className='text-muted-foreground h-11 w-[21rem] px-4 font-medium'>
               {t('table.colProgress')}
             </TableHead>
             {showActions && (
-              <TableHead className='text-muted-foreground h-11 px-4 text-center font-medium'>
+              <TableHead className='text-muted-foreground h-11 w-52 px-4 text-center font-medium'>
                 {t('table.colActions')}
               </TableHead>
             )}
             {showCompleteTime && (
-              <TableHead className='text-muted-foreground h-11 px-4 text-right font-medium'>
+              <TableHead className='text-muted-foreground h-11 w-44 px-4 text-right font-medium'>
                 {t('table.colCompletedAt')}
               </TableHead>
             )}
@@ -150,7 +152,7 @@ export default function TransferTable({
             return (
               <TableRow
                 key={task.taskId}
-                className='border-border/60 hover:bg-muted/25 border-b last:border-b-0'
+                className='border-b-0 transition-colors duration-150 hover:bg-primary/[0.06]'
               >
                 <TableCell className='px-4 py-3.5'>
                   <span
@@ -161,7 +163,7 @@ export default function TransferTable({
                   </span>
                 </TableCell>
 
-                <TableCell className='px-4 py-3.5 tabular-nums'>
+                <TableCell className='px-4 py-3.5 whitespace-nowrap tabular-nums'>
                   {task.status === 'uploading' ||
                   task.status === 'downloading' ||
                   task.status === 'paused' ? (
@@ -183,8 +185,11 @@ export default function TransferTable({
 
                 <TableCell className='px-4 py-3.5'>
                   <Badge
-                    variant={getStatusColor(task.status)}
-                    className='rounded-full px-2.5'
+                    variant='outline'
+                    className={
+                      'rounded-full px-2.5 ' +
+                      getStatusBadgeClass(task.status)
+                    }
                   >
                     {statusText(task.status)}
                   </Badge>
@@ -195,10 +200,19 @@ export default function TransferTable({
                   {(task.status === 'idle' ||
                     task.status === 'initialized') && (
                     <div className='flex items-center gap-2'>
-                      <div className='h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent' />
-                      <span className='text-sm text-muted-foreground'>
-                        {t('table.prep')}
-                      </span>
+                      {task.taskType === 'upload' &&
+                      uploadQueue.includes(task.taskId) ? (
+                        <span className='text-sm text-muted-foreground'>
+                          {t('table.queued')}
+                        </span>
+                      ) : (
+                        <>
+                          <div className='h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent' />
+                          <span className='text-sm text-muted-foreground'>
+                            {t('table.prep')}
+                          </span>
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -218,9 +232,9 @@ export default function TransferTable({
                     <div className='flex items-center gap-3'>
                       <Progress
                         value={displayData.progress}
-                        className='w-[200px]'
+                        className='h-2 min-w-0 flex-1'
                       />
-                      <div className='flex min-w-[100px] flex-col gap-0.5'>
+                      <div className='flex min-w-[100px] shrink-0 flex-col gap-0.5'>
                         <span className='text-sm font-medium'>
                           {formatSpeed(displayData.speed || 0)}
                         </span>
@@ -243,7 +257,7 @@ export default function TransferTable({
                     <div className='flex items-center gap-3'>
                       <Progress
                         value={displayData.progress}
-                        className='w-[200px]'
+                        className='h-2 min-w-0 flex-1'
                       />
                       <span className='min-w-[100px] text-sm text-muted-foreground'>
                         {t('table.paused')}
@@ -270,7 +284,10 @@ export default function TransferTable({
 
                   {/* Failed */}
                   {task.status === 'failed' && (
-                    <span className='text-sm text-destructive'>
+                    <span
+                      className='block truncate text-sm text-destructive'
+                      title={task.errorMessage || undefined}
+                    >
                       {task.errorMessage || t('table.uploadFailed')}
                     </span>
                   )}

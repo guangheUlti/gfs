@@ -19,7 +19,8 @@
     "toastClearOk": "已清空所有已完成任务",
     "toastDownloadComplete": "{{name}} 下载完成",
     "toastDownloadQueued": "已添加 {{count}} 个下载任务",
-    "folderSkipHint": "{{count}} 个文件夹暂不支持下载，已跳过"
+    "folderSkipHint": "{{count}} 个文件夹暂不支持下载，已跳过",
+    "noMore": "没有更多了"
   },
   "table": {
     "colFileName": "文件名称",
@@ -29,6 +30,7 @@
     "colActions": "操作",
     "colCompletedAt": "完成时间",
     "prep": "准备中...",
+    "queued": "排队中",
     "checking": "校验文件...",
     "paused": "已暂停",
     "merging": "正在处理文件...",

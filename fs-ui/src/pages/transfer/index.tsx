@@ -140,7 +140,7 @@ export default function TransferPage() {
   return (
     <div className='flex h-full flex-col'>
       {/* 顶部工具栏：窄屏放不下时自动换行 */}
-      <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 py-3 sm:px-6 sm:py-4'>
+      <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 pt-4 pb-3 sm:px-6 sm:pt-6 sm:pb-4'>
         <div className='flex h-9 min-w-0 flex-1 items-center'>
           <h2 className='text-xl font-semibold tracking-tight'>
             {t('page.title')}
@@ -230,16 +230,22 @@ export default function TransferPage() {
             </Empty>
           </div>
         ) : (
-          <TransferTable
-            tasks={currentDisplayTasks}
-            loading={loading}
-            showActions={activeTab !== 'completed'}
-            showCompleteTime={activeTab === 'completed'}
-            onPause={handlePause}
-            onResume={handleResume}
-            onCancel={handleCancel}
-            onRetry={handleRetry}
-          />
+          <>
+            <TransferTable
+              tasks={currentDisplayTasks}
+              loading={loading}
+              showActions={activeTab !== 'completed'}
+              showCompleteTime={activeTab === 'completed'}
+              onPause={handlePause}
+              onResume={handleResume}
+              onCancel={handleCancel}
+              onRetry={handleRetry}
+            />
+            {/* 与文件列表同款的全量末尾提示；底部留白交给滚动区 padding，各页面保持一致 */}
+            <p className='pt-6 text-center text-sm text-muted-foreground/55'>
+              {t('page.noMore')}
+            </p>
+          </>
         )}
       </div>
     </div>

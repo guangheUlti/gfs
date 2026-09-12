@@ -34,7 +34,7 @@ export default function UploadPanel({ onSuccess }: UploadPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [prevCompletedCount, setPrevCompletedCount] = useState(0)
 
-  const { getCurrentSessionTasks, pauseTask, resumeTask, cancelTask } =
+  const { getCurrentSessionTasks, pauseTask, resumeTask, cancelTask, uploadQueue } =
     useTransferStore()
   const taskList = getCurrentSessionTasks()
 
@@ -237,10 +237,19 @@ export default function UploadPanel({ onSuccess }: UploadPanelProps) {
                     {(task.status === 'idle' ||
                       task.status === 'initialized') && (
                       <div className='mt-1 flex items-center gap-2'>
-                        <div className='h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent' />
-                        <span className='text-xs text-muted-foreground'>
-                          {t('uploadPanel.preparing')}
-                        </span>
+                        {task.taskType === 'upload' &&
+                        uploadQueue.includes(task.taskId) ? (
+                          <span className='text-xs text-muted-foreground'>
+                            {t('uploadPanel.queued')}
+                          </span>
+                        ) : (
+                          <>
+                            <div className='h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent' />
+                            <span className='text-xs text-muted-foreground'>
+                              {t('uploadPanel.preparing')}
+                            </span>
+                          </>
+                        )}
                       </div>
                     )}
 

@@ -32,6 +32,8 @@ interface TransferStore {
   currentSessionId: string | null
   sessionTasks: Map<string, string[]>
   fileCache: Map<string, File>
+  /** 等待空闲名额的上传任务 ID（FIFO）；同时上传数量=transferSetting.concurrentUploadQuantity */
+  uploadQueue: string[]
   completedActionsTriggered: Set<string>
   errorNotificationTriggered: Set<string>
 
@@ -89,6 +91,7 @@ interface TransferStore {
   ) => void
   syncDownloadExecutorConfig: () => void
   ensureDownloadExecutorCallbacks: () => void
+  pumpUploadQueue: () => void
   checkUnfinishedTasks: () => Promise<void>
   checkAndStartPolling: () => void
   startPolling: () => void
@@ -136,6 +139,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
   currentSessionId: null,
   sessionTasks: new Map(),
   fileCache: new Map(),
+  uploadQueue: [],
   completedActionsTriggered: new Set(),
   errorNotificationTriggered: new Set(),
 
@@ -206,6 +210,14 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
 
       if (newStatus === 'completed' && !completedActionsTriggered.has(taskId)) {
         get().triggerCompletedActions(updatedTask)
+      }
+
+      // 上传任务到达终态后释放名额，让队列里排队的任务补上
+      if (
+        ['completed', 'failed', 'cancelled'].includes(newStatus) &&
+        updatedTask.taskType === 'upload'
+      ) {
+        get().pumpUploadQueue()
       }
 
       get().checkAndStartPolling()
@@ -563,6 +575,9 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       console.error('同步传输任务失败:', error)
       // 静默失败，不抛出错误
     }
+
+    // 同步可能把任务直接置为终态（绕过 transitionTo），补偿泵一次上传队列
+    get().pumpUploadQueue()
   },
 
   startUploadSession: () => {
@@ -583,7 +598,6 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
 
     const settings = userStore.transferSetting!
     const chunkSize = settings.chunkSize
-    const concurrency = settings.concurrentUploadQuantity
 
     if (!callbacksInitialized) {
       callbacksInitialized = true
@@ -655,9 +669,8 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
 
     get().transitionTo(taskId, 'initialized')
 
-    uploadExecutor.start(taskId, file, concurrency, chunkSize).catch(() => {
-      // Silent
-    })
+    set({ uploadQueue: [...get().uploadQueue, taskId] })
+    get().pumpUploadQueue()
 
     return taskId
   },
@@ -948,6 +961,53 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     })
   },
 
+  /** 从队列取出名额内的上传任务开始执行；任务终态/取消/入队后都会调用 */
+  pumpUploadQueue: () => {
+    const limit = Math.max(
+      1,
+      useUserStore.getState().transferSetting?.concurrentUploadQuantity || 3
+    )
+
+    for (;;) {
+      const { uploadQueue, tasks, fileCache } = get()
+      if (uploadQueue.length === 0) return
+
+      const activeCount = Array.from(tasks.values()).filter(
+        (task) =>
+          task.taskType === 'upload' &&
+          ['checking', 'uploading', 'merging'].includes(task.status)
+      ).length
+      if (activeCount >= limit) return
+
+      const taskId = uploadQueue[0]
+      const file = fileCache.get(taskId)
+      const task = tasks.get(taskId)
+
+      set({ uploadQueue: uploadQueue.slice(1) })
+
+      // 任务已被取消或文件缓存丢失：跳过，不占用本次名额
+      if (!file || !task) continue
+      if (
+        ['completed', 'failed', 'cancelled', 'paused'].includes(task.status)
+      ) {
+        continue
+      }
+
+      // start() 会在首个 await 前同步转入 checking，循环按最新活跃数继续判断
+      const settings = useUserStore.getState().transferSetting
+      uploadExecutor
+        .start(
+          taskId,
+          file,
+          uploadExecutor.DEFAULT_CONCURRENCY,
+          settings?.chunkSize || 5 * 1024 * 1024
+        )
+        .catch(() => {
+          // Silent
+        })
+    }
+  },
+
   pauseTask: async (taskId) => {
     const { tasks } = get()
     const task = tasks.get(taskId)
@@ -1111,8 +1171,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       return
     }
 
-    const file = fileCache.get(taskId)
-    if (!file) {
+    if (!fileCache.get(taskId)) {
       throw new Error('File not found in cache, cannot retry')
     }
 
@@ -1139,16 +1198,8 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       set({ tasks: newTasks })
     }
 
-    const userStore = useUserStore.getState()
-    const currentConcurrency =
-      userStore.transferSetting?.concurrentUploadQuantity || 3
-    const currentChunkSize =
-      userStore.transferSetting?.chunkSize || 5 * 1024 * 1024
-    uploadExecutor
-      .start(taskId, file, currentConcurrency, currentChunkSize)
-      .catch(() => {
-        // Silent
-      })
+    set({ uploadQueue: [...get().uploadQueue, taskId] })
+    get().pumpUploadQueue()
   },
 
   clearCompletedTasks: async () => {
