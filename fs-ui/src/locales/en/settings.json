@@ -10,7 +10,18 @@
     "preference": "Preferences",
     "transfer": "Transfer",
     "userApproval": "User Approval",
-    "loginManagement": "Login Management"
+    "loginManagement": "Login Management",
+    "featureToggles": "Feature Toggles"
+  },
+  "featureToggles": {
+    "pageTitle": "Feature Toggles",
+    "pageDescription": "Control whether feature entries are shown. Disabled features disappear from the sidebar",
+    "favorite": "Favorites",
+    "favoriteDesc": "When enabled, the Favorites entry appears in the sidebar",
+    "history": "Recents",
+    "historyDesc": "When enabled, the Recents entry appears in the sidebar",
+    "loadFailed": "Failed to load feature toggles",
+    "saveFailed": "Failed to save feature toggles"
   },
   "userApproval": {
     "pageTitle": "User Approval",

@@ -307,6 +307,20 @@ CREATE TABLE "sys_user_transfer_setting" (
 COMMENT ON TABLE "sys_user_transfer_setting" IS '用户传输设置';
 
 -- ==============================================================
+-- 15. sys_feature_toggle 功能开关
+-- ==============================================================
+DROP TABLE IF EXISTS "sys_feature_toggle";
+CREATE TABLE "sys_feature_toggle" (
+    "id" SERIAL PRIMARY KEY,
+    "feature_key" varchar(64) NOT NULL,
+    "enabled" smallint NOT NULL DEFAULT 0,
+    "created_at" timestamp NOT NULL,
+    "updated_at" timestamp NOT NULL,
+    CONSTRAINT "uk_feature_key" UNIQUE ("feature_key")
+);
+COMMENT ON TABLE "sys_feature_toggle" IS '功能开关';
+
+-- ==============================================================
 -- 初始化数据
 -- ==============================================================
 

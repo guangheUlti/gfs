@@ -71,6 +71,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       import('@/store/user')
         .then(({ useUserStore }) => useUserStore.getState().loadTransferSetting())
         .catch(() => {}),
+      import('@/store/feature')
+        .then(({ useFeatureStore }) => useFeatureStore.getState().fetchToggles())
+        .catch(() => {}),
     ])
   }, [])
 
@@ -154,6 +157,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     import('@/store/user').then(({ useUserStore }) => {
       useUserStore.getState().clearUserInfo()
+    })
+    import('@/store/feature').then(({ useFeatureStore }) => {
+      useFeatureStore.getState().reset()
     })
   }, [])
 

@@ -13,6 +13,7 @@ export type SettingsTab =
   | 'transfer'
   | 'user-approval'
   | 'login-management'
+  | 'feature-toggles'
 
 type SettingsModalValue = {
   open: boolean

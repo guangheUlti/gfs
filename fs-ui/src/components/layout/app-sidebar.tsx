@@ -4,6 +4,7 @@ import { RiSettings3Fill, RiSettings3Line } from '@remixicon/react'
 import { useAuth } from '@/contexts/auth-context'
 import { useSettingsModal } from '@/contexts/settings-modal-context'
 import { usePermission } from '@/hooks/use-permission'
+import { useFeatureStore } from '@/store/feature'
 import {
   Sidebar,
   SidebarContent,
@@ -23,6 +24,7 @@ export function AppSidebar() {
   const { user: authUser } = useAuth()
   const { hasPermission } = usePermission()
   const { openSettings } = useSettingsModal()
+  const featureToggles = useFeatureStore((s) => s.toggles)
 
   // 使用真实用户信息，如果未登录则使用占位符
   const user = authUser
@@ -36,7 +38,9 @@ export function AppSidebar() {
     .map((group) => ({
       ...group,
       items: group.items.filter(
-        (item) => !item.permission || hasPermission(item.permission)
+        (item) =>
+          (!item.permission || hasPermission(item.permission)) &&
+          (!item.featureKey || !!featureToggles[item.featureKey])
       ),
     }))
     // 系统分组末尾注入「设置」：全局弹窗而非路由，人人可用，不参与权限过滤

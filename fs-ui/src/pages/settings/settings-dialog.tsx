@@ -8,6 +8,8 @@ import {
   RiArrowLeftRightLine,
   RiComputerFill,
   RiComputerLine,
+  RiEqualizer2Fill,
+  RiEqualizer2Line,
   RiTShirtFill,
   RiTShirtLine,
   RiUserSettingsFill,
@@ -31,6 +33,7 @@ import { SettingsAppearance } from './appearance'
 import { SettingsTransfer } from './transfer'
 import { SettingsUserApproval } from './user-approval'
 import { SettingsLoginManagement } from './login-management'
+import { SettingsFeatureToggles } from './feature-toggles'
 import { SidebarNav, type SettingsNavGroup } from './components/sidebar-nav'
 import { useAuth } from '@/contexts/auth-context'
 
@@ -84,6 +87,12 @@ function buildNavConfig(
           icon: { line: RiComputerLine, fill: RiComputerFill },
           superAdminOnly: true,
         },
+        {
+          title: t('nav.featureToggles'),
+          tab: 'feature-toggles',
+          icon: { line: RiEqualizer2Line, fill: RiEqualizer2Fill },
+          superAdminOnly: true,
+        },
       ],
     },
   ]
@@ -126,6 +135,12 @@ function SettingsPanel({ tab }: { tab: SettingsTab }) {
     case 'login-management':
       return user?.isSuperAdmin ? (
         <SettingsLoginManagement />
+      ) : (
+        <NoPermission />
+      )
+    case 'feature-toggles':
+      return user?.isSuperAdmin ? (
+        <SettingsFeatureToggles />
       ) : (
         <NoPermission />
       )

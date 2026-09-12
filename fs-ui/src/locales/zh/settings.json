@@ -10,7 +10,18 @@
     "preference": "偏好设置",
     "transfer": "传输设置",
     "userApproval": "用户审核",
-    "loginManagement": "登录管理"
+    "loginManagement": "登录管理",
+    "featureToggles": "功能开关"
+  },
+  "featureToggles": {
+    "pageTitle": "功能开关",
+    "pageDescription": "控制系统功能入口是否展示，关闭后侧边栏不再出现对应菜单",
+    "favorite": "收藏",
+    "favoriteDesc": "开启后侧边栏显示「收藏」菜单",
+    "history": "历史",
+    "historyDesc": "开启后侧边栏显示「历史」菜单",
+    "loadFailed": "加载功能开关失败",
+    "saveFailed": "保存功能开关失败"
   },
   "userApproval": {
     "pageTitle": "用户审核",

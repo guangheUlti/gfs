@@ -23,6 +23,8 @@ type BaseNavItem = {
   badge?: string
   icon?: SidebarNavIconPair
   permission?: PermissionCodeType
+  /** 受全局功能开关控制的项（如收藏/历史），开关关闭时从侧边栏隐藏 */
+  featureKey?: string
 }
 
 type NavLink = BaseNavItem & {
