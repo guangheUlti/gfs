@@ -1,10 +1,11 @@
 import { useTranslation } from 'react-i18next'
 import { PreviewTopBar } from './PreviewTopBar'
-import { getPreviewStreamUrl, type PreviewViewerProps } from '@/utils/preview-types'
+import { usePreviewStreamUrl, type PreviewViewerProps } from '@/utils/preview-types'
 
 export function PdfPreviewViewer({ files, index }: PreviewViewerProps) {
   const { t } = useTranslation('files')
   const file = files[index]
+  const src = usePreviewStreamUrl(file.id)
   return (
     <div className='flex h-full flex-col'>
       <PreviewTopBar title={file.displayName}>
@@ -14,11 +15,13 @@ export function PdfPreviewViewer({ files, index }: PreviewViewerProps) {
           </span>
         )}
       </PreviewTopBar>
-      <iframe
-        src={getPreviewStreamUrl(file.id)}
-        title={t('preview.title')}
-        className='min-h-0 flex-1 bg-background'
-      />
+      {src && (
+        <iframe
+          src={src}
+          title={t('preview.title')}
+          className='min-h-0 flex-1 bg-background'
+        />
+      )}
     </div>
   )
 }

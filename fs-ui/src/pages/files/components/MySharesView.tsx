@@ -101,7 +101,6 @@ const SHARE_TABLE_HEAD: Record<string, string> = {
   expireTime: 'w-36',
   viewCount: 'w-28 text-center',
   downloadCount: 'w-28 text-center',
-  scope: 'w-32 text-center',
   createdAt: 'w-44',
   // 行尾操作列只在触屏出现，鼠标端靠右键菜单；表头用 sr-only 占位
   actions: 'w-10 px-1 text-right hoverable:hidden',
@@ -225,18 +224,6 @@ export function MySharesView() {
     }
     return null
   }
-
-  const formatScopeText = useCallback(
-    (scope?: string) => {
-      if (!scope) return t('myShares.permPreviewDownload')
-      const permissions: string[] = []
-      if (scope.includes('preview')) permissions.push(t('myShares.permPreview'))
-      if (scope.includes('download'))
-        permissions.push(t('myShares.permDownload'))
-      return permissions.length > 0 ? permissions.join(' + ') : '-'
-    },
-    [t]
-  )
 
   // 快捷复制
   const handleQuickCopy = async (share: ShareItem) => {
@@ -425,6 +412,14 @@ export function MySharesView() {
     lastClickedIndexRef.current = rowIndex
   }
 
+  // 右键未选中的行时先单选它（已选中的行保留当前多选），让高亮跟随操作对象
+  const handleRowContextMenu = (rowIndex: number, id: string) => {
+    if (!selectedKeys.includes(id)) {
+      setSelectedKeys([id])
+      lastClickedIndexRef.current = rowIndex
+    }
+  }
+
   // ESC 键取消选择并退出多选模式
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -523,31 +518,6 @@ export function MySharesView() {
         ),
       },
       {
-        id: 'scope',
-        accessorFn: (row) => row.scope,
-        header: t('myShares.colScope'),
-        cell: ({ row }) => {
-          const share = row.original
-          return (
-            <div className='flex items-center justify-center gap-1'>
-              {(!share.scope || share.scope.includes('preview')) && (
-                <Badge variant='secondary' className='text-xs'>
-                  {t('myShares.permPreview')}
-                </Badge>
-              )}
-              {(!share.scope || share.scope.includes('download')) && (
-                <Badge
-                  variant='secondary'
-                  className='bg-green-100 text-xs text-green-700'
-                >
-                  {t('myShares.permDownload')}
-                </Badge>
-              )}
-            </div>
-          )
-        },
-      },
-      {
         accessorKey: 'createdAt',
         header: t('myShares.colCreated'),
         cell: ({ row }) => (
@@ -634,7 +604,7 @@ export function MySharesView() {
         enableSorting: false,
       },
     ],
-    [canCancelShare, shareList, t, formatExpireTime, formatScopeText, isExpired]
+    [canCancelShare, shareList, t, formatExpireTime, isExpired]
   )
 
   const pageCount = Math.max(
@@ -658,7 +628,7 @@ export function MySharesView() {
   return (
     <div className='flex h-full flex-col'>
       {/* 顶部工具栏：窄屏时标题独占一行，搜索与清空按钮同处第二行 */}
-      <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 py-3 sm:px-6 sm:py-4'>
+      <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 pt-4 pb-3 sm:px-6 sm:pt-6 sm:pb-4'>
         <div className='w-full min-w-0 sm:w-auto sm:flex-1'>
           <FileBreadcrumb
             breadcrumbPath={[]}
@@ -788,6 +758,12 @@ export function MySharesView() {
                               )}
                               onClick={(e) =>
                                 handleRowClick(rowIndex, row.original.id, e)
+                              }
+                              onContextMenu={() =>
+                                handleRowContextMenu(
+                                  rowIndex,
+                                  row.original.id
+                                )
                               }
                             >
                               {row.getVisibleCells().map((cell) => (
@@ -990,15 +966,6 @@ export function MySharesView() {
                       {currentShare.isPermanent
                         ? t('myShares.permanent')
                         : formatExpireTime(currentShare.expireTime)}
-                    </DescriptionFieldValue>
-                  </DescriptionField>
-
-                  <DescriptionField>
-                    <DescriptionFieldLabel>
-                      {t('myShares.colScope')}
-                    </DescriptionFieldLabel>
-                    <DescriptionFieldValue>
-                      {formatScopeText(currentShare.scope)}
                     </DescriptionFieldValue>
                   </DescriptionField>
 

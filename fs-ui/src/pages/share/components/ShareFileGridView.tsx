@@ -14,7 +14,6 @@ import { FileIcon } from '@/components/file-icon'
 
 interface ShareFileGridViewProps {
   fileList: FileItem[]
-  scope?: string
   onFileClick: (file: FileItem) => void
   onPreview: (file: FileItem) => void
   onDownload: (file: FileItem) => void
@@ -22,14 +21,11 @@ interface ShareFileGridViewProps {
 
 export function ShareFileGridView({
   fileList,
-  scope,
   onFileClick,
   onPreview,
   onDownload,
 }: ShareFileGridViewProps) {
   const { t } = useTranslation('share')
-  const hasPreviewPermission = () => scope?.includes('preview') ?? true
-  const hasDownloadPermission = () => scope?.includes('download') ?? true
 
   const handleDoubleClick = (file: FileItem) => {
     if (file.isDir) {
@@ -52,50 +48,45 @@ export function ShareFileGridView({
             onDoubleClick={() => handleDoubleClick(file)}
           >
             {/* 更多操作 */}
-            {!file.isDir &&
-              (hasPreviewPermission() || hasDownloadPermission()) && (
-                <div className='absolute top-2 right-2 z-10 opacity-100 transition-opacity hoverable:opacity-0 hoverable:group-hover:opacity-100'>
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger
-                      asChild
+            {!file.isDir && (
+              <div className='absolute top-2 right-2 z-10 opacity-100 transition-opacity hoverable:opacity-0 hoverable:group-hover:opacity-100'>
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger
+                    asChild
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Button
+                      variant='ghost'
+                      size='icon'
+                      className='h-7 w-7 bg-background/95 shadow-sm backdrop-blur-sm hover:scale-105 hover:bg-background hover:shadow-md'
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <Button
-                        variant='ghost'
-                        size='icon'
-                        className='h-7 w-7 bg-background/95 shadow-sm backdrop-blur-sm hover:scale-105 hover:bg-background hover:shadow-md'
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <MoreVertical className='h-4 w-4' />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align='end'>
-                      {hasPreviewPermission() && (
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onPreview(file)
-                          }}
-                        >
-                          <Eye className='mr-2 h-4 w-4' />
-                          {t('fileList.preview')}
-                        </DropdownMenuItem>
-                      )}
-                      {hasDownloadPermission() && (
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onDownload(file)
-                          }}
-                        >
-                          <Download className='mr-2 h-4 w-4' />
-                          {t('fileList.download')}
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              )}
+                      <MoreVertical className='h-4 w-4' />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align='end'>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onPreview(file)
+                      }}
+                    >
+                      <Eye className='mr-2 h-4 w-4' />
+                      {t('fileList.preview')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDownload(file)
+                      }}
+                    >
+                      <Download className='mr-2 h-4 w-4' />
+                      {t('fileList.download')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
 
             {/* 文件图标 */}
             <div className='mb-3 flex h-20 items-center justify-center pt-1'>

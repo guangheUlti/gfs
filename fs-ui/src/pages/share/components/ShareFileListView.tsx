@@ -16,7 +16,6 @@ import { FileIcon } from '@/components/file-icon'
 
 interface ShareFileListViewProps {
   fileList: FileItem[]
-  scope?: string
   onFileClick: (file: FileItem) => void
   onPreview: (file: FileItem) => void
   onDownload: (file: FileItem) => void
@@ -24,14 +23,11 @@ interface ShareFileListViewProps {
 
 export function ShareFileListView({
   fileList,
-  scope,
   onFileClick,
   onPreview,
   onDownload,
 }: ShareFileListViewProps) {
   const { t } = useTranslation('share')
-  const hasPreviewPermission = () => scope?.includes('preview') ?? true
-  const hasDownloadPermission = () => scope?.includes('download') ?? true
 
   const handleDoubleClick = (file: FileItem) => {
     if (file.isDir) {
@@ -91,7 +87,7 @@ export function ShareFileListView({
               </TableCell>
               <TableCell onClick={(e) => e.stopPropagation()}>
                 <div className='flex items-center justify-center gap-1 opacity-100 transition-opacity hoverable:opacity-0 hoverable:group-hover:opacity-100'>
-                  {!file.isDir && hasPreviewPermission() && (
+                  {!file.isDir && (
                     <Button
                       variant='ghost'
                       size='icon'
@@ -105,7 +101,7 @@ export function ShareFileListView({
                       <Eye className='h-4 w-4' />
                     </Button>
                   )}
-                  {!file.isDir && hasDownloadPermission() && (
+                  {!file.isDir && (
                     <Button
                       variant='ghost'
                       size='icon'

@@ -7,7 +7,6 @@ import { toast } from 'sonner'
 import { formatFileSize } from '@/utils/format'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -24,7 +23,6 @@ import { FileIcon } from '@/components/file-icon'
 import {
   FormFieldStack,
   FormInlineOption,
-  FormInlineOptions,
 } from '@/components/field-layout'
 
 interface ShareModalProps {
@@ -55,7 +53,6 @@ export function ShareModal({
     'unlimited' | 'custom'
   >('unlimited')
   const [maxDownloadCount, setMaxDownloadCount] = useState<string>('')
-  const [scopeList, setScopeList] = useState<string[]>(['preview'])
 
   // 分享结果状态
   const [shareLink, setShareLink] = useState('')
@@ -65,10 +62,17 @@ export function ShareModal({
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
+  const [rawLink, setRawLink] = useState('')
+  const [copiedRawLink, setCopiedRawLink] = useState(false)
 
   const sharingFiles = file ? [file] : files
   const isBatchShare = sharingFiles.length > 1
   const displayFiles = sharingFiles.slice(0, 3)
+  // 直链只对单文件分享展示；文件夹在分享页内逐个下载
+  const singleFile =
+    sharingFiles.length === 1 && !sharingFiles[0].isDir
+      ? sharingFiles[0]
+      : null
 
   // 判断是否永久分享
   const isPermanentShare = () => {
@@ -96,11 +100,11 @@ export function ShareModal({
     setMaxViewCount('')
     setMaxDownloadCountType('unlimited')
     setMaxDownloadCount('')
-    setScopeList(['preview'])
     setShareLink('')
     setShareCode('')
     setShareExpireTime('')
     setIsPermanent(false)
+    setRawLink('')
   }
 
   // 获取过期时间文本
@@ -139,7 +143,6 @@ export function ShareModal({
     setIsSubmitting(true)
     try {
       const fileIds = sharingFiles.map((f) => f.id)
-      const scope = scopeList.join(',')
 
       const response = await shareFiles({
         fileIds,
@@ -152,7 +155,6 @@ export function ShareModal({
           maxDownloadCountType === 'custom'
             ? Number(maxDownloadCount)
             : undefined,
-        scope,
       })
 
       if (response) {
@@ -162,6 +164,11 @@ export function ShareModal({
         setShareCode(response.shareCode || '')
         setShareExpireTime(response.expireTime || '')
         setIsPermanent(response.isPermanent)
+        setRawLink(
+          singleFile
+            ? `${baseUrl}/apis/share/${response.id}/raw/${singleFile.id}`
+            : ''
+        )
 
         const successMsg =
           fileIds.length === 1
@@ -193,19 +200,24 @@ export function ShareModal({
     }
   }
 
+  // 复制直链
+  const handleCopyRawLink = async () => {
+    try {
+      await navigator.clipboard.writeText(rawLink)
+      setCopiedRawLink(true)
+      setTimeout(() => {
+        setCopiedRawLink(false)
+      }, 2000)
+      toast.success(t('common.copied'))
+    } catch (error) {
+      toast.error(t('common.copyFailed'))
+    }
+  }
+
   // 处理确认按钮点击
   const handleOk = async () => {
     if (!shareLink) {
       await handleShare()
-    }
-  }
-
-  // 处理权限选择变化
-  const handleScopeChange = (value: string) => {
-    if (scopeList.includes(value)) {
-      setScopeList(scopeList.filter((v) => v !== value))
-    } else {
-      setScopeList([...scopeList, value])
     }
   }
 
@@ -215,6 +227,7 @@ export function ShareModal({
       setTimeout(() => {
         resetForm()
         setCopiedLink(false)
+        setCopiedRawLink(false)
       }, 300)
     }
   }, [open])
@@ -362,41 +375,6 @@ export function ShareModal({
                 </RadioGroup>
               </FormFieldStack>
 
-              {/* 分享权限 */}
-              <FormFieldStack>
-                <Label>{t('shareModal.labelScope')}</Label>
-                <FormInlineOptions>
-                  <FormInlineOption>
-                    <Checkbox
-                      id='scope-preview'
-                      checked={scopeList.includes('preview')}
-                      onCheckedChange={() => handleScopeChange('preview')}
-                      disabled={!!shareLink}
-                    />
-                    <Label
-                      htmlFor='scope-preview'
-                      className='cursor-pointer font-normal'
-                    >
-                      {t('shareModal.scopePreview')}
-                    </Label>
-                  </FormInlineOption>
-                  <FormInlineOption>
-                    <Checkbox
-                      id='scope-download'
-                      checked={scopeList.includes('download')}
-                      onCheckedChange={() => handleScopeChange('download')}
-                      disabled={!!shareLink}
-                    />
-                    <Label
-                      htmlFor='scope-download'
-                      className='cursor-pointer font-normal'
-                    >
-                      {t('shareModal.scopeDownload')}
-                    </Label>
-                  </FormInlineOption>
-                </FormInlineOptions>
-              </FormFieldStack>
-
               {/* 最大查看次数 */}
               <FormFieldStack>
                 <Label>{t('shareModal.labelMaxView')}</Label>
@@ -512,6 +490,32 @@ export function ShareModal({
                   )}
                 </div>
               </div>
+
+              {rawLink && (
+                <div className='space-y-2 rounded-lg border p-4'>
+                  <div className='text-xs text-muted-foreground'>
+                    {t('shareModal.rawLinkTip')}
+                  </div>
+                  <div className='flex items-center gap-2'>
+                    <div className='min-w-0 flex-1 truncate text-sm'>
+                      {rawLink}
+                    </div>
+                    <Button variant='outline' size='sm' onClick={handleCopyRawLink}>
+                      {copiedRawLink ? (
+                        <>
+                          <Check className='mr-2 h-4 w-4' />
+                          {t('shareModal.btnCopied')}
+                        </>
+                      ) : (
+                        <>
+                          <Copy className='mr-2 h-4 w-4' />
+                          {t('shareModal.btnCopyRaw')}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               <div className='text-center text-sm text-muted-foreground'>
                 {isPermanentShare()

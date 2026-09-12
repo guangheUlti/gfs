@@ -49,7 +49,7 @@ export default function StoragePage() {
   return (
     <div className='flex h-full flex-col'>
       {/* 顶部工具栏：窄屏时标题独占一行，搜索与按钮同处第二行 */}
-      <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 py-3 sm:px-6 sm:py-4'>
+      <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 pt-4 pb-3 sm:px-6 sm:pt-6 sm:pb-4'>
         {/* 标题 */}
         <div className='flex h-9 w-full min-w-0 items-center sm:w-auto sm:flex-1'>
           <h2 className='text-xl font-semibold tracking-tight'>
@@ -88,13 +88,6 @@ export default function StoragePage() {
             </Button>
           </RequirePermission>
         </div>
-      </div>
-
-      {/* 次级工具栏：统计信息 */}
-      <div className='flex flex-wrap items-center justify-between gap-2 px-3 pt-2 pb-1.5 sm:px-6 sm:pt-2.5'>
-        <span className='text-sm text-muted-foreground'>
-          {tc('listTotalItems', { count: filteredSettings.length })}
-        </span>
       </div>
 
       {/* 主内容区域 */}

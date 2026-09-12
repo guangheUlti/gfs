@@ -20,7 +20,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const defaultOpen = useMemo(getDefaultSidebarOpen, [])
   return (
     <SettingsModalProvider>
-      <SidebarProvider defaultOpen={defaultOpen}>
+      {/* 锁死视口高度：页面内只有各自的列表区滚动（h-full 链需要明确高度），面包屑/工具栏/表头固定 */}
+      <SidebarProvider defaultOpen={defaultOpen} className='h-svh overflow-hidden'>
         <AppSidebar />
         <SidebarInset>
           <Main fixed>{children}</Main>

@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { formatFileSize } from '@/utils/format'
 import { PreviewTopBar } from './PreviewTopBar'
-import { getPreviewStreamUrl, type PreviewViewerProps } from '@/utils/preview-types'
+import { usePreviewStreamUrl, type PreviewViewerProps } from '@/utils/preview-types'
 import type { FileItem } from '@/types/file'
 
 function fmtTime(seconds: number): string {
@@ -42,6 +42,7 @@ function AudioPreviewBody({ file, files, index, onSwitch }: AudioPreviewBodyProp
   const { t } = useTranslation('files')
   const audioRef = useRef<HTMLAudioElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
+  const audioSrc = usePreviewStreamUrl(file.id)
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -104,19 +105,21 @@ function AudioPreviewBody({ file, files, index, onSwitch }: AudioPreviewBodyProp
 
         {/* 主控区 */}
         <div className='flex min-w-0 flex-1 flex-col items-center justify-center gap-8 bg-background px-8 text-foreground'>
-          <audio
-            ref={audioRef}
-            src={getPreviewStreamUrl(file.id)}
-            autoPlay
-            onPlay={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
-            onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-            onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-            onEnded={() => {
-              if (autoNext && index < files.length - 1) onSwitch(index + 1)
-              else setPlaying(false)
-            }}
-          />
+          {audioSrc && (
+            <audio
+              ref={audioRef}
+              src={audioSrc}
+              autoPlay
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
+              onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+              onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+              onEnded={() => {
+                if (autoNext && index < files.length - 1) onSwitch(index + 1)
+                else setPlaying(false)
+              }}
+            />
+          )}
 
           <div className='w-full max-w-xl text-center'>
             <p className='truncate text-xl font-medium' title={file.displayName}>

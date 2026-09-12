@@ -247,6 +247,14 @@ export default function RecycleBinView() {
     lastClickedIndexRef.current = rowIndex
   }
 
+  // 右键未选中的行时先单选它（已选中的行保留当前多选），让高亮跟随操作对象
+  const handleRowContextMenu = (rowIndex: number, id: string) => {
+    if (!selectedIds.includes(id)) {
+      setSelectedIds([id])
+      lastClickedIndexRef.current = rowIndex
+    }
+  }
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -410,7 +418,7 @@ export default function RecycleBinView() {
   return (
     <div className='flex h-full flex-col'>
       {/* 顶部工具栏：窄屏时标题独占一行，搜索与清空按钮同处第二行 */}
-      <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 py-3 sm:px-6 sm:py-4'>
+      <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 pt-4 pb-3 sm:px-6 sm:pt-6 sm:pb-4'>
         <div className='w-full min-w-0 sm:w-auto sm:flex-1'>
           <FileBreadcrumb
             breadcrumbPath={[]}
@@ -540,6 +548,12 @@ export default function RecycleBinView() {
                               )}
                               onClick={(e) =>
                                 handleRowClick(rowIndex, row.original.id, e)
+                              }
+                              onContextMenu={() =>
+                                handleRowContextMenu(
+                                  rowIndex,
+                                  row.original.id
+                                )
                               }
                             >
                               {row.getVisibleCells().map((cell) => (

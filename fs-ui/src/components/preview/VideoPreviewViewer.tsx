@@ -3,11 +3,12 @@ import { useTranslation } from 'react-i18next'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { PreviewTopBar } from './PreviewTopBar'
-import { getPreviewStreamUrl, type PreviewViewerProps } from '@/utils/preview-types'
+import { usePreviewStreamUrl, type PreviewViewerProps } from '@/utils/preview-types'
 
 export function VideoPreviewViewer({ files, index, onSwitch }: PreviewViewerProps) {
   const { t } = useTranslation('files')
   const file = files[index]
+  const videoSrc = usePreviewStreamUrl(file.id)
   const [autoNext, setAutoNext] = useState(
     () => localStorage.getItem('gfs.preview.video-auto-next') === 'true'
   )
@@ -29,16 +30,18 @@ export function VideoPreviewViewer({ files, index, onSwitch }: PreviewViewerProp
 
       <div className='flex min-h-0 flex-1'>
         <div className='flex min-w-0 flex-1 items-center justify-center bg-black'>
-          <video
-            key={file.id}
-            src={getPreviewStreamUrl(file.id)}
-            controls
-            autoPlay
-            className='max-h-full max-w-full'
-            onEnded={() => {
-              if (autoNext && index < files.length - 1) onSwitch(index + 1)
-            }}
-          />
+          {videoSrc && (
+            <video
+              key={file.id}
+              src={videoSrc}
+              controls
+              autoPlay
+              className='max-h-full max-w-full'
+              onEnded={() => {
+                if (autoNext && index < files.length - 1) onSwitch(index + 1)
+              }}
+            />
+          )}
         </div>
 
         <div className='flex w-72 shrink-0 flex-col border-l bg-card'>

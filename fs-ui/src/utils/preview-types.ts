@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { getPreviewToken } from '@/api/file'
 import type { FileItem } from '@/types/file'
 
 /** 各预览 viewer 的统一 props：files 为同类型文件集合，index 为当前索引；startEdit 为 true 时直接进入编辑模式 */
@@ -62,9 +64,40 @@ export function isEditableSuffix(suffix: string | undefined): boolean {
   return TEXT_EXTS.includes(ext) || CODE_EXTS.includes(ext) || MARKDOWN_EXTS.includes(ext)
 }
 
-/** 主流式预览地址（公开接口，支持 Range/206；word/ppt 流内转 PDF） */
-export function getPreviewStreamUrl(fileId: string): string {
-  return `${import.meta.env.VITE_API_BASE_URL}/api/file/stream/preview/${fileId}`
+/**
+ * 流式预览地址解析：流接口已纳入防盗链拦截，<img>/<video>/<audio>/<iframe> 带不了登录头，
+ * 需先换取短时 previewToken 再拼 URL；token 有效期 5 分钟，本地缓存 4 分钟内复用
+ */
+const STREAM_URL_TTL_MS = 4 * 60 * 1000
+const streamUrlCache = new Map<string, { url: string; expireAt: number }>()
+
+async function resolvePreviewStreamUrl(fileId: string): Promise<string> {
+  const cached = streamUrlCache.get(fileId)
+  if (cached && cached.expireAt > Date.now()) return cached.url
+  const token = await getPreviewToken(fileId)
+  const url = `${import.meta.env.VITE_API_BASE_URL}/api/file/stream/preview/${fileId}?previewToken=${encodeURIComponent(token)}`
+  streamUrlCache.set(fileId, { url, expireAt: Date.now() + STREAM_URL_TTL_MS })
+  return url
+}
+
+export function usePreviewStreamUrl(fileId: string): string | undefined {
+  const [url, setUrl] = useState<string | undefined>(
+    () => streamUrlCache.get(fileId)?.url
+  )
+  useEffect(() => {
+    let alive = true
+    resolvePreviewStreamUrl(fileId)
+      .then((u) => {
+        if (alive) setUrl(u)
+      })
+      .catch(() => {
+        if (alive) setUrl(undefined)
+      })
+    return () => {
+      alive = false
+    }
+  }, [fileId])
+  return url
 }
 
 /** 从文件集合中筛出与指定文件同类型（同 PreviewKind）的文件，用于预览切换 */

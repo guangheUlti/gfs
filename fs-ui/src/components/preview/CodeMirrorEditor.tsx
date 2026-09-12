@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Loader2, Save } from 'lucide-react'
 import { keymap, EditorView } from '@codemirror/view'
@@ -119,6 +119,27 @@ export default function CodeMirrorEditor({
     const saved = localStorage.getItem(THEME_KEY)
     return saved && saved !== 'default' ? saved : 'system'
   })
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Ctrl+滚轮默认缩放编辑器字号（拦截浏览器整页缩放），与工具栏字号选择联动
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      setFontSize((size) => {
+        const next = Math.min(
+          FONT_SIZES[FONT_SIZES.length - 1],
+          Math.max(FONT_SIZES[0], size + (e.deltaY < 0 ? 1 : -1))
+        )
+        localStorage.setItem(FONT_SIZE_KEY, String(next))
+        return next
+      })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
   const [loaded, setLoaded] = useState<{
     desc: LanguageDescription
     support: LanguageSupport
@@ -242,7 +263,7 @@ export default function CodeMirrorEditor({
   }, [themeName, systemTheme])
 
   return (
-    <div className='flex min-h-0 flex-1 flex-col bg-background'>
+    <div ref={containerRef} className='flex min-h-0 flex-1 flex-col bg-background'>
       {/* 工具栏（对齐 ffs operate-wrapper：保存/自动换行/字号/语言/主题） */}
       <div className='flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-2'>
         {!readOnly && (

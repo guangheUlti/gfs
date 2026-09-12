@@ -180,6 +180,14 @@ export function FileGridView({
     lastClickedIndexRef.current = index
   }
 
+  // 右键未选中的卡片时先单选它（已选中的保留当前多选），让高亮跟随操作对象
+  const handleItemContextMenu = (file: FileItem, index: number) => {
+    if (!selectedSet.has(file.id)) {
+      onSelectionChange([file.id])
+      lastClickedIndexRef.current = index
+    }
+  }
+
   const handleDoubleClick = (file: FileItem) => {
     if (file.isDir) {
       onFileClick(file)
@@ -193,8 +201,8 @@ export function FileGridView({
     !hasMore && !loadingMore && fileList.length > 0
 
   return (
-    // 外层滚动区已有内边距，窄屏不再叠加，给卡片让出宽度
-    <div className='p-0 sm:p-4'>
+    // 外层滚动区已有内边距，窄屏不再叠加，给卡片让出宽度；底部留白交给滚动区，让「没有更多了」提示距底与其他列表一致
+    <div className='p-0 sm:px-4 sm:pt-4'>
       <div className='relative'>
         <div className='grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-4'>
         {fileList.map((file, index) => {
@@ -225,6 +233,7 @@ export function FileGridView({
                   onDragLeave={(e) => canWrite && handleDragLeave(e, file)}
                   onDrop={(e) => canWrite && handleDrop(e, file)}
                   onClick={(e) => handleItemClick(file, e, index)}
+                  onContextMenu={() => handleItemContextMenu(file, index)}
                   onDoubleClick={() => handleDoubleClick(file)}
                 >
                   {/* 更多操作 */}
@@ -652,7 +661,7 @@ export function FileGridView({
         </div>
       )}
       {showNoMoreHint && (
-        <p className='mt-6 pb-2 text-center text-sm text-muted-foreground/55'>
+        <p className='pt-6 text-center text-sm text-muted-foreground/55'>
           {t('index.noMore')}
         </p>
       )}

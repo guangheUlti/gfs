@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { Slider } from '@/components/ui/slider'
 import { PreviewTopBar } from './PreviewTopBar'
-import { getPreviewStreamUrl, type PreviewViewerProps } from '@/utils/preview-types'
+import { usePreviewStreamUrl, type PreviewViewerProps } from '@/utils/preview-types'
 import type { FileItem } from '@/types/file'
 
 const LIST_COLLAPSED_KEY = 'gfs.preview.img-list-collapsed'
@@ -37,6 +37,7 @@ interface ImagePreviewBodyProps {
 
 function ImagePreviewBody({ file, files, index, onSwitch }: ImagePreviewBodyProps) {
   const { t } = useTranslation('files')
+  const mainSrc = usePreviewStreamUrl(file.id)
   const [zoom, setZoom] = useState(100)
   const [rotate, setRotate] = useState(0)
   // 默认收起缩略图列表；用户展开过则记住（localStorage 'false' = 展开）。
@@ -137,12 +138,9 @@ function ImagePreviewBody({ file, files, index, onSwitch }: ImagePreviewBodyProp
                   i === index ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/40'
                 }`}
               >
-                <img
-                  src={getPreviewStreamUrl(item.id)}
-                  alt=''
-                  loading='lazy'
+                <PreviewThumbImage
+                  fileId={item.id}
                   className='mx-auto max-h-28 max-w-full rounded object-contain'
-                  draggable={false}
                 />
                 <p className='mt-1 truncate text-center text-xs'>
                   {item.displayName}
@@ -156,16 +154,18 @@ function ImagePreviewBody({ file, files, index, onSwitch }: ImagePreviewBodyProp
           ref={areaRef}
           className='relative flex min-w-0 flex-1 items-center justify-center overflow-hidden bg-muted'
         >
-          <img
-            src={getPreviewStreamUrl(file.id)}
-            alt={file.displayName}
-            onLoad={(e) => fitZoom(e.currentTarget)}
-            draggable={false}
-            className='max-h-full max-w-full select-none'
-            style={{
-              transform: `rotate(${rotate}deg) scale(${zoom / 100})`,
-            }}
-          />
+          {mainSrc && (
+            <img
+              src={mainSrc}
+              alt={file.displayName}
+              onLoad={(e) => fitZoom(e.currentTarget)}
+              draggable={false}
+              className='max-h-full max-w-full select-none'
+              style={{
+                transform: `rotate(${rotate}deg) scale(${zoom / 100})`,
+              }}
+            />
+          )}
 
           {index > 0 && (
             <button
@@ -204,4 +204,11 @@ function ImagePreviewBody({ file, files, index, onSwitch }: ImagePreviewBodyProp
       </div>
     </div>
   )
+}
+
+/** 缩略图条目：<img> 直连流接口，需各自换取 previewToken */
+function PreviewThumbImage({ fileId, className }: { fileId: string; className: string }) {
+  const url = usePreviewStreamUrl(fileId)
+  if (!url) return null
+  return <img src={url} alt='' loading='lazy' className={className} draggable={false} />
 }

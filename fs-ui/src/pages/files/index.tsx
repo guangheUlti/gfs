@@ -311,8 +311,8 @@ export default function FilesPage() {
 
   return (
     <div className='flex h-full flex-col'>
-      {/* 顶部工具栏：窄屏时标题与工具栏各占一行；行内上下留白对称，分隔线离标题的间距与标题距顶一致 */}
-      <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 py-3 sm:px-6 sm:py-4'>
+      {/* 顶部工具栏：窄屏时标题与工具栏各占一行；顶部留白大、底部留白小，分隔线贴近内容 */}
+      <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 pt-4 pb-3 sm:px-6 sm:pt-6 sm:pb-4'>
         {/* 面包屑导航 */}
         <div className='w-full min-w-0 sm:w-auto sm:flex-1'>
           <FileBreadcrumb

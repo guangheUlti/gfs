@@ -19,9 +19,7 @@ import {
   validateShareCode,
   getShareItemList,
 } from '@/api/share'
-import { getToken } from '@/utils/auth'
 import { getAvatarFallback } from '@/utils/avatar'
-import { usePreviewStore } from '@/store/preview'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   Breadcrumb,
@@ -199,34 +197,26 @@ export default function SharePage() {
     [t]
   )
 
-  // 处理预览（本窗口全屏弹窗）
+  // 处理预览：分享匿名开放，直链内联展示可预览类型，其余浏览器自动下载
   const handlePreview = (file: FileItem) => {
-    const index = fileList.findIndex((f) => f.id === file.id)
-    usePreviewStore.getState().openPreview(fileList, Math.max(index, 0))
+    window.open(
+      `${import.meta.env.VITE_API_BASE_URL}/apis/share/${shareToken}/raw/${file.id}`,
+      '_blank'
+    )
   }
 
-  // 处理下载
+  // 处理下载：下载接口本身匿名，无需携带 token
   const handleDownload = (file: FileItem) => {
-    try {
-      const token = getToken()
+    const downloadUrl = `${import.meta.env.VITE_API_BASE_URL}/apis/share/${shareToken}/download/${file.id}`
 
-      // 构建下载链接，浏览器直接下载带不了请求头，把 token 放到 URL 参数中
-      const params = new URLSearchParams()
-      params.set('Authorization', `Bearer ${token}`)
-
-      const downloadUrl = `${import.meta.env.VITE_API_BASE_URL}/apis/share/${shareToken}/download/${file.id}?${params.toString()}`
-
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = file.originalName
-      link.style.display = 'none'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      toast.success(t('toast.downloadStart'))
-    } catch (error) {
-      toast.error(t('toast.downloadFail'))
-    }
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = file.originalName
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    toast.success(t('toast.downloadStart'))
   }
 
   useEffect(() => {
@@ -456,7 +446,6 @@ export default function SharePage() {
           ) : viewMode === 'list' ? (
             <ShareFileListView
               fileList={fileList}
-              scope={shareData.scope}
               onFileClick={handleFileClick}
               onPreview={handlePreview}
               onDownload={handleDownload}
@@ -464,7 +453,6 @@ export default function SharePage() {
           ) : (
             <ShareFileGridView
               fileList={fileList}
-              scope={shareData.scope}
               onFileClick={handleFileClick}
               onPreview={handlePreview}
               onDownload={handleDownload}

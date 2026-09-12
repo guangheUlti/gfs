@@ -195,6 +195,14 @@ export function FileListView({
     lastClickedIndexRef.current = index
   }
 
+  // 右键未选中的行时先单选它（已选中的行保留当前多选），让高亮跟随操作对象
+  const handleRowContextMenu = (file: FileItem, index: number) => {
+    if (!selectedKeys.includes(file.id)) {
+      onSelectionChange([file.id])
+      lastClickedIndexRef.current = index
+    }
+  }
+
   const handleDoubleClick = (file: FileItem) => {
     if (file.isDir) {
       onFileClick(file)
@@ -278,6 +286,7 @@ export function FileListView({
                     onDragLeave={(e) => canWrite && handleDragLeave(e, file)}
                     onDrop={(e) => canWrite && handleDrop(e, file)}
                     onClick={(e) => handleRowClick(file, e, index)}
+                    onContextMenu={() => handleRowContextMenu(file, index)}
                     onDoubleClick={() => handleDoubleClick(file)}
                   >
                     <TableCell
@@ -707,7 +716,7 @@ export function FileListView({
         </div>
       )}
       {showNoMoreHint && (
-        <p className='py-6 text-center text-sm text-muted-foreground/55'>
+        <p className='pt-6 text-center text-sm text-muted-foreground/55'>
           {t('index.noMore')}
         </p>
       )}
