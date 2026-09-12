@@ -94,7 +94,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
         //注册文件预览防盗链拦截器
         registry.addInterceptor(previewInterceptor)
-                .addPathPatterns("/preview/**", "/archive/preview/**", "/api/file/stream/preview/archive/inner/**")
+                .addPathPatterns("/preview/**", "/archive/preview/**", "/api/file/stream/preview/**")
                 .excludePathPatterns("/preview/token/**", "/preview/error", "/archive/preview/token/**")
                 .order(3);
     }

@@ -137,7 +137,10 @@ public class ArchiveFilePreviewService {
      * 辅助：下载方法
      */
     private byte[] downloadFile(String fileId) throws Exception {
-        String streamUrl = previewConfig.getStreamApi() + "/" + fileId;
+        // 服务端回环拉流同样要过防盗链拦截器，补签短时 previewToken
+        String token = UUID.randomUUID().toString().replace("-", "");
+        redisRepository.setExpire(RedisKey.getPreviewTokenKey(token), fileId, RedisKey.PREVIEW_TOKEN_EXPIRE);
+        String streamUrl = previewConfig.getStreamApi() + "/" + fileId + "?previewToken=" + token;
         try (InputStream is = new BufferedInputStream(URI.create(streamUrl).toURL().openStream())) {
             return is.readAllBytes(); // 注意：如果原始文件极大，建议改用临时文件引用而非内存数组
         }

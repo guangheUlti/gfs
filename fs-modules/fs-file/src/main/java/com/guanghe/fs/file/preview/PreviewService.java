@@ -2,17 +2,20 @@ package com.guanghe.fs.file.preview;
 
 import com.guanghe.fs.file.domain.FileInfo;
 import com.guanghe.fs.file.service.FileInfoService;
+import com.guanghe.fs.framework.common.constant.RedisKey;
 import com.guanghe.fs.framework.common.enums.FileTypeEnum;
 import com.guanghe.fs.framework.common.utils.I18nUtils;
 import com.guanghe.fs.framework.preview.config.FilePreviewConfig;
 import com.guanghe.fs.framework.preview.core.PreviewContext;
 import com.guanghe.fs.framework.preview.core.PreviewStrategy;
 import com.guanghe.fs.framework.preview.factory.PreviewStrategyManager;
+import com.guanghe.fs.framework.redis.repository.RedisRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.ui.Model;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * 预览服务
@@ -25,6 +28,7 @@ public class PreviewService {
     private final FileInfoService fileInfoService;
     private final PreviewStrategyManager strategyManager;
     private final FilePreviewConfig previewConfig;
+    private final RedisRepository redisRepository;
 
     public String preview(String fileId, Model model) {
         if (fileId == null || fileId.trim().isEmpty()) {
@@ -49,10 +53,14 @@ public class PreviewService {
                     I18nUtils.getMessage("preview.file.type.not.supported.detail"));
         }
 
+        // 内嵌页媒体走流接口，补签短时 previewToken（流接口已纳入防盗链拦截）
+        String streamToken = UUID.randomUUID().toString().replace("-", "");
+        redisRepository.setExpire(RedisKey.getPreviewTokenKey(streamToken), fileId, RedisKey.PREVIEW_TOKEN_EXPIRE);
+
         PreviewContext context = PreviewContext.builder()
                 .fileId(fileId)
                 .fileName(fileInfo.getDisplayName())
-                .streamUrl(BROWSER_PREVIEW_STREAM_PATH + "/" + fileId)
+                .streamUrl(BROWSER_PREVIEW_STREAM_PATH + "/" + fileId + "?previewToken=" + streamToken)
                 .fileSize(fileInfo.getSize())
                 .extension(fileInfo.getSuffix())
                 .fileType(fileType)

@@ -26,6 +26,7 @@ import com.guanghe.fs.file.mount.MountPathResolver;
 import com.guanghe.fs.file.mount.MountPointService;
 import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.file.service.FileObjectReferenceService;
+import com.guanghe.fs.framework.common.constant.RedisKey;
 import com.guanghe.fs.framework.common.domain.PageResult;
 import com.guanghe.fs.framework.common.enums.FileTypeEnum;
 import com.guanghe.fs.framework.common.exception.BusinessException;
@@ -33,6 +34,7 @@ import com.guanghe.fs.framework.common.exception.StorageOperationException;
 import com.guanghe.fs.framework.common.utils.FileUtils;
 import com.guanghe.fs.framework.common.utils.I18nUtils;
 import com.guanghe.fs.framework.common.utils.StringUtils;
+import com.guanghe.fs.framework.redis.repository.RedisRepository;
 import com.guanghe.fs.storage.plugin.core.IStorageOperationService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
@@ -93,6 +95,9 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
 
     @Autowired
     private com.guanghe.fs.storage.service.StorageSettingService storageSettingService;
+
+    @Autowired
+    private RedisRepository redisRepository;
 
     /** 当前配置是否为挂载式存储（能力位判断，勿比较 identifier 字符串） */
     private boolean isMountStorage(String settingId) {
@@ -1261,7 +1266,10 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
             return null;
         }
         // 统一走同源文件流，避免把 minio/rustfs 等 Docker 内部地址返回给浏览器。
-        return "/api/file/stream/preview/" + fileId;
+        // 流接口已纳入防盗链拦截，缩略图由 <img> 直连（带不了登录头），内嵌短时 previewToken
+        String token = UUID.randomUUID().toString().replace("-", "");
+        redisRepository.setExpire(RedisKey.getPreviewTokenKey(token), fileId, RedisKey.PREVIEW_TOKEN_EXPIRE);
+        return "/api/file/stream/preview/" + fileId + "?previewToken=" + token;
     }
 
     @Override

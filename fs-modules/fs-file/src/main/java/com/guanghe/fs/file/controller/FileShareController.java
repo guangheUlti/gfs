@@ -17,6 +17,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.MediaTypeFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -150,6 +152,45 @@ public class FileShareController {
         } catch (Exception e) {
             throw new RuntimeException("文件下载失败", e);
         }
+    }
+
+    @GetMapping("/{shareId}/raw/{fileId}")
+    @Operation(summary = "直链访问分享文件", description = "绕过分享页直接访问分享内文件，白名单媒体类型内联展示，其余类型转为下载")
+    public ResponseEntity<Resource> rawShareFile(@PathVariable String shareId, @PathVariable String fileId) {
+        FileDownloadVO fileDownload = fileShareService.downloadFiles(shareId, fileId);
+        String fileName = fileDownload.getFileName();
+        String encodedName = URLEncoder.encode(fileName, StandardCharsets.UTF_8);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("X-Content-Type-Options", "nosniff");
+        // 直链仅内联安全的媒体类型（排除 svg/html 等可执行内容），其余回退为附件下载
+        MediaType mediaType = MediaTypeFactory.getMediaType(fileName).orElse(null);
+        if (mediaType != null && isSafeInlineType(mediaType)) {
+            if (MediaType.TEXT_PLAIN_VALUE.equals(mediaType.toString())) {
+                mediaType = new MediaType(mediaType, StandardCharsets.UTF_8);
+            }
+            headers.add(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + encodedName + "\"");
+            headers.add(HttpHeaders.CONTENT_TYPE, mediaType.toString());
+        } else {
+            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + encodedName + "\"");
+            headers.add(HttpHeaders.CONTENT_TYPE, "application/octet-stream");
+        }
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .contentLength(fileDownload.getFileSize())
+                .body(fileDownload.getResource());
+    }
+
+    private boolean isSafeInlineType(MediaType mediaType) {
+        String type = mediaType.toString();
+        if (type.startsWith("image/")) {
+            return !type.contains("svg");
+        }
+        return type.startsWith("video/") || type.startsWith("audio/")
+                || MediaType.APPLICATION_PDF_VALUE.equals(type)
+                || MediaType.TEXT_PLAIN_VALUE.equals(type)
+                || MediaType.APPLICATION_JSON_VALUE.equals(type);
     }
 
     @PostMapping("/{shareId}/folder-download/tasks/{folderId}")

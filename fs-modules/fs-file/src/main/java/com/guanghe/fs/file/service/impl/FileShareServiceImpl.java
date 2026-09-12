@@ -171,7 +171,8 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
             share.setShareCode(RandomUtil.randomString(4));
         }
 
-        share.setScope(cmd.getScope());
+        // 分享统一可下载；scope 列非空且无默认值，前端不再传时补默认，历史值原样保留
+        share.setScope(StrUtil.blankToDefault(cmd.getScope(), "download"));
         share.setMaxViewCount(cmd.getMaxViewCount());
         share.setMaxDownloadCount(cmd.getMaxDownloadCount());
 
