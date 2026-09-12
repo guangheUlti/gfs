@@ -31,7 +31,8 @@ deploy-package/
 │   └── redis.conf          # 首次运行时由 env.bat 生成
 ├── frontend/               # 前端构建产物，由应用在 / 路径下直接提供服务
 ├── sql/init.sql            # 表结构 + 初始数据（admin 账号、权限）
-├── data/                   # 首次运行自动创建：mysql、redis、upload
+├── data/                   # 首次运行自动创建：mysql、redis
+├── storage/                # 首次运行自动创建：上传文件根目录（GFS_STORAGE_DIR）
 └── logs/                   # 首次运行自动创建：gfs*.log、mysql.log、redis.log
 ```
 
@@ -141,10 +142,10 @@ net start GFS-MySQL
 
 ## 数据、日志与备份
 
-GFS 写入的所有内容都在 `data\` 下：`mysql\`（数据库）、`redis\`（持久化 +
-日志）、`upload\`（上传的文件）。用 `bin\stop.bat` 停掉服务后，复制 `data\`
-和 `conf\` 两个目录就是一份完整备份。删除 `data\` 等于重置系统，下次启动时
-`init.bat` 会重新初始化数据库。
+GFS 写入的所有内容都在 `data\`（`mysql\` 数据库、`redis\` 持久化 + 日志）与
+`storage\`（上传的文件，即 `GFS_STORAGE_DIR`）下。用 `bin\stop.bat` 停掉服务
+后，复制 `data\`、`storage\` 和 `conf\` 三个目录就是一份完整备份。删除
+`data\` 等于重置系统，下次启动时 `init.bat` 会重新初始化数据库。
 
 ## 前端与深链接
 

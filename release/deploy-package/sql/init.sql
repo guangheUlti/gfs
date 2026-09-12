@@ -369,6 +369,33 @@ LOCK TABLES `storage_settings` WRITE;
 UNLOCK TABLES;
 
 --
+-- Table structure for table `sys_feature_toggle`
+--
+
+DROP TABLE IF EXISTS `sys_feature_toggle`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `sys_feature_toggle` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `feature_key` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '功能标识',
+  `enabled` tinyint NOT NULL DEFAULT '0' COMMENT '是否开启：0关 1开',
+  `created_at` datetime NOT NULL COMMENT '创建时间',
+  `updated_at` datetime NOT NULL COMMENT '修改时间',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE KEY `uk_feature_key` (`feature_key`) USING BTREE COMMENT '功能标识唯一索引'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC COMMENT='功能开关';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `sys_feature_toggle`
+--
+
+LOCK TABLES `sys_feature_toggle` WRITE;
+/*!40000 ALTER TABLE `sys_feature_toggle` DISABLE KEYS */;
+/*!40000 ALTER TABLE `sys_feature_toggle` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `sys_login_log`
 --
 

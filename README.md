@@ -78,7 +78,7 @@
     - 存储空间统计
 
 - **对外文件服务**（管理员可配，实时运行状态）
-    - **WebDAV 服务端**：复用主服务 HTTP 端口（80），路径前缀 `/dav`，支持 Windows 网络驱动器映射（`net use Z: http://<主机>/dav`）、rclone、davfs2 等客户端
+    - **WebDAV 服务端**：复用主服务 HTTP 端口（部署默认 80），路径前缀 `/dav`，支持 Windows 网络驱动器映射（`net use Z: http://<主机>/dav`）、rclone、davfs2 等客户端
     - **SFTP 服务端**：独立端口（默认 9022，Apache MINA SSHD），支持 sshfs 挂载与 WinSCP / FileZilla / OpenSSH 客户端
     - 认证复用网盘账号（BCrypt 校验），删除进回收站与 Web 端语义一致，内容级去重秒传
     - 启用/停用热生效，服务重启后自动拉起；SFTP 主机密钥持久化，重启后客户端无指纹告警
@@ -149,7 +149,7 @@ mvn spring-boot:run
 
 # 或使用 IDE 运行 FsAdminApplication
 
-# 启动前端（开发地址 http://localhost:5173，/apis 代理到后端 80）
+# 启动前端（开发地址 http://localhost:8000，/apis 代理到后端 2000）
 cd fs-ui
 pnpm install
 pnpm dev
@@ -157,8 +157,9 @@ pnpm dev
 
 访问：
 
-- 服务地址：http://localhost
-- API 文档：http://localhost/swagger-ui.html
+- 开发前端：http://localhost:8000（`/apis`、`/dav` 代理到后端 2000）
+- 后端直连：http://localhost:2000（API 文档：http://localhost:2000/swagger-ui.html）
+- 部署版默认入口：http://localhost（见下方「Windows 一键部署」）
 
 ### 默认账号
 
@@ -172,14 +173,38 @@ pnpm dev
 
 ```bat
 cd release\deploy-package
-bin\verify.bat          :: 检查包内容与端口
-bin\start.bat           :: 首次运行自动初始化数据库并启动三件套
-bin\stop.bat            :: 全部停止
-bin\status.bat          :: 查看运行状态
-bin\install-service.bat :: 注册开机自启（需管理员）
+bin\verify.bat            :: 可选：检查包内容与端口，启动前后各跑一次
+bin\start.bat             :: 首次运行自动初始化数据库并启动 Redis + MySQL + 应用
+bin\stop.bat              :: 全部停止
+bin\status.bat            :: 查看运行状态（PID、端口、初始化情况）
+bin\install-service.bat   :: 注册开机自启（需管理员）
+bin\uninstall-service.bat :: 移除开机自启（不影响运行中的服务与数据）
 ```
 
-端口、数据库密码、JVM 参数统一在 `bin\env.bat` 里改，详见 `release/deploy-package/README.md`。
+启动后访问 `http://<服务器地址>`，默认账号 `admin / admin`。
+
+**部署配置**集中在 `bin\env.bat`（唯一配置入口，改完重新执行 `start.bat` 生效），也可在启动前用 `set` 临时覆盖单次运行：
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `SERVER_PORT` | `80` | 应用 HTTP 端口：Web 界面、`/apis` 接口与 WebDAV（`/dav`）共用 |
+| `MYSQL_HOST` / `MYSQL_PORT` | `127.0.0.1` / `3306` | 内置 MySQL |
+| `MYSQL_DB` / `MYSQL_USER` / `MYSQL_PASSWORD` | `gfs` / `root` / `root` | 数据库与账号 |
+| `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | `127.0.0.1` / `6379` / 空 | 内置 Redis（会话与缓存） |
+| `DATA_DIR` / `LOG_DIR` | `<包目录>\data` / `<包目录>\logs` | MySQL 数据、Redis 持久化 / 全部日志；上传文件固定在 `<包目录>\storage` |
+| `INNODB_POOL` | `256M` | InnoDB buffer pool 大小 |
+| `JAVA_OPTS` | `-Xms512m -Xmx1024m` | JVM 内存参数 |
+| `FS_FRONTEND_DOMAIN` | `http://localhost:<SERVER_PORT>` | 对外生成的绝对链接前缀 |
+| `TASK_NAME` | `GFS-Autostart` | 开机自启计划任务名 |
+
+配置生效方式：
+
+- `conf\application.yml` 只负责激活 prod profile；`conf\application-prod.yml` 通过 `${SERVER_PORT}`、`${MYSQL_*}`、`${REDIS_*}`、`${GFS_HOME}` 等占位符读取 `env.bat` 导出的环境变量——改一处，MySQL、Redis、JDBC、应用端口同时生效，**配置文件本身无需手动编辑**。
+- `conf\my.ini`、`conf\redis.conf` 首次启动时按 `env.bat` 自动生成，之后手工修改会被保留（删除文件即强制重新生成）。
+- 前端构建产物在 `frontend\`，由应用自身在 `/` 下直接提供服务，无需 nginx；升级前端直接覆盖该目录。
+- 备份：`bin\stop.bat` 停止后复制 `data\`、`storage\`、`conf\` 即为完整备份；删除 `data\` 即重置系统。
+
+启用「对外文件服务」后 SFTP 默认额外监听 `9022`（网页管理端可改）。更多细节（脚本参数、开机自启原理、故障排查）见 `release/deploy-package/README.md`。
 
 ---
 
