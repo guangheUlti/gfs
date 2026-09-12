@@ -1,8 +1,14 @@
 # GFS 存储插件扩展实施指南
 
 > 目标读者：负责实施编码的 agent。本文档自包含，实施前只需通读本文 + 按锚点核对代码现状。
-> 代码基线：2026-09-09，main 分支 commit `acab558`（工作区另有若干未提交的布局微调，不影响本指南涉及的文件）。所有 `文件:行号` 锚点若有漂移，以**符号搜索**为准。
-> 阶段顺序 P0→P5，每阶段结束必须可独立编译验证。**不要做"明确不做"清单之外的事。**
+>
+> 代码基线：2026-09-09，main 分支 commit `acab558`（所有 `文件:行号` 锚点若有漂移，以**符号搜索**为准）。
+>
+> 执行约束：阶段顺序 P0→P5，每阶段结束必须可独立编译验证。**不要做「明确不做」清单之外的事。**
+>
+> 最后更新：2026-09-09 —— P0–P5 已随 commit `20b2f77` 落地，本文转为实施记录与维护参考。
+
+---
 
 ## 0. 项目约定（必须遵守）
 
@@ -17,7 +23,7 @@
 ## 1. 需求清单
 
 | # | 需求 | 说明 |
-|---|---|---|
+| --- | --- | --- |
 | R1 | 移除 Kodo、Obs 插件 | 模块删除 + DB 孤儿平台行清理 |
 | R2 | 新增 SMB / WebDAV / SFTP / FTP(FTPS) 四个插件 | 纯对象式（同 Local/Minio 模式），分片先落本地 temp，complete 时合并写远程 |
 | R3 | 新增「本地目录挂载」插件（LocalMount，读写） | 真实文件系统目录挂进网盘：DB 目录树镜像真实结构，GFS 内写操作穿透真实 FS，外部改动靠扫描同步回来 |
@@ -65,7 +71,7 @@
 ## 3. 阶段总览
 
 | 阶段 | 内容 | 规模 |
-|---|---|---|
+| --- | --- | --- |
 | P0 | 移除 Kodo/Obs + 孤儿平台清理 | 小 |
 | P1 | SPI 扩展（4 个 default 方法 + 1 个 DTO）+ 分片 temp 公共基类 + 4 个依赖坐标 | 小 |
 | P2 | 四个远程协议插件（SMB/WebDAV/SFTP/FTP） | 大 |
@@ -279,7 +285,7 @@ private void testStorageConnection(String platformIdentifier, String configData)
 新建 5 个类：
 
 | 类 | 职责 |
-|---|---|
+| --- | --- |
 | `MountPathResolver` | `resolveRelativeKey(FileInfo file, long settingId)`：沿 parent_id 向上收集 display_name 直到挂载点记录（判定：is_dir=1 && parent_id IS NULL && storage_platform_setting_id=settingId），逆序拼 `a/b/c.ext`；名字含 `/` 或 `\` → 抛 `mount.invalid.name`；未遇挂载点到根 → `mount.not.in.scope`；长度>500 → `mount.key.too.long` |
 | `MountPointService` | ensureMountPoint（懒建挂载点记录）；unmount(settingId)（删索引见 8.4-⑧） |
 | `MountLocks` | `ConcurrentHashMap<String, ReentrantLock>`，key=settingId；`acquire/callWithLock(settingId, supplier)`。**所有写穿透与扫描都持此锁** |
@@ -289,7 +295,7 @@ private void testStorageConnection(String platformIdentifier, String configData)
 修改的现有文件：
 
 | 文件 | 挂载分支 |
-|---|---|
+| --- | --- |
 | `FileTransferTaskServiceImpl.initUpload:256-302` | 拿到 `getStorageService(configId).isMountMode()` 时：objectKey 不走 `FileUtils.generateObjectKey`，改 `MountPathResolver.resolveRelativeKey(parentDirRecord)` + `"/" + 预占显示名`；同时校验父记录 storagePlatformSettingId==configId（不一致抛 `mount.platform.mismatch`）；普通平台行为不变 |
 | `FileTransferTaskServiceImpl.checkUpload:305-367` | 挂载式**跳过秒传查询**（复用旧对象会破坏路径映射）；空文件分支改 `uploadFile(空流, task.objectKey)` 直写真实路径 |
 | `FileTransferTaskServiceImpl.doMergeChunks:775-921` | 挂载式**跳过合并后二次去重**（:851-868）；completeMultipartUpload 由插件直接写真实路径；`file_info` 插入与真实写入都包在 `MountLocks` 内 |
@@ -304,7 +310,7 @@ private void testStorageConnection(String platformIdentifier, String configData)
 ### 8.4 边界情况处理表（实施时逐条对照）
 
 | # | 场景 | 策略 |
-|---|---|---|
+| --- | --- | --- |
 | ① | GFS 上传中（分片在插件 temp） | 分片全在 temp（挂载根之外），真实树无痕迹；合并与扫描互斥（MountLocks） |
 | ② | 合并写真实文件与扫描并发 | 合并的 completeMultipartUpload + file_info 落库都在 MountLocks 内，与扫描串行化 |
 | ③ | 外部删除文件 | DB 记录**硬删**（不入回收站——内容已没了，进回收站给用户"可恢复"错觉）；本就 is_deleted=1 的不动 |
@@ -379,7 +385,7 @@ fs:
 ## 9. P5 前端（fs-ui）
 
 | 文件 | 改动 |
-|---|---|
+| --- | --- |
 | `src\pages\storage\utils.ts`（新建） | `isSensitiveField(id)`：小写后含 password/secret/token，或同时含 access 和 key——**与后端 isSensitiveKey 完全同规则** |
 | `AddStorageModal.tsx` | 字段渲染处：敏感字段 `<Input type='password' autoComplete='new-password'>` |
 | `StorageSettingCard.tsx` | ① 编辑弹窗同上；② 卡片操作区：`setting.storagePlatform?.identifier === 'LocalMount'` 时渲染「重新扫描」按钮（RefreshCw 图标 + loading 态），调新 api |
@@ -393,7 +399,7 @@ fs:
 ### 10.1 每阶段验证
 
 | 阶段 | 验证 |
-|---|---|
+| --- | --- |
 | P0 | mvn 编译过；启动日志出现"清理孤儿存储平台: Obs/Kodo"；设置页添加下拉不再出现 OBS；`SELECT * FROM storage_platform` 无两行 |
 | P1 | 全量编译过（8 个旧插件零改动）；启动正常，现有 Local 上传下载回归 |
 | P2 | 启动日志注册 4 新插件；正确配置保存成功；**错误配置（错密码/端口/share）保存被 P3 拒绝**并返回 `storage.config.test.failed`，DB 无残留行 |
@@ -427,7 +433,7 @@ curl -s -X POST http://localhost/apis/auth/login -H "Content-Type: application/j
 ## 11. 风险清单
 
 | 风险 | 等级 | 缓解 |
-|---|---|---|
+| --- | --- | --- |
 | 扫描器误删 DB 记录（网络抖动/部分失败） | 高 | 8.5-6：异常放弃本轮删除段；删除前路径二次确认；保险丝上限 |
 | object_key 列宽不足 | 高 | 8.6 扩列 512 + 解析器长度守卫 |
 | 远程客户端线程安全（实例被缓存共享） | 中 | FTP/SMB/SFTP 逐操作连接；WebDAV 复用 |

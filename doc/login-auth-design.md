@@ -22,8 +22,6 @@
 | 拦截链 | `WebMvcConfig` | `fs-admin/.../web/WebMvcConfig.java` | 注册工作空间、登录校验、存储平台三个拦截器 |
 | 前端 | `auth-context` / `utils/auth` / `api/request` | `fs-ui/src/` | 登录态编排、token 持久化、请求头注入、401 整页跳转 |
 
----
-
 ## 2. 登录时序
 
 ```
@@ -57,8 +55,6 @@
 - 用户不存在与口令错误返回**同一句文案**（`user.account.or.password.incorrect`），避免账号枚举。
 - 禁用/待审核/已拒绝属于业务拒绝，**不计入密码试错次数**，不会因管理员审核延迟把用户锁在门外。
 
----
-
 ## 3. 凭证与 token 生命周期
 
 | 维度 | 现行设计 |
@@ -86,8 +82,6 @@
 因此约定：**无法自定义请求头的请求（下载、SSE）一律用查询参数 `Authorization=Bearer <token>`**（`is-read-body: true` 会读取请求参数）。若将来确实需要 Cookie 鉴权，得先去掉 `token-prefix` 并重新评估 CSRF 面。已登录用户浏览器里残留的旧 Cookie 不会被读取，到期自然消失。
 
 > `/apis/transfer/sse` 实测矩阵：Header 传 `Bearer <token>` → 200；Query 传 `Bearer <token>` → 200；Cookie 传裸 token → 401；Cookie 传带前缀 token → 401；无凭据 → 401。
-
----
 
 ## 4. 多端登录互不影响的实现原理
 
@@ -162,8 +156,6 @@ Token-Session（按 tokenValue 唯一，端级私有数据）
 2. 可选语义微调（Sa-Token 默认值即为下述组合）：
    - `replacedLoginExitMode`：`OLD_DEVICE`（旧设备被顶下线，新登录成功）/ `NEW_DEVICE`（拒绝新登录，旧设备保持在线）；
    - `replacedRange`：`CURR_DEVICE_TYPE`（仅顶同设备类型）/ `ALL_DEVICE_TYPE`（顶掉该账号所有设备）。
-
----
 
 ## 5. 配置项详解
 
@@ -240,8 +232,6 @@ Token-Session（按 tokenValue 唯一，端级私有数据）
 | 验证结果 | 未登录 401；非超管 403（列表与踢人均拦）；踢单终端后该 token 401、同账号其他终端还是 200；整账号下线 `data` 为实际会话数且包含管理员自己时也能正常踢并保留审计；错误 `tokenTail` 不会误伤（目标仍 200）；全部登出后 Redis `Authorization:login:*` 归零 |
 | 依赖 | 必须配合 §5.4 的 Redis 存储。若退回 JVM 内存实现，每个实例只能看到并踢自己发的 token，“登录管理”在多实例下会失真 |
 
----
-
 ## 6. 请求进入时的鉴权链
 
 `WebMvcConfig.addInterceptors` 注册的顺序（`order` 越小越先执行）：
@@ -260,8 +250,6 @@ Token-Session（按 tokenValue 唯一，端级私有数据）
 
 > **排查提示（重要）**：本项目的业务异常经 `GlobalExceptionHandler` 统一封装为 **HTTP 200 + body `code`**（例如未登录是 `{"code":401,"msg":"Token无效…"}`）。只有 `WorkspaceInterceptor` 直接写响应流的场景才是真 400/401/403。用 `curl`/脚本验证登录态时**必须检查响应体的 `code` 字段**，只看 HTTP 状态码会得到「好像没鉴权」的错误结论。
 
----
-
 ## 7. 扩展与维护指南
 
 | 想做的事 | 怎么做 |
@@ -272,8 +260,6 @@ Token-Session（按 tokenValue 唯一，端级私有数据）
 | 强制某端下线 | 已在「登录管理」中实现（见 §5.5）；普通 token 模式下 `StpUtil.logout(loginId, device)` / `StpUtil.kickout(...)` 均可用（旧 JWT 模式下这些API 均失效） |
 | 直连数据库改 `sys_user` | 必须清 Redis 用户缓存 `user:{userId}`，否则 `/apis/user/info` 返回旧值（`SysUserServiceImpl.getDetail()` 带 `@Cacheable("user")`） |
 | 换头像/改资料后前端不更新 | 走应用接口（会自动 evict 缓存），不要直接改库 |
-
----
 
 ## 8. 关键文件索引
 

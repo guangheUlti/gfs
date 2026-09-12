@@ -1,6 +1,12 @@
-# 对外文件服务实施指南：WebDAV + SFTP（服务端）
+# GFS 对外文件服务实施指南（WebDAV + SFTP）
 
-> 本文档是给实施 agent 的完整操作文档。所有决策已定，按本文执行即可；**不要扩大范围**。
+> 目标读者：负责实施编码的 agent。本文档自包含，所有决策已定，按本文执行即可，不要扩大范围。
+>
+> 代码基线：2026-09-09，main 分支写定时状态（所有 `文件:行号` 锚点若有漂移，以符号搜索为准）。
+>
+> 最后更新：2026-09-11 —— 服务端与前端管理页已随 commit `70f9fab` 落地，本文转为实施记录与维护参考。
+
+---
 
 ## 1. 背景与已定决策
 
@@ -9,7 +15,7 @@ GFS 目前只有 Web 端文件管理；本任务让系统**对外充当文件服
 **范围（只做这两个）：**
 
 | 协议 | 接入方式 | 认证 |
-|------|---------|------|
+| --- | --- | --- |
 | WebDAV | 复用现有 HTTP 服务（Tomcat 80 端口），路径 `/dav/**` | HTTP Basic（现有账号 + BCrypt 校验） |
 | SFTP | Apache MINA SSHD 独立端口（默认 9022） | 密码认证（现有账号 + BCrypt 校验） |
 
@@ -110,7 +116,7 @@ PostgreSQL 版（`sql/postgresql/gfs_pg.sql`）：id varchar(128)、service_type
 ### 3.2 管理端 API（挂 /apis/service/**，Sa-Token 正常拦截）
 
 | 方法 | 路径 | 说明 |
-|------|------|------|
+| --- | --- | --- |
 | GET | `/apis/service/list` | 全部服务配置 + 实时运行状态（running/stopped/error + 错误信息） |
 | PUT | `/apis/service/{type}/config` | body: `{enabled, port?, bindAddress?}`；保存后热生效（§4.7） |
 | POST | `/apis/service/{type}/{action}` | action ∈ start / stop / restart（与 storage 的 `/{id}/{action}` 风格一致） |
