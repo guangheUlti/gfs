@@ -1,0 +1,32 @@
+[
+  {
+    "label": "存储根目录",
+    "dataType": "string",
+    "identifier": "basePath",
+    "validation": {
+      "required": true
+    }
+  },
+  {
+    "label": "开启落盘加密",
+    "dataType": "boolean",
+    "identifier": "encryptionEnabled",
+    "validation": {
+      "required": false
+    },
+    "description": "开启后新写入的文件以 AES-CTR 加密落盘；变更密钥将导致旧文件无法解密，请谨慎保管"
+  },
+  {
+    "label": "加密密钥",
+    "dataType": "string",
+    "identifier": "encryptionSecret",
+    "validation": {
+      "required": false
+    },
+    "showIf": {
+      "identifier": "encryptionEnabled",
+      "value": "true"
+    },
+    "placeholder": "开启加密后必填；密钥变更后旧文件将无法解密"
+  }
+]

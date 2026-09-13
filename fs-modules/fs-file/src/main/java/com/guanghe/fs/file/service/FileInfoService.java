@@ -30,6 +30,11 @@ public interface FileInfoService extends IService<FileInfo> {
     FileInfo getAuthorizedFile(String fileId);
 
     /**
+     * 统计指定存储配置下的文件数量（含各级目录），用于删除存储配置前的占用检查
+     */
+    long countByStorageSettingId(String settingId);
+
+    /**
      * 下载文件
      *
      * @param fileId 文件ID

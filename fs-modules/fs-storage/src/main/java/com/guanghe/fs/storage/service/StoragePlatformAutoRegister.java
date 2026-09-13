@@ -29,8 +29,9 @@ import static com.guanghe.fs.storage.domain.table.StorageSettingTableDef.STORAGE
 /**
  * 存储平台自动注册服务
  * 在应用启动时自动扫描插件并同步到数据库
- * 
- * 注意：Local 插件作为系统内置默认插件，不需要插入数据库
+ *
+ * Local 插件同样注册平台行（携带配置Schema），支持添加多个不同根目录的本地存储实例；
+ * 其内置配置行固定 id="Local"，由 StorageSettingServiceImpl 懒建
  *
  * @Author: guangheUlti
  * @Date: 2026/01/12 22:06
@@ -72,13 +73,6 @@ public class StoragePlatformAutoRegister implements ApplicationRunner {
 
         for (StoragePluginMetadata metadata : allMetadata) {
             try {
-                // 跳过 Local 插件，它是系统内置默认插件，不需要插入数据库
-                if (StorageUtils.LOCAL_PLATFORM_IDENTIFIER.equals(metadata.getIdentifier())) {
-                    log.debug("跳过内置插件: {}", metadata.getIdentifier());
-                    skipCount++;
-                    continue;
-                }
-                
                 SyncResult result = syncSinglePlugin(metadata);
                 switch (result) {
                     case INSERTED -> insertCount++;

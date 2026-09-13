@@ -5,7 +5,6 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.guanghe.fs.framework.security.properties.SecurityProperties;
 import com.guanghe.fs.interceptor.PreviewInterceptor;
 import com.guanghe.fs.interceptor.StoragePlatformInterceptor;
-import com.guanghe.fs.storage.plugin.local.config.LocalStorageProperties;
 import java.io.IOException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
@@ -33,18 +32,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Autowired
     private PreviewInterceptor previewInterceptor;
 
-    @Autowired
-    private LocalStorageProperties storageProperties;
-
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        String baseUrl = storageProperties.getBaseUrl();
-        // 提取最后一个 / 之后的内容
-        String prefix = baseUrl.substring(baseUrl.lastIndexOf("/") + 1);
-
-        registry.addResourceHandler("/" + prefix + "/**")
-                .addResourceLocations("file:" + storageProperties.getBasePath() + "/");
-
         // 前端 SPA 静态资源与 history 路由回退：未命中的非接口路径回退到 index.html
         registry.addResourceHandler("/**")
                 .addResourceLocations("classpath:/static/")

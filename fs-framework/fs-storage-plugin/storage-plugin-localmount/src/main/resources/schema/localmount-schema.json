@@ -2,5 +2,7 @@
   {"label":"挂载显示名","dataType":"string","identifier":"mountName","validation":{"required":false}},
   {"label":"挂载根路径","dataType":"string","identifier":"rootPath","validation":{"required":true}},
   {"label":"跟随符号链接","dataType":"string","identifier":"followSymlinks","validation":{"required":false}},
-  {"label":"扫描间隔（秒）","dataType":"string","identifier":"rescanIntervalSeconds","validation":{"required":false}}
+  {"label":"扫描间隔（秒）","dataType":"string","identifier":"rescanIntervalSeconds","validation":{"required":false}},
+  {"label":"开启落盘加密","dataType":"boolean","identifier":"encryptionEnabled","validation":{"required":false}},
+  {"label":"加密密钥","dataType":"string","identifier":"encryptionSecret","validation":{"required":false},"showIf":{"identifier":"encryptionEnabled","value":"true"},"placeholder":"开启加密后必填，变更密钥将导致旧文件无法解密"}
 ]

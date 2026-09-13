@@ -14,6 +14,7 @@ import com.guanghe.fs.storage.domain.vo.StoragePlatformVO;
 import com.guanghe.fs.storage.domain.vo.StorageSettingUserVO;
 import com.guanghe.fs.storage.facade.StorageServiceFacade;
 import com.guanghe.fs.storage.mapper.StorageSettingMapper;
+import com.guanghe.fs.storage.plugin.boot.LocalStorageManager;
 import com.guanghe.fs.storage.plugin.boot.StoragePluginRegistry;
 import com.guanghe.fs.storage.plugin.core.IStorageOperationService;
 import com.guanghe.fs.storage.plugin.core.config.StorageConfig;
@@ -28,19 +29,24 @@ import io.github.linpeilie.Converter;
 import tools.jackson.core.type.TypeReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 
 import static com.guanghe.fs.storage.domain.table.StorageSettingTableDef.STORAGE_SETTING;
+import static com.guanghe.fs.storage.plugin.core.utils.StorageUtils.platformDisplayOrder;
 
 /**
  * 存储平台配置业务接口实现
@@ -65,27 +71,93 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
         this.mountUnmountConsumer = consumer;
     }
 
+    /**
+     * 存储占用检查（由 fs-file 在启动时注入，避免 fs-storage 反向依赖 fs-file）。
+     * 返回 true 表示该配置下仍有文件索引，禁止删除。
+     */
+    private volatile java.util.function.Predicate<String> storageInUseChecker;
+
+    public void setStorageInUseChecker(java.util.function.Predicate<String> checker) {
+        this.storageInUseChecker = checker;
+    }
+
     private final Converter converter;
 
     private final StoragePlatformService storagePlatformService;
 
     private final StorageServiceFacade storageServiceFacade;
-    
+
     private final StoragePluginRegistry storagePluginRegistry;
+
+    private final LocalStorageManager localStorageManager;
+
+    private final CacheManager cacheManager;
+
+    /**
+     * 启动后装配内置本地存储：
+     * 1. 懒建固定 id="Local" 的配置行（首次启动用 application.yml 默认值落库）
+     * 2. 向 LocalStorageManager 注入 DB 属性覆盖，使内置实例按 DB 配置的根目录工作
+     * 3. 清空本服务列表缓存，避免升级后命中旧版本写入的过期结构（TTL 1h 内不自愈）
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void initBuiltinLocalSetting() {
+        try {
+            ensureBuiltinLocalRow();
+            localStorageManager.setPropertiesOverride(this::loadBuiltinLocalProperties);
+            List.of("storageSettings", "storageActivePlatforms").forEach(name -> {
+                var cache = cacheManager.getCache(name);
+                if (cache != null) {
+                    cache.clear();
+                }
+            });
+            log.info("内置本地存储配置装配完成: basePath={}",
+                    localStorageManager.getEffectiveProperties().get("basePath"));
+        } catch (Exception e) {
+            log.warn("内置本地存储配置装配失败，沿用 application.yml 默认值: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 内置 Local 配置行懒建：作为其根目录等属性的持久化载体
+     */
+    private void ensureBuiltinLocalRow() {
+        if (this.getById(StorageUtils.LOCAL_PLATFORM_IDENTIFIER) != null) {
+            return;
+        }
+        StorageSetting local = new StorageSetting();
+        local.setId(StorageUtils.LOCAL_PLATFORM_IDENTIFIER);
+        local.setPlatformIdentifier(StorageUtils.LOCAL_PLATFORM_IDENTIFIER);
+        local.setConfigData(JsonUtils.toJsonString(localStorageManager.getDefaultProperties()));
+        local.setEnabled(CommonConstant.Y);
+        local.setRemark(I18nUtils.getMessage("storage.system.default"));
+        this.save(local);
+        log.info("内置本地存储配置行已初始化");
+    }
+
+    /**
+     * 内置 Local 的 DB 覆盖属性（空白项剔除，交给 application.yml 默认值兜底）
+     */
+    private Map<String, Object> loadBuiltinLocalProperties() {
+        StorageSetting local = this.getById(StorageUtils.LOCAL_PLATFORM_IDENTIFIER);
+        if (local == null || local.getConfigData() == null || local.getConfigData().isBlank()) {
+            return Map.of();
+        }
+        Map<String, Object> props = parseConfig(local.getConfigData());
+        props.entrySet().removeIf(e -> e.getValue() == null || String.valueOf(e.getValue()).isBlank());
+        return props;
+    }
 
     @Override
     @Cacheable(value = "storageSettings", key = "'global'", unless = "#result == null || #result.isEmpty()")
     public List<StorageSettingUserVO> getStorageSettingsByUser() {
-        // 存储配置为系统级资源，仅系统管理员可读写，无需再按归属过滤
+        // 存储配置为系统级资源，仅系统管理员可读写，无需再按归属过滤；内置 Local 行单独组装、固定首位
         List<StorageSetting> storageSettings = this.list(
                 new QueryWrapper()
+                        .where(STORAGE_SETTING.ID.ne(StorageUtils.LOCAL_PLATFORM_IDENTIFIER))
                         .orderBy(STORAGE_SETTING.ENABLED.desc())
         );
         List<StorageSettingUserVO> result = new ArrayList<>();
-        // 内置本地存储固定在列表首位：本地存储不落库，无启用配置行即代表当前正使用它
-        boolean hasEnabled = storageSettings.stream()
-                .anyMatch(s -> CommonConstant.Y.equals(s.getEnabled()));
-        result.add(buildLocalSettingVO(!hasEnabled));
+        result.add(buildLocalSettingVO());
         storageSettings.stream().map(storageSetting -> {
             StorageSettingUserVO vo = converter.convert(storageSetting, StorageSettingUserVO.class);
             vo.setConfigData(maskSensitiveConfig(storageSetting.getConfigData()));
@@ -94,23 +166,33 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
             vo.setStoragePlatform(storagePlatformVO);
             return vo;
         }).forEach(result::add);
+        // 统一展示顺序：按平台权重排序，同平台内启用优先
+        result.sort(Comparator
+                .comparingInt((StorageSettingUserVO vo) -> platformDisplayOrder(
+                        vo.getStoragePlatform() != null ? vo.getStoragePlatform().getIdentifier() : null))
+                .thenComparing(vo -> CommonConstant.Y.equals(vo.getEnabled()) ? 0 : 1));
         return result;
     }
 
     /**
-     * 构造内置本地存储的展示行（不落库）：id 固定为 "Local"，供列表展示与"切换回本地存储"使用
+     * 构造内置本地存储的展示行：id 固定为 "Local"，恒启用，携带生效配置与配置Schema 供编辑表单使用
      */
-    private StorageSettingUserVO buildLocalSettingVO(boolean enabled) {
+    private StorageSettingUserVO buildLocalSettingVO() {
         StorageSettingUserVO vo = new StorageSettingUserVO();
         vo.setId(StorageUtils.LOCAL_PLATFORM_IDENTIFIER);
-        vo.setEnabled(enabled ? CommonConstant.Y : CommonConstant.N);
+        vo.setEnabled(CommonConstant.Y);
         vo.setRemark(I18nUtils.getMessage("storage.system.default"));
+        // 加密口令属敏感字段，展示侧与其它平台配置一样打掩码；编辑提交空/掩码时按“不变”回填
+        vo.setConfigData(maskSensitiveConfig(JsonUtils.toJsonString(localStorageManager.getEffectiveProperties())));
+        StoragePluginMetadata localMetadata = storagePluginRegistry.getMetadata(StorageUtils.LOCAL_PLATFORM_IDENTIFIER);
         StoragePlatformVO platform = new StoragePlatformVO();
         platform.setIdentifier(StorageUtils.LOCAL_PLATFORM_IDENTIFIER);
         platform.setName(I18nUtils.getMessage("storage.local.name"));
         platform.setDesc(I18nUtils.getMessage("storage.local.desc"));
         platform.setIcon("icon-bendicunchu1");
-        platform.setConfigScheme("[]");
+        platform.setConfigScheme(localMetadata != null && localMetadata.getConfigSchema() != null
+                ? localMetadata.getConfigSchema()
+                : "[]");
         vo.setStoragePlatform(platform);
         return vo;
     }
@@ -118,27 +200,28 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     @Override
     @Cacheable(value = "storageActivePlatforms", key = "'global'", unless = "#result == null || #result.isEmpty()")
     public List<StorageActivePlatformsVO> getActiveStoragePlatforms() {
-        StorageSetting storageSetting = this.getOne(
-                new QueryWrapper().where(STORAGE_SETTING.ENABLED.eq(CommonConstant.Y))
-        );
         List<StorageActivePlatformsVO> result = new ArrayList<>();
-        // 添加默认本地存储平台
+        // 内置本地存储恒可用，固定首位
         StorageActivePlatformsVO localInstance = new StorageActivePlatformsVO();
         StoragePluginMetadata localMetadata = storagePluginRegistry.getMetadata(StorageUtils.LOCAL_PLATFORM_IDENTIFIER);
         localInstance.setSettingId(StorageUtils.LOCAL_PLATFORM_IDENTIFIER);
         localInstance.setPlatformIdentifier(StorageUtils.LOCAL_PLATFORM_IDENTIFIER);
-        if (localMetadata != null) {
-            localInstance.setPlatformIcon(localMetadata.getIcon());
-            localInstance.setPlatformName(localMetadata.getName());
-        } else {
-            // 回退到默认值
-            localInstance.setPlatformIcon("icon-bendicunchu1");
-            localInstance.setPlatformName(I18nUtils.getMessage("storage.local.name"));
-        }
+        localInstance.setPlatformIcon(localMetadata != null
+                ? localMetadata.getIcon()
+                : "icon-bendicunchu1");
+        localInstance.setPlatformName(I18nUtils.getMessage("storage.local.name"));
         localInstance.setIsEnabled(true);
         localInstance.setRemark(I18nUtils.getMessage("storage.system.default"));
-        if (storageSetting != null) {
-            localInstance.setIsEnabled(false);
+        result.add(localInstance);
+
+        // 多激活：全部启用行一并返回（内置 Local 行已单独组装）
+        List<StorageSetting> enabledSettings = this.list(
+                new QueryWrapper().where(STORAGE_SETTING.ENABLED.eq(CommonConstant.Y))
+        );
+        for (StorageSetting storageSetting : enabledSettings) {
+            if (StorageUtils.LOCAL_PLATFORM_IDENTIFIER.equals(storageSetting.getId())) {
+                continue;
+            }
             StoragePlatform storagePlatform = storagePlatformService.getStoragePlatformByIdentifier(storageSetting.getPlatformIdentifier());
             StorageActivePlatformsVO vo = new StorageActivePlatformsVO();
             vo.setSettingId(storageSetting.getId());
@@ -153,7 +236,9 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
             vo.setIsEnabled(true);
             result.add(vo);
         }
-        result.add(localInstance);
+        // 统一展示顺序（内置 Local 权重最小，恒为首位）
+        result.sort(Comparator.comparingInt(
+                (StorageActivePlatformsVO vo) -> platformDisplayOrder(vo.getPlatformIdentifier())));
         return result;
     }
 
@@ -166,17 +251,10 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     public void enableOrDisableStoragePlatform(String settingId, Integer action) {
         Integer newStatus = action == 0 ? CommonConstant.N : CommonConstant.Y;
 
-        // 内置本地存储没有数据库行：切换到它 = 清空全部启用行（无启用行即本地存储生效）
+        // 内置本地存储恒启用：重复启用直接成功，禁用一律拒绝
         if (StorageUtils.LOCAL_PLATFORM_IDENTIFIER.equals(settingId)) {
             if (CommonConstant.N.equals(newStatus)) {
                 throw new BusinessException(I18nUtils.getMessage("storage.local.disable.forbidden"));
-            }
-            List<StorageSetting> storageSettings = this.list(
-                    new QueryWrapper().where(STORAGE_SETTING.ENABLED.eq(CommonConstant.Y))
-            );
-            storageSettings.forEach(s -> s.setEnabled(CommonConstant.N));
-            if (!storageSettings.isEmpty()) {
-                this.updateBatch(storageSettings);
             }
             return;
         }
@@ -186,15 +264,7 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
             throw new BusinessException(I18nUtils.getMessage("storage.config.not.exist"));
         }
 
-        if (newStatus.equals(CommonConstant.Y)) {
-            // 全系统同时只允许一个存储配置处于启用状态
-            List<StorageSetting> storageSettings = this.list(
-                    new QueryWrapper()
-                            .where(STORAGE_SETTING.ENABLED.eq(CommonConstant.Y))
-            );
-            storageSettings.forEach(s -> s.setEnabled(CommonConstant.N));
-            this.updateBatch(storageSettings);
-        }
+        // 多激活：启用不再互斥清空其它启用行，可同时启用多个存储配置
         storageSetting.setEnabled(newStatus);
         this.updateById(storageSetting);
 
@@ -257,6 +327,10 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
             @CacheEvict(value = "storageActivePlatforms", key = "'global'")
     })
     public void editStorageSetting(StorageSettingEditCmd cmd) {
+        if (StorageUtils.LOCAL_PLATFORM_IDENTIFIER.equals(cmd.getSettingId())) {
+            editBuiltinLocalSetting(cmd);
+            return;
+        }
         StorageSetting storageSetting = this.getById(cmd.getSettingId());
         if (storageSetting == null) {
             throw new BusinessException(I18nUtils.getMessage("storage.config.not.exist"));
@@ -280,15 +354,44 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     }
 
     /**
+     * 内置本地存储编辑：更新固定 id="Local" 配置行的根目录等属性并重建内置实例。
+     * 改根目录只影响新写入文件，既有文件索引仍指向旧根目录下的 objectKey，需自行迁移物理文件。
+     */
+    private void editBuiltinLocalSetting(StorageSettingEditCmd cmd) {
+        Map<String, Object> incoming = parseConfig(cmd.getConfigData());
+        Object basePath = incoming.get("basePath");
+        if (basePath == null || String.valueOf(basePath).isBlank()) {
+            throw new BusinessException(I18nUtils.getMessage("storage.local.basepath.required"));
+        }
+        StorageSetting local = this.getById(StorageUtils.LOCAL_PLATFORM_IDENTIFIER);
+        if (local == null) {
+            throw new BusinessException(I18nUtils.getMessage("storage.config.not.exist"));
+        }
+        // 敏感字段（加密口令）提交掩码/空白时保留 DB 旧值，与其它平台配置编辑同一规则
+        Map<String, Object> merged = parseConfig(JsonUtils.toJsonString(incoming));
+        merged = parseConfig(mergeSensitiveConfig(local.getConfigData(), JsonUtils.toJsonString(merged)));
+        String mergedConfigData = JsonUtils.toJsonString(merged);
+        // 与其它本地存储实例查重（同根目录的重复实例没有意义）
+        if (checkDuplicateConfigForUpdate(StorageUtils.LOCAL_PLATFORM_IDENTIFIER, mergedConfigData,
+                StorageUtils.LOCAL_PLATFORM_IDENTIFIER)) {
+            throw new BusinessException(I18nUtils.getMessage("storage.config.duplicate"));
+        }
+        // 真实初始化验证根目录可创建/可写，失败整单回滚
+        testStorageConnection(StorageUtils.LOCAL_PLATFORM_IDENTIFIER, mergedConfigData);
+        local.setConfigData(mergedConfigData);
+        local.setRemark(cmd.getRemark());
+        this.updateById(local);
+        // 重建内置单例：属性覆盖 supplier 惰性重读 DB 行
+        localStorageManager.reset();
+        log.info("内置本地存储配置已更新: basePath={}", basePath);
+    }
+
+    /**
      * 保存前存储连接测试
      * 用原型工厂创建配置化实例（validateConfig + initialize 真实建连），失败即抛业务异常拒绝保存。
-     * configId 传 null 避免测试实例进入缓存；Local 平台跳过（内置单例有自己的目录保障）。
+     * configId 传 null 避免测试实例进入缓存；Local 平台的 initialize 会真实创建根目录，兼作目录校验。
      */
     private void testStorageConnection(String platformIdentifier, String configData) {
-        if (StorageUtils.isLocalConfig(platformIdentifier)
-                || StorageUtils.LOCAL_PLATFORM_IDENTIFIER.equals(platformIdentifier)) {
-            return;
-        }
         StorageConfig cfg = StorageConfig.builder()
                 .configId(null)
                 .platformIdentifier(platformIdentifier)
@@ -338,6 +441,10 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
             @CacheEvict(value = "storageActivePlatforms", key = "'global'")
     })
     public void deleteStorageSettingById(String id) {
+        // 内置本地存储是系统默认存储，禁止删除
+        if (StorageUtils.LOCAL_PLATFORM_IDENTIFIER.equals(id)) {
+            throw new BusinessException(I18nUtils.getMessage("storage.local.delete.forbidden"));
+        }
         StorageSetting storageSetting = this.getById(id);
 
         if (storageSetting == null) {
@@ -346,6 +453,11 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
         String cacheSettingId = StoragePlatformContextHolder.getConfigId();
         if (id.equals(cacheSettingId)) {
             throw new BusinessException(I18nUtils.getMessage("storage.config.in.use"));
+        }
+        // 该存储下仍有文件索引时禁止删除，防止文件永久失联
+        java.util.function.Predicate<String> inUseChecker = this.storageInUseChecker;
+        if (inUseChecker != null && inUseChecker.test(id)) {
+            throw new BusinessException(I18nUtils.getMessage("storage.delete.has.files"));
         }
 
         this.removeById(id);

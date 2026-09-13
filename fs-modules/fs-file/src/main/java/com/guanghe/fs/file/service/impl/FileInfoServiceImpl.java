@@ -129,6 +129,16 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     }
 
     @Override
+    public long countByStorageSettingId(String settingId) {
+        if (StrUtil.isBlank(settingId)) {
+            return 0;
+        }
+        return count(new QueryWrapper()
+                .where(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.eq(settingId))
+                .and(FILE_INFO.IS_DELETED.eq(false)));
+    }
+
+    @Override
     public InputStream downloadFile(String fileId) {
         FileInfo fileInfo = getAuthorizedFile(fileId);
         if (fileInfo.getIsDir()) {

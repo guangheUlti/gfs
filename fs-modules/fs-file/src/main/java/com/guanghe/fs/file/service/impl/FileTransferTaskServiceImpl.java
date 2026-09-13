@@ -356,6 +356,13 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                     log.info("挂载式空文件上传，直写真实路径: taskId={}", taskId);
                     return handleMountEmptyFileUpload(task, storagePlatformSettingId);
                 }
+            } else if (storageServiceFacade.getStorageService(storagePlatformSettingId).isEncryptionEnabled()) {
+                // 落盘加密存储：物理对象是按写入口令加密的密文，且加密后同一密钥下 IV 随机、密文互不相同，
+                // 秒传/去重复用旧对象的前提不成立（密钥变更后新记录会指向无法解密的对象），一律走真实上传。
+                log.info("落盘加密存储，跳过秒传检查直接上传: taskId={}", taskId);
+                if (task.getFileSize() == null || task.getFileSize() == 0) {
+                    return handleEmptyFileUpload(task, cmd.getFileMd5(), storagePlatformSettingId);
+                }
             } else {
                 // 相同存储配置中的相同内容全局复用；回收站记录也属于有效引用。
                 try (FileObjectReferenceService.ReferenceLock ignored =
@@ -948,6 +955,10 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                     fileInfoService.save(fi);
                     return fi;
                 });
+            } else if (storageService.isEncryptionEnabled()) {
+                // 落盘加密存储：合并产物已是密文，跳过并发去重复用，直接登记本次上传的对象
+                fileInfo = buildUploadedFileInfo(task, uploadedObjectKey, completeTime);
+                fileInfoService.save(fileInfo);
             } else {
             // 合并完成后再次去重，解决多个相同文件并发上传时都未命中秒传的问题。
             try (FileObjectReferenceService.ReferenceLock ignored =

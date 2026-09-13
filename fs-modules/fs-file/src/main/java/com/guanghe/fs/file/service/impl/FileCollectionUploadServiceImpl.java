@@ -138,10 +138,12 @@ public class FileCollectionUploadServiceImpl implements FileCollectionUploadServ
         cacheManager.cacheTask(task);
 
         String storageSettingId = task.getStoragePlatformSettingId();
+        // 落盘加密存储：物理对象是密文，秒传/去重复用前提不成立，直接走真实上传
+        boolean encryptionEnabled = storageServiceFacade.getStorageService(storageSettingId).isEncryptionEnabled();
         try (FileObjectReferenceService.ReferenceLock ignored =
                      objectReferenceService.acquireContentLock(
                              storageSettingId, cmd.getFileMd5(), task.getFileSize())) {
-            FileInfo reusableFile = objectReferenceService.findReusableFile(
+            FileInfo reusableFile = encryptionEnabled ? null : objectReferenceService.findReusableFile(
                     cmd.getFileMd5(), task.getFileSize(), storageSettingId);
             if (reusableFile != null) {
                 try (FileObjectReferenceService.ReferenceLock objectLock =
@@ -287,10 +289,12 @@ public class FileCollectionUploadServiceImpl implements FileCollectionUploadServ
 
             String uploadedObjectKey = task.getObjectKey();
             FileInfo fileInfo;
+            // 落盘加密存储：合并产物已是密文，跳过并发去重复用
+            boolean encryptionEnabled = storageService.isEncryptionEnabled();
             try (FileObjectReferenceService.ReferenceLock ignored =
                          objectReferenceService.acquireContentLock(
                                  task.getStoragePlatformSettingId(), task.getFileMd5(), task.getFileSize())) {
-                FileInfo reusableFile = objectReferenceService.findReusableFile(
+                FileInfo reusableFile = encryptionEnabled ? null : objectReferenceService.findReusableFile(
                         task.getFileMd5(), task.getFileSize(), task.getStoragePlatformSettingId());
                 if (reusableFile != null) {
                     try (FileObjectReferenceService.ReferenceLock objectLock =

@@ -37,9 +37,15 @@ public class FileObjectReferenceService {
     /**
      * 在同一物理存储配置中查找内容相同且对象仍真实存在的文件。
      * 回收站记录仍可恢复，因此同样属于有效引用。
+     * 落盘加密存储直接短路：物理对象是按写入口令加密的密文，复用旧对象在密钥变更后
+     * 会变成「新记录指向无法解密的对象」，且 contentMd5 是明文哈希与密文无关，去重前提不成立。
      */
     public FileInfo findReusableFile(String contentMd5, Long size, String storageSettingId) {
         if (StrUtil.isBlank(contentMd5)) {
+            return null;
+        }
+        if (isStorageEncrypted(storageSettingId)) {
+            log.debug("落盘加密存储，跳过去重复用: storageSettingId={}, md5={}", storageSettingId, contentMd5);
             return null;
         }
 
@@ -145,6 +151,17 @@ public class FileObjectReferenceService {
             wrapper.and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.isNull());
         } else {
             wrapper.and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.eq(storageSettingId));
+        }
+    }
+
+    /**
+     * 目标存储是否开启落盘加密（存储不可用时按未加密处理，走原有去重逻辑）
+     */
+    private boolean isStorageEncrypted(String storageSettingId) {
+        try {
+            return storageServiceFacade.getStorageService(storageSettingId).isEncryptionEnabled();
+        } catch (Exception e) {
+            return false;
         }
     }
 

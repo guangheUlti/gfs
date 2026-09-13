@@ -11,9 +11,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+import java.util.Comparator;
 import java.util.List;
 
 import static com.guanghe.fs.storage.domain.table.StoragePlatformTableDef.STORAGE_PLATFORM;
+import static com.guanghe.fs.storage.plugin.core.utils.StorageUtils.platformDisplayOrder;
 
 /**
  * 存储平台业务接口实现
@@ -31,7 +33,9 @@ public class StoragePlatformServiceImpl extends ServiceImpl<StoragePlatformMappe
     @Override
     public List<StoragePlatformVO> getList() {
         List<StoragePlatform> storagePlatforms = this.list();
-        return converter.convert(storagePlatforms, StoragePlatformVO.class);
+        List<StoragePlatformVO> result = converter.convert(storagePlatforms, StoragePlatformVO.class);
+        result.sort(Comparator.comparingInt(vo -> platformDisplayOrder(vo.getIdentifier())));
+        return result;
     }
 
 

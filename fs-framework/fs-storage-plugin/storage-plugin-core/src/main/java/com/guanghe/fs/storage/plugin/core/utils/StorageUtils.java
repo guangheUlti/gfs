@@ -2,6 +2,8 @@ package com.guanghe.fs.storage.plugin.core.utils;
 
 import cn.hutool.core.util.StrUtil;
 
+import java.util.List;
+
 /**
  * 存储工具类
  *
@@ -14,6 +16,29 @@ public class StorageUtils {
      * 本地存储平台标识符常量
      */
     public static final String LOCAL_PLATFORM_IDENTIFIER = "Local";
+
+    /**
+     * 存储平台展示顺序（平台下拉、存储切换、配置/服务页列表统一按此排序；未列出的平台排最后）
+     */
+    private static final List<String> PLATFORM_DISPLAY_ORDER = List.of(
+            LOCAL_PLATFORM_IDENTIFIER,
+            "LocalMount",
+            "WebDAV",
+            "SFTP",
+            "FTP",
+            "Smb",
+            "RustFS",
+            "AliyunOSS",
+            "Minio"
+    );
+
+    /**
+     * 获取平台展示顺序权重，越小越靠前；未收录的平台返回 Integer.MAX_VALUE
+     */
+    public static int platformDisplayOrder(String identifier) {
+        int index = identifier == null ? -1 : PLATFORM_DISPLAY_ORDER.indexOf(identifier);
+        return index >= 0 ? index : Integer.MAX_VALUE;
+    }
 
     /**
      * 判断是否为 Local 存储配置

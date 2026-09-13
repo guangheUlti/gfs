@@ -5,6 +5,7 @@ import com.guanghe.fs.framework.common.exception.StorageOperationException;
 import com.guanghe.fs.storage.plugin.core.annotation.StoragePlugin;
 import com.guanghe.fs.storage.plugin.core.chunk.AbstractTempChunkStorageService;
 import com.guanghe.fs.storage.plugin.core.config.StorageConfig;
+import com.guanghe.fs.storage.plugin.core.crypto.StreamCipherSupport;
 import com.guanghe.fs.storage.plugin.core.model.StorageObjectEntry;
 import com.guanghe.fs.storage.plugin.localmount.config.LocalMountConfig;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +55,9 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
     private Path rootPath;
     private boolean followSymlinks;
 
+    /** 落盘加密口令（encryptionEnabled=true 时非空） */
+    private String encryptionSecret;
+
     public LocalMountStorageOperationService() {
         super();
     }
@@ -72,6 +76,13 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
         if (cfg.getRootPath().trim().contains("\\")) {
             throw new StorageConfigException("本地目录挂载配置错误：根路径请使用正斜杠（如 D:/mnt-test）");
         }
+        // 开启加密时口令必填（与 Local 插件同规则）
+        if (cfg.isEncryptionEnabled()) {
+            String secret = cfg.getEncryptionSecret();
+            if (secret == null || secret.trim().isEmpty()) {
+                throw new StorageConfigException("本地目录挂载配置错误：开启落盘加密后必须设置密钥（encryptionSecret）");
+            }
+        }
     }
 
     @Override
@@ -89,8 +100,9 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
             throw new StorageConfigException("本地目录挂载配置错误：根路径无法解析: " + e.getMessage());
         }
         this.followSymlinks = "true".equalsIgnoreCase(cfg.getFollowSymlinks());
-        log.info("{} 本地目录挂载初始化完成: rootPath={}, followSymlinks={}",
-                getLogPrefix(), rootPath, followSymlinks);
+        this.encryptionSecret = cfg.isEncryptionEnabled() ? cfg.getEncryptionSecret().trim() : null;
+        log.info("{} 本地目录挂载初始化完成: rootPath={}, followSymlinks={}, encryption={}",
+                getLogPrefix(), rootPath, followSymlinks, encryptionSecret != null ? "AES-CTR 开启" : "关闭");
     }
 
     public Path getRootPath() {
@@ -130,8 +142,11 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
                 // 幂等创建，禁止 exists()+mkdirs()（并发竞态）
                 Files.createDirectories(parent);
             }
-            try (OutputStream os = Files.newOutputStream(target,
-                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
+            try (OutputStream os = encryptionSecret != null
+                    ? StreamCipherSupport.encryptingOutputStream(Files.newOutputStream(target,
+                            StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE), encryptionSecret)
+                    : Files.newOutputStream(target,
+                            StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
                 inputStream.transferTo(os);
             }
             log.debug("{} 文件上传成功: objectKey={}", getLogPrefix(), objectKey);
@@ -149,7 +164,10 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
             if (!Files.isRegularFile(target)) {
                 throw new StorageOperationException("文件不存在: " + objectKey);
             }
-            return new BufferedInputStream(Files.newInputStream(target, StandardOpenOption.READ), 65536);
+            InputStream raw = new BufferedInputStream(Files.newInputStream(target, StandardOpenOption.READ), 65536);
+            return encryptionSecret != null && StreamCipherSupport.isEncryptedFile(target)
+                    ? StreamCipherSupport.decryptingInputStream(raw, encryptionSecret)
+                    : raw;
         } catch (IOException e) {
             log.error("{} 文件下载失败: objectKey={}", getLogPrefix(), objectKey, e);
             throw new StorageOperationException("挂载目录读取失败: " + e.getMessage(), e);
@@ -172,6 +190,10 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
                 throw new StorageOperationException("起始字节超出文件大小: startByte=" + startByte + ", fileSize=" + fileSize);
             }
             long length = Math.min(endByte - startByte + 1, fileSize - startByte);
+            // 加密文件：换算为密文偏移（头 12 字节 + CTR 密文与明文等长），按块对齐后解密
+            if (encryptionSecret != null && StreamCipherSupport.isEncryptedFile(target)) {
+                return openEncryptedRange(target, startByte, endByte);
+            }
             RandomAccessFile raf = new RandomAccessFile(target.toFile(), "r");
             raf.seek(startByte);
             log.debug("{} Range读取文件: objectKey={}, start={}, length={}", getLogPrefix(), objectKey, startByte, length);
@@ -180,6 +202,32 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
             log.error("{} Range读取文件失败: objectKey={}", getLogPrefix(), objectKey, e);
             throw new StorageOperationException("挂载目录读取失败: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 加密文件的 Range 读取：头 12 字节 + 密文区按明文偏移定位解密（与 Local 插件同规则）
+     */
+    private InputStream openEncryptedRange(Path target, long startByte, long endByte) throws IOException {
+        long fileSize = Files.size(target);
+        if (fileSize <= StreamCipherSupport.HEADER_LENGTH) {
+            return new java.io.ByteArrayInputStream(new byte[0]);
+        }
+        byte[] header = new byte[StreamCipherSupport.HEADER_LENGTH];
+        try (java.io.DataInputStream headerIn = new java.io.DataInputStream(
+                new java.io.BufferedInputStream(Files.newInputStream(target, StandardOpenOption.READ), StreamCipherSupport.HEADER_LENGTH))) {
+            headerIn.readFully(header);
+        }
+        long cipherLength = fileSize - StreamCipherSupport.HEADER_LENGTH;
+        long plainStart = Math.min(startByte, cipherLength);
+        long plainEndIncl = Math.min(endByte, cipherLength - 1);
+        if (plainEndIncl < plainStart) {
+            return new java.io.ByteArrayInputStream(new byte[0]);
+        }
+        RandomAccessFile raf = new RandomAccessFile(target.toFile(), "r");
+        raf.seek(StreamCipherSupport.HEADER_LENGTH + plainStart);
+        long length = plainEndIncl - plainStart + 1;
+        return new CipherRangeInputStream(raf, length,
+                StreamCipherSupport.newCipher(encryptionSecret, header, plainStart));
     }
 
     @Override
@@ -237,6 +285,12 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
     @Override
     public boolean isMountMode() {
         return true;
+    }
+
+    @Override
+    public boolean isEncryptionEnabled() {
+        ensureNotPrototype();
+        return encryptionSecret != null;
     }
 
     @Override
@@ -357,7 +411,8 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
     }
 
     /**
-     * 合并完成后写真实挂载路径（8.4-②：与业务侧 MountLocks 配合串行化）
+     * 合并完成后写真实挂载路径（8.4-②：与业务侧 MountLocks 配合串行化）；
+     * 开启加密时先把合并产物转为密文再落盘（分片与 merged 临时文件保持明文）
      */
     @Override
     protected void writeMerged(Path mergedFile, String objectKey) {
@@ -367,7 +422,15 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
         }
         try {
             Files.createDirectories(target.getParent());
-            Files.move(mergedFile, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            if (encryptionSecret != null) {
+                try (InputStream in = new BufferedInputStream(Files.newInputStream(mergedFile, StandardOpenOption.READ), 65536);
+                     OutputStream out = StreamCipherSupport.encryptingOutputStream(Files.newOutputStream(target,
+                             StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE), encryptionSecret)) {
+                    in.transferTo(out);
+                }
+            } else {
+                Files.move(mergedFile, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
             log.info("{} 分片合并写入真实路径完成: objectKey={}", getLogPrefix(), objectKey);
         } catch (IOException e) {
             throw new StorageOperationException("合并写入真实路径失败: " + objectKey + ", " + e.getMessage(), e);
@@ -432,6 +495,60 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
 
         @Override
         public void close() throws IOException {
+            raf.close();
+        }
+
+        @Override
+        public int available() throws IOException {
+            return (int) Math.min(remaining, Integer.MAX_VALUE);
+        }
+    }
+
+    /**
+     * 加密文件 Range 读取流（与 Local 插件同实现）：读密文并按定位好的 CTR cipher 解密，
+     * 读完指定长度后自动关闭底层文件句柄
+     */
+    private static class CipherRangeInputStream extends InputStream {
+        private final RandomAccessFile raf;
+        private long remaining;
+        private final javax.crypto.Cipher cipher;
+        private final byte[] single = new byte[1];
+
+        CipherRangeInputStream(RandomAccessFile raf, long length, javax.crypto.Cipher cipher) {
+            this.raf = raf;
+            this.remaining = length;
+            this.cipher = cipher;
+        }
+
+        @Override
+        public int read() throws IOException {
+            int n = read(single, 0, 1);
+            return n == -1 ? -1 : (single[0] & 0xFF);
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            if (remaining <= 0) {
+                close();
+                return -1;
+            }
+            int toRead = (int) Math.min(len, remaining);
+            int bytesRead = raf.read(b, off, toRead);
+            if (bytesRead <= 0) {
+                close();
+                return -1;
+            }
+            remaining -= bytesRead;
+            byte[] dec = cipher.update(b, off, bytesRead);
+            if (dec != null && dec != b) {
+                System.arraycopy(dec, 0, b, off, dec.length);
+            }
+            return bytesRead;
+        }
+
+        @Override
+        public void close() throws IOException {
+            remaining = 0;
             raf.close();
         }
 

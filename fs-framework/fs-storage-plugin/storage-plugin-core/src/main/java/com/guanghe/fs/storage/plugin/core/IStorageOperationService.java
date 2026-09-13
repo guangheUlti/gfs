@@ -171,6 +171,18 @@ public interface IStorageOperationService extends Closeable {
     }
 
     /**
+     * 是否开启了落盘加密。
+     * <p>
+     * 开启后物理对象是密文：秒传/去重复用对象、以及任何绕过存储插件直接读物理文件的路径都不再安全或不再成立，
+     * 业务侧据此关闭复用逻辑（如秒传）。加解密对插件接口调用方透明。
+     *
+     * @return 是否落盘加密
+     */
+    default boolean isEncryptionEnabled() {
+        return false;
+    }
+
+    /**
      * 创建目录（含逐级父链）。仅挂载式实现
      *
      * @param dirKey 目录相对键（posix '/' 分隔、无前导 '/'）

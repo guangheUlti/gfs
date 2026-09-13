@@ -7,6 +7,7 @@ import com.guanghe.fs.framework.common.exception.StorageOperationException;
 import com.guanghe.fs.storage.plugin.core.AbstractStorageOperationService;
 import com.guanghe.fs.storage.plugin.core.annotation.StoragePlugin;
 import com.guanghe.fs.storage.plugin.core.config.StorageConfig;
+import com.guanghe.fs.storage.plugin.core.crypto.StreamCipherSupport;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.*;
@@ -25,12 +26,18 @@ import java.util.*;
 @Slf4j
 @StoragePlugin(
     identifier = "Local",
-    name = "Local"
+    name = "本地存储",
+    description = "系统内置的本地磁盘存储；也支持添加多个不同根目录的本地存储实例。",
+    icon = "icon-bendicunchu1",
+    isDefault = true,
+    schemaResource = "classpath:schema/local-schema.json"
 )
 public class LocalStorageOperationService extends AbstractStorageOperationService {
 
     private String basePath;
-    private String baseUrl;
+
+    /** 落盘加密口令（encryptionEnabled=true 时非空） */
+    private String encryptionSecret;
 
     @SuppressWarnings("unused")
     public LocalStorageOperationService() {
@@ -45,14 +52,24 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
     @Override
     protected void validateConfig(StorageConfig config) {
         String basePath = config.getRequiredProperty("basePath", String.class);
-        String baseUrl = config.getRequiredProperty("baseUrl", String.class);
 
         if (basePath == null || basePath.trim().isEmpty()) {
             throw new StorageConfigException("Local 存储配置错误：basePath 不能为空");
         }
+        validateEncryption(config);
+    }
 
-        if (baseUrl == null || baseUrl.trim().isEmpty()) {
-            throw new StorageConfigException("Local 存储配置错误：baseUrl 不能为空");
+    /**
+     * 校验加密配置：开启时口令必填，未开启时忽略口令
+     */
+    static void validateEncryption(StorageConfig config) {
+        boolean enabled = Boolean.parseBoolean(
+                String.valueOf(config.getProperty("encryptionEnabled", Object.class, Boolean.FALSE)));
+        if (enabled) {
+            String secret = config.getProperty("encryptionSecret", String.class);
+            if (secret == null || secret.trim().isEmpty()) {
+                throw new StorageConfigException("Local 存储配置错误：开启落盘加密后必须设置密钥（encryptionSecret）");
+            }
         }
     }
 
@@ -60,9 +77,11 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
     protected void initialize(StorageConfig config) {
         String rawBasePath = config.getRequiredProperty("basePath", String.class);
         this.basePath = normalizePath(rawBasePath, File.separator, "basePath 不能为空");
-
-        String rawBaseUrl = config.getRequiredProperty("baseUrl", String.class);
-        this.baseUrl = normalizePath(rawBaseUrl, "/", "baseUrl 不能为空");
+        boolean encryptionEnabled = Boolean.parseBoolean(
+                String.valueOf(config.getProperty("encryptionEnabled", Object.class, Boolean.FALSE)));
+        this.encryptionSecret = encryptionEnabled
+                ? config.getRequiredProperty("encryptionSecret", String.class)
+                : null;
         // 创建存储目录
         File baseDir = new File(this.basePath);
         if (!baseDir.exists()) {
@@ -72,7 +91,8 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
             log.info("创建存储目录: {}", this.basePath);
         }
 
-        log.debug("{} Local 存储初始化完成: {}", getLogPrefix(), this.basePath);
+        log.info("{} Local 存储初始化完成: basePath={}, encryption={}",
+                getLogPrefix(), this.basePath, encryptionEnabled ? "AES-CTR 开启" : "关闭");
     }
 
     /**
@@ -98,6 +118,19 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
         return basePath + File.separator + normalizedObjectKey;
     }
 
+    /**
+     * 加密是否开启
+     */
+    private boolean encryptionEnabled() {
+        return encryptionSecret != null;
+    }
+
+    @Override
+    public boolean isEncryptionEnabled() {
+        ensureNotPrototype();
+        return encryptionEnabled();
+    }
+
     @Override
     public void uploadFile(InputStream inputStream, String objectKey) {
         ensureNotPrototype();
@@ -111,7 +144,9 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
                 Files.createDirectories(parentDir.toPath());
             }
 
-            try (FileOutputStream fos = new FileOutputStream(targetFile)) {
+            try (OutputStream fos = encryptionEnabled()
+                    ? StreamCipherSupport.encryptingOutputStream(new FileOutputStream(targetFile), encryptionSecret)
+                    : new FileOutputStream(targetFile)) {
                 inputStream.transferTo(fos);
             }
 
@@ -133,7 +168,10 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
                 throw new StorageOperationException("文件不存在: " + objectKey);
             }
 
-            return new FileInputStream(file);
+            InputStream raw = new FileInputStream(file);
+            return encryptionEnabled() && StreamCipherSupport.isEncryptedFile(file.toPath())
+                    ? StreamCipherSupport.decryptingInputStream(raw, encryptionSecret)
+                    : raw;
         } catch (IOException e) {
             throw new StorageOperationException("文件下载失败: " + e.getMessage(), e);
         }
@@ -159,6 +197,11 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
                 throw new StorageOperationException("起始字节超出文件大小: startByte=" + startByte + ", fileSize=" + file.length());
             }
 
+            // 加密文件：换算为密文偏移（头 12 字节 + CTR 密文与明文等长），按块对齐后解密
+            if (encryptionEnabled() && StreamCipherSupport.isEncryptedFile(file.toPath())) {
+                return openEncryptedRange(file, startByte, endByte);
+            }
+
             // 使用 RandomAccessFile 定位到起始字节
             RandomAccessFile raf = new RandomAccessFile(file, "r");
             raf.seek(startByte);
@@ -174,6 +217,30 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
         } catch (IOException e) {
             throw new StorageOperationException("Range读取文件失败: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 加密文件的 Range 读取：头 12 字节 + 密文区按明文偏移定位解密
+     */
+    private InputStream openEncryptedRange(File file, long startByte, long endByte) throws IOException {
+        long fileSize = file.length();
+        if (fileSize <= StreamCipherSupport.HEADER_LENGTH) {
+            return new ByteArrayInputStream(new byte[0]);
+        }
+        byte[] header = new byte[StreamCipherSupport.HEADER_LENGTH];
+        try (DataInputStream headerIn = new DataInputStream(new BufferedInputStream(new FileInputStream(file), StreamCipherSupport.HEADER_LENGTH))) {
+            headerIn.readFully(header);
+        }
+        long cipherLength = fileSize - StreamCipherSupport.HEADER_LENGTH;
+        long plainStart = Math.min(startByte, cipherLength);
+        long plainEndIncl = Math.min(endByte, cipherLength - 1);
+        if (plainEndIncl < plainStart) {
+            return new ByteArrayInputStream(new byte[0]);
+        }
+        RandomAccessFile raf = new RandomAccessFile(file, "r");
+        raf.seek(StreamCipherSupport.HEADER_LENGTH + plainStart);            long length = plainEndIncl - plainStart + 1;
+        javax.crypto.Cipher cipher = StreamCipherSupport.newCipher(encryptionSecret, header, plainStart);
+        return new CipherRangeInputStream(raf, length, cipher);
     }
 
     @Override
@@ -213,7 +280,8 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
                 ? objectKey.substring(1)
                 : objectKey;
 
-        return baseUrl + "/" + normalizedObjectKey;
+        // Local 存储不做公开外链：文件访问一律走带鉴权的接口，这里仅返回相对 key
+        return "/" + normalizedObjectKey;
     }
 
     @Override
@@ -242,7 +310,10 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
             }
             log.debug("{} 获取文件流: objectKey={}, fileSize={} bytes",
                     getLogPrefix(), objectKey, file.length());
-            return new BufferedInputStream(new FileInputStream(file), 8192);
+            InputStream raw = new FileInputStream(file);
+            return encryptionEnabled() && StreamCipherSupport.isEncryptedFile(file.toPath())
+                    ? StreamCipherSupport.decryptingInputStream(raw, encryptionSecret)
+                    : raw;
         } catch (FileNotFoundException e) {
             log.error("{} 文件不存在: objectKey={}", getLogPrefix(), objectKey, e);
             throw new StorageOperationException("文件不存在: " + objectKey, e);
@@ -369,10 +440,14 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
                 Files.createDirectories(parentDir.toPath());
             }
 
-            // 合并分片文件
+            // 合并分片文件（开启加密时边合并边加密，分片临时文件保持明文）
             String tempDir = getTempDir(uploadId);
-            try (FileOutputStream fos = new FileOutputStream(targetFile);
-                 FileChannel outChannel = fos.getChannel()) {
+            // 未加密走 channel transferTo 零拷贝；加密时以流包装输出，分片照旧 transferTo 到缓冲再写
+            OutputStream fos = encryptionEnabled()
+                    ? StreamCipherSupport.encryptingOutputStream(new FileOutputStream(targetFile), encryptionSecret)
+                    : new FileOutputStream(targetFile);
+            FileChannel outChannel = encryptionEnabled() ? null : ((FileOutputStream) fos).getChannel();
+            try (OutputStream fosCloseable = fos) {
 
                 // 按分片号排序
                 partETags.sort((a, b) -> {
@@ -388,9 +463,16 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
                     if (!partFile.exists()) {
                         throw new StorageOperationException("分片文件不存在: " + partFilePath);
                     }
-                    try (FileInputStream fis = new FileInputStream(partFile);
-                         FileChannel inChannel = fis.getChannel()) {
-                        inChannel.transferTo(0, inChannel.size(), outChannel);
+                    if (encryptionEnabled()) {
+                        // 加密路径不能用 channel transferTo（需要经过 cipher），走流拷贝
+                        try (InputStream fis = new BufferedInputStream(new FileInputStream(partFile), 65536)) {
+                            fis.transferTo(fos);
+                        }
+                    } else {
+                        try (FileInputStream fis = new FileInputStream(partFile);
+                             FileChannel inChannel = fis.getChannel()) {
+                            inChannel.transferTo(0, inChannel.size(), outChannel);
+                        }
                     }
                 }
             }
@@ -483,6 +565,60 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
 
         @Override
         public void close() throws IOException {
+            raf.close();
+        }
+
+        @Override
+        public int available() throws IOException {
+            return (int) Math.min(remaining, Integer.MAX_VALUE);
+        }
+    }
+
+    /**
+     * 加密文件 Range 读取流：从 RandomAccessFile 读密文并用定位好的 CTR cipher 解密，
+     * 读完指定长度后自动关闭底层文件句柄
+     */
+    private static class CipherRangeInputStream extends InputStream {
+        private final RandomAccessFile raf;
+        private long remaining;
+        private final javax.crypto.Cipher cipher;
+        private final byte[] single = new byte[1];
+
+        CipherRangeInputStream(RandomAccessFile raf, long length, javax.crypto.Cipher cipher) {
+            this.raf = raf;
+            this.remaining = length;
+            this.cipher = cipher;
+        }
+
+        @Override
+        public int read() throws IOException {
+            int n = read(single, 0, 1);
+            return n == -1 ? -1 : (single[0] & 0xFF);
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            if (remaining <= 0) {
+                close();
+                return -1;
+            }
+            int toRead = (int) Math.min(len, remaining);
+            int bytesRead = raf.read(b, off, toRead);
+            if (bytesRead <= 0) {
+                close();
+                return -1;
+            }
+            remaining -= bytesRead;
+            byte[] dec = cipher.update(b, off, bytesRead);
+            if (dec != null && dec != b) {
+                System.arraycopy(dec, 0, b, off, dec.length);
+            }
+            return bytesRead;
+        }
+
+        @Override
+        public void close() throws IOException {
+            remaining = 0;
             raf.close();
         }
 

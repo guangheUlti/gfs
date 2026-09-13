@@ -91,12 +91,6 @@ fs:
       max-tasks-per-process: 200
       cache-path: ${java.io.tmpdir}/office-convert
 
-  # 本地存储配置（默认）
-  storage:
-    local:
-      base-path: ./storage
-      base-url: http://localhost:80/files
-
 mybatis-flex:
   # sql审计
   audit_enable: true
