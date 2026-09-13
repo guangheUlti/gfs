@@ -3,6 +3,7 @@ package com.guanghe.fs.file.controller;
 import com.guanghe.fs.file.domain.qry.FileHomeUsedBytesQry;
 import com.guanghe.fs.file.domain.vo.FileHomeVO;
 import com.guanghe.fs.file.domain.vo.StorageCapacityVO;
+import com.guanghe.fs.file.domain.vo.SystemInfoVO;
 import com.guanghe.fs.file.service.FileHomeService;
 import com.guanghe.fs.framework.common.domain.Result;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,5 +38,13 @@ public class FileHomeController {
                     + "对象存储无本地磁盘概念时 capacityKnown 为 false、totalBytes 为 null，前端只展示已使用量")
     public Result<StorageCapacityVO> getStorageCapacity() {
         return Result.ok(fileHomeService.getStorageCapacity());
+    }
+
+    @GetMapping("/system/info")
+    @Operation(summary = "查询系统与运行信息",
+            description = "OS / CPU / JVM 内存 / 运行时长 / 存储路径 / 磁盘分区，"
+                    + "用于侧边栏存储空间弹窗。任一项采集失败仅该字段为 null")
+    public Result<SystemInfoVO> getSystemInfo() {
+        return Result.ok(fileHomeService.getSystemInfo());
     }
 }

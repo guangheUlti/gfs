@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { HardDrive } from 'lucide-react'
+import { ChevronRight, HardDrive } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   getStorageCapacity,
@@ -7,6 +8,7 @@ import {
 } from '@/api/home'
 import { cn } from '@/lib/utils'
 import { formatCapacityBytes } from '@/utils/format'
+import { StorageDetailDialog } from './storage-detail-dialog'
 import { useSidebar } from '@/components/ui/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -34,6 +36,7 @@ function barColorClass(percent: number): string {
 export function StorageUsageBar({ className }: { className?: string }) {
   const { t } = useTranslation('layout')
   const { state } = useSidebar()
+  const [detailOpen, setDetailOpen] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['storageCapacity'],
@@ -63,9 +66,13 @@ export function StorageUsageBar({ className }: { className?: string }) {
       })
 
   return (
-    <div
+    <>
+    <button
+      type='button'
+      onClick={() => setDetailOpen(true)}
+      title={t('storageDialog.title')}
       className={cn(
-        'mx-2 flex flex-col gap-1.5 rounded-lg px-2 py-2 transition-colors hover:bg-sidebar-accent',
+        'mx-2 flex flex-col gap-1.5 rounded-lg px-2 py-2 text-start transition-colors hover:bg-sidebar-accent',
         className
       )}
     >
@@ -82,6 +89,7 @@ export function StorageUsageBar({ className }: { className?: string }) {
             {formatPercent(percent)}
           </span>
         )}
+        <ChevronRight className='size-3.5 shrink-0 text-muted-foreground/70' />
       </div>
 
       {isLoading ? (
@@ -117,6 +125,8 @@ export function StorageUsageBar({ className }: { className?: string }) {
           {usageText}
         </span>
       )}
-    </div>
+    </button>
+    <StorageDetailDialog open={detailOpen} onOpenChange={setDetailOpen} />
+    </>
   )
 }

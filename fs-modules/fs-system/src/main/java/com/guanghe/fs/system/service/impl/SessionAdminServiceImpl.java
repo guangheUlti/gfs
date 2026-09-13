@@ -8,12 +8,14 @@ import com.guanghe.fs.framework.common.exception.BusinessException;
 import com.guanghe.fs.framework.common.utils.I18nUtils;
 import com.guanghe.fs.log.constant.OperationType;
 import com.guanghe.fs.log.service.SysOperationLogService;
+import com.guanghe.fs.storage.plugin.boot.StoragePluginManager;
 import com.guanghe.fs.system.constant.TerminalExtraKey;
 import com.guanghe.fs.system.domain.SysUser;
 import com.guanghe.fs.system.domain.vo.OnlineTerminalVO;
 import com.guanghe.fs.system.domain.vo.OnlineUserVO;
 import com.guanghe.fs.system.service.SessionAdminService;
 import com.guanghe.fs.system.service.SysUserService;
+import com.guanghe.fs.system.util.AvatarUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -47,6 +49,8 @@ public class SessionAdminServiceImpl implements SessionAdminService {
 
     private final SysOperationLogService operationLogService;
 
+    private final StoragePluginManager pluginManager;
+
     @Override
     public List<OnlineUserVO> listOnlineSessions(String keyword) {
         sysUserService.assertSuperAdmin();
@@ -67,7 +71,7 @@ public class SessionAdminServiceImpl implements SessionAdminService {
             if (user != null) {
                 vo.setUsername(user.getUsername());
                 vo.setNickname(user.getNickname());
-                vo.setAvatar(user.getAvatar());
+                vo.setAvatar(AvatarUtils.resolve(user.getAvatar(), pluginManager::getLocalInstance));
                 vo.setStatus(user.getStatus());
             }
             vo.setTerminals(buildTerminals(loginId, entry.getValue(), currentToken));

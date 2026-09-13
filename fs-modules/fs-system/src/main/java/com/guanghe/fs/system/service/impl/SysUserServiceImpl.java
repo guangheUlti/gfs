@@ -20,6 +20,7 @@ import com.guanghe.fs.system.auth.PasswordHashService;
 import com.guanghe.fs.system.auth.LoginGuardService;
 import com.guanghe.fs.system.service.SysUserService;
 import com.guanghe.fs.system.service.SysUserTransferSettingService;
+import com.guanghe.fs.system.util.AvatarUtils;
 import io.github.linpeilie.Converter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -75,6 +76,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         SysUser user = this.getById(userId);
         SysUserVO userVO = converter.convert(user, SysUserVO.class);
         if (user != null) {
+            userVO.setAvatar(AvatarUtils.resolve(user.getAvatar(), pluginManager::getLocalInstance));
             // 设置用户是否已设置密码
             userVO.setIsSetPassword(user.getPassword() != null);
             // 是否系统管理员（用户名与配置一致）
@@ -138,7 +140,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
             throw new BusinessException(I18nUtils.getMessage("user.not.exist"));
         }
 
-        String avatarUrl;
+        String objectKey;
         try {
             IStorageOperationService storageOperationService = pluginManager.getLocalInstance();
             // 优化路径拼接与命名，防止路径穿越
@@ -147,15 +149,15 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
             String avatarPath = CommonConstant.AVATAR_SAVE_PATH + "/" + userId;
 
             // 目录创建逻辑可以封装在 storageOperationService 内部
-            String objectKey = avatarPath + "/" + fileName;
+            objectKey = avatarPath + "/" + fileName;
 
             storageOperationService.uploadFile(file.getInputStream(), objectKey);
-            avatarUrl = storageOperationService.getFileUrl(objectKey, null);
         } catch (Exception e) {
             throw new BusinessException(I18nUtils.getMessage("file.upload.failed"));
         }
 
-        updateUserAvatarInTransaction(existUser, avatarUrl);
+        // 库内只存 objectKey，展示值由 AvatarUtils 按需转换
+        updateUserAvatarInTransaction(existUser, objectKey);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -208,7 +210,11 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
                 .where(SYS_USER.STATUS.eq(UserStatus.PENDING_REVIEW))
                 .orderBy(SYS_USER.CREATED_AT, false));
         return users.stream()
-                .map(u -> converter.convert(u, PendingUserVO.class))
+                .map(u -> {
+                    PendingUserVO vo = converter.convert(u, PendingUserVO.class);
+                    vo.setAvatar(AvatarUtils.resolve(u.getAvatar(), pluginManager::getLocalInstance));
+                    return vo;
+                })
                 .toList();
     }
 

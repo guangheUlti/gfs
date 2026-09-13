@@ -26,5 +26,31 @@
     "logout": "Log out",
     "lightMode": "Light mode",
     "darkMode": "Dark mode"
+  },
+  "storageDialog": {
+    "title": "Storage",
+    "description": "Cloud drive capacity, system info and runtime status",
+    "usedPercent": "used",
+    "used": "Used",
+    "free": "Free",
+    "total": "Total",
+    "files": "Storage type",
+    "capacityUnknown": "This storage platform cannot report physical capacity (e.g. object storage); only usage is shown",
+    "systemInfo": "System",
+    "runtimeInfo": "Runtime",
+    "disks": "Disk partitions",
+    "os": "OS",
+    "cpu": "CPU",
+    "cpuCores": "{{cores}} cores",
+    "cpuLoad": "System load",
+    "jvmMemory": "JVM memory",
+    "java": "Java version",
+    "startTime": "Started at",
+    "uptime": "Uptime",
+    "storageType": "Storage type",
+    "storagePath": "Storage path",
+    "diskTotal": "{{total}} total",
+    "diskFree": "{{free}} free",
+    "currentStorage": "Current"
   }
 }

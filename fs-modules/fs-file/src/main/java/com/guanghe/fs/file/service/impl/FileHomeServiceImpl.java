@@ -1,6 +1,7 @@
 package com.guanghe.fs.file.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
+import com.guanghe.fs.storage.plugin.boot.LocalStorageManager;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.guanghe.fs.file.domain.FileInfo;
 import com.guanghe.fs.file.domain.qry.FileHomeUsedBytesQry;
@@ -9,6 +10,7 @@ import com.guanghe.fs.file.domain.vo.FileHomeUsedBytesVO;
 import com.guanghe.fs.file.domain.vo.FileHomeVO;
 import com.guanghe.fs.file.domain.vo.FileVO;
 import com.guanghe.fs.file.domain.vo.StorageCapacityVO;
+import com.guanghe.fs.file.domain.vo.SystemInfoVO;
 import com.guanghe.fs.file.service.FileHomeService;
 import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.framework.common.domain.PageResult;
@@ -40,6 +42,8 @@ public class FileHomeServiceImpl implements FileHomeService {
     private final FileInfoService fileInfoService;
 
     private final StorageServiceFacade storageServiceFacade;
+
+    private final LocalStorageManager localStorageManager;
 
     @Override
     public FileHomeVO getFileHomes(FileHomeUsedBytesQry qry) {
@@ -194,5 +198,118 @@ public class FileHomeServiceImpl implements FileHomeService {
         return BigDecimal.valueOf(rawBytes)
                 .divide(BigDecimal.valueOf(divisor), scale, RoundingMode.HALF_UP)
                 .doubleValue();
+    }
+
+    /**
+     * 采集系统与运行信息（OS / CPU / 内存 / 运行时长 / 存储路径 / 磁盘分区）。
+     * 单项采集失败只降级该字段（留 null），不影响整个接口。
+     */
+    @Override
+    public SystemInfoVO getSystemInfo() {
+        SystemInfoVO vo = new SystemInfoVO();
+        Runtime runtime = Runtime.getRuntime();
+        java.lang.management.OperatingSystemMXBean osBean =
+                java.lang.management.ManagementFactory.getOperatingSystemMXBean();
+
+        vo.setOsName(osBean.getName());
+        vo.setOsArch(osBean.getArch());
+        vo.setCpuCores(runtime.availableProcessors());
+        vo.setJavaVersion(System.getProperty("java.version"));
+
+        // CPU 使用率：com.sun.management.OperatingSystemMXBean 提供即时采样值
+        if (osBean instanceof com.sun.management.OperatingSystemMXBean sunBean) {
+            try {
+                double processLoad = sunBean.getProcessCpuLoad();
+                double systemLoad = sunBean.getSystemCpuLoad();
+                vo.setProcessCpuLoad(processLoad < 0 ? null : processLoad * 100);
+                vo.setSystemCpuLoad(systemLoad < 0 ? null : systemLoad * 100);
+            } catch (Exception e) {
+                log.debug("CPU 使用率采集失败: {}", e.getMessage());
+            }
+        }
+
+        // JVM 堆内存
+        vo.setJvmUsedBytes(runtime.totalMemory() - runtime.freeMemory());
+        vo.setJvmCommittedBytes(runtime.totalMemory());
+        vo.setJvmMaxBytes(runtime.maxMemory());
+
+        // 运行时长
+        long uptimeMillis = System.currentTimeMillis() - START_TIME_MILLIS;
+        vo.setUptimeMillis(uptimeMillis);
+        vo.setStartTime(java.time.Instant.ofEpochMilli(START_TIME_MILLIS)
+                .atZone(java.time.ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+        vo.setUptimeText(formatUptime(uptimeMillis));
+
+        // 当前存储平台类型与根路径（取不到留 null，不影响渲染）
+        try {
+            IStorageOperationService storageService = storageServiceFacade.getCurrentStorageService();
+            if (storageService != null) {
+                String configId = StoragePlatformContextHolder.getConfigId();
+                if (configId == null || configId.isBlank()) {
+                    vo.setStorageType("Local");
+                    Object basePath = localStorageManager.getEffectiveProperties().get("basePath");
+                    vo.setStoragePath(basePath == null ? null : String.valueOf(basePath));
+                } else {
+                    vo.setStorageType("自定义存储");
+                }
+            }
+        } catch (Exception e) {
+            log.debug("存储路径采集失败: {}", e.getMessage());
+        }
+
+        // 磁盘分区（仅本地类平台有物理磁盘概念；对象存储给不出就空列表）
+        try {
+            vo.setDisks(collectDiskPartitions());
+        } catch (Exception e) {
+            vo.setDisks(List.of());
+            log.debug("磁盘分区采集失败: {}", e.getMessage());
+        }
+        return vo;
+    }
+
+    /** 进程启动时刻（类加载即进程启动后很快发生，误差可忽略） */
+    private static final long START_TIME_MILLIS =
+            java.lang.management.ManagementFactory.getRuntimeMXBean().getStartTime();
+
+    private List<SystemInfoVO.DiskPartitionVO> collectDiskPartitions() {
+        List<SystemInfoVO.DiskPartitionVO> disks = new ArrayList<>();
+        // 仅 Windows 有盘符概念；Linux/macOS 取文件系统根聚合
+        java.io.File[] roots = java.io.File.listRoots();
+        if (roots == null) {
+            return disks;
+        }
+        for (java.io.File root : roots) {
+            try {
+                long total = root.getTotalSpace();
+                long free = root.getFreeSpace();
+                if (total <= 0) {
+                    continue;
+                }
+                SystemInfoVO.DiskPartitionVO disk = new SystemInfoVO.DiskPartitionVO();
+                disk.setMountPoint(root.getAbsolutePath());
+                disk.setTotalBytes(total);
+                disk.setFreeBytes(free);
+                disk.setUsedBytes(total - free);
+                disks.add(disk);
+            } catch (Exception e) {
+                log.debug("分区 {} 采集失败: {}", root, e.getMessage());
+            }
+        }
+        return disks;
+    }
+
+    private static String formatUptime(long millis) {
+        long minutes = millis / 60_000;
+        long days = minutes / (60 * 24);
+        long hours = (minutes % (60 * 24)) / 60;
+        long mins = minutes % 60;
+        if (days > 0) {
+            return days + "天 " + hours + "小时 " + mins + "分钟";
+        }
+        if (hours > 0) {
+            return hours + "小时 " + mins + "分钟";
+        }
+        return mins + "分钟";
     }
 }

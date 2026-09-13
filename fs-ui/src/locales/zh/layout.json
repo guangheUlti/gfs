@@ -26,5 +26,31 @@
     "logout": "退出登录",
     "lightMode": "明亮模式",
     "darkMode": "暗黑模式"
+  },
+  "storageDialog": {
+    "title": "存储空间",
+    "description": "云盘空间、系统信息与运行状态一览",
+    "usedPercent": "已使用",
+    "used": "已用空间",
+    "free": "剩余空间",
+    "total": "总容量",
+    "files": "存储类型",
+    "capacityUnknown": "当前存储平台无法感知物理容量（如对象存储），仅展示已使用量",
+    "systemInfo": "系统信息",
+    "runtimeInfo": "运行信息",
+    "disks": "磁盘分区",
+    "os": "操作系统",
+    "cpu": "处理器",
+    "cpuCores": "{{cores}} 核",
+    "cpuLoad": "系统负载",
+    "jvmMemory": "JVM 内存",
+    "java": "Java 版本",
+    "startTime": "启动时间",
+    "uptime": "已运行",
+    "storageType": "存储类型",
+    "storagePath": "存储路径",
+    "diskTotal": "共 {{total}}",
+    "diskFree": "剩 {{free}}",
+    "currentStorage": "当前存储"
   }
 }

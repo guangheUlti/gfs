@@ -51,3 +51,35 @@ export interface StorageCapacity {
 export function getStorageCapacity() {
   return request.get<StorageCapacity>('/apis/home/storage/capacity')
 }
+
+/** 磁盘分区信息 */
+export interface DiskPartition {
+  /** 挂载点/盘符，如 C:\ 或 / */
+  mountPoint: string
+  totalBytes: number
+  usedBytes: number
+  freeBytes: number
+}
+
+/** 对应 SystemInfoVO：系统与运行信息，任一项采集失败仅该字段为 null */
+export interface SystemInfo {
+  osName: string | null
+  osArch: string | null
+  cpuCores: number | null
+  processCpuLoad: number | null
+  systemCpuLoad: number | null
+  jvmUsedBytes: number | null
+  jvmMaxBytes: number | null
+  jvmCommittedBytes: number | null
+  javaVersion: string | null
+  startTime: string | null
+  uptimeText: string | null
+  uptimeMillis: number | null
+  storagePath: string | null
+  storageType: string | null
+  disks: DiskPartition[] | null
+}
+
+export function getSystemInfo() {
+  return request.get<SystemInfo>('/apis/home/system/info')
+}
