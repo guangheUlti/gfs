@@ -67,4 +67,13 @@ export interface ConfigScheme {
   validation: {
     required: boolean
   }
+  /** 字段说明（渲染在输入框下方的小字提示） */
+  description?: string
+  /** 输入框占位文案（缺省用 i18n 默认） */
+  placeholder?: string
+  /** 条件显隐：仅当 formData[identifier] === value 时展示该字段 */
+  showIf?: {
+    identifier: string
+    value: string
+  }
 }

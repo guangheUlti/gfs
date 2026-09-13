@@ -47,20 +47,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const loadStoragePlatform = async () => {
     try {
       const activePlatforms = await getActiveStoragePlatforms()
-      const enabledPlatform = activePlatforms?.find((p) => p.isEnabled)
-      if (enabledPlatform) {
-        localStorage.setItem(
-          'current-storage-platform',
-          JSON.stringify({
-            settingId: enabledPlatform.settingId,
-            platformName: enabledPlatform.platformName,
-          })
+      // 多存储：保留用户已选且仍可用的存储；未选择 = 内置本地存储（不携带请求头）
+      let stored: { settingId?: string } | null = null
+      try {
+        stored = JSON.parse(
+          localStorage.getItem('current-storage-platform') || 'null'
         )
-      } else {
-        localStorage.removeItem('current-storage-platform')
+      } catch {
+        stored = null
+      }
+      if (stored?.settingId) {
+        const stillActive = activePlatforms?.find(
+          (p) => p.settingId === stored!.settingId
+        )
+        if (stillActive) {
+          localStorage.setItem(
+            'current-storage-platform',
+            JSON.stringify({
+              settingId: stillActive.settingId,
+              platformName: stillActive.platformName,
+            })
+          )
+        } else {
+          localStorage.removeItem('current-storage-platform')
+        }
       }
     } catch (error) {
-      localStorage.removeItem('current-storage-platform')
       console.error('获取存储平台配置失败:', error)
     }
   }

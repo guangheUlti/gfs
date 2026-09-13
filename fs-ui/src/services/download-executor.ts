@@ -461,7 +461,10 @@ class DownloadExecutor {
 
       let blob: Blob
       if (context.opfsFileHandle) {
-        blob = await context.opfsFileHandle.getFile()
+        // OPFS 后端的 File 无法被浏览器主进程读取，直接 <a download> 会报
+        // 「无法下载 - 网络问题」，必须先拷贝为内存 blob 再触发保存
+        const file = await context.opfsFileHandle.getFile()
+        blob = new Blob([await file.arrayBuffer()])
       } else {
         const ordered: Blob[] = []
         for (let i = 0; i < context.totalChunks; i += 1) {

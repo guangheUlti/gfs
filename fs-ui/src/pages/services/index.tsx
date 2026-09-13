@@ -5,7 +5,8 @@ import { ServiceSettingCard } from './components/ServiceSettingCard'
 import { UsageTips } from './components/UsageTips'
 
 /**
- * 对外文件服务配置页：WebDAV 与 SFTP 两张卡片并列展示（布局对齐存储配置页的卡片网格）
+ * 对外文件服务配置页：WebDAV 与 SFTP 两张卡片并列展示
+ * 服务卡片内容多，不跟存储配置页共用等分网格，大屏下一行两张等宽卡片
  */
 export default function ServicesPage() {
   const { t } = useTranslation('services')
@@ -30,7 +31,7 @@ export default function ServicesPage() {
             <p className='text-muted-foreground'>{t('page.loading')}</p>
           </div>
         ) : (
-          <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'>
+          <div className='grid grid-cols-1 gap-4 lg:grid-cols-2'>
             <ServiceColumn
               serviceType='webdav'
               setting={findByType('webdav')}

@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -28,7 +29,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { isSensitiveField } from '../utils'
+import {
+  buildInitialFormData,
+  isBooleanField,
+  isFieldVisible,
+  isSensitiveField,
+  normalizeConfigValue,
+} from '../utils'
 
 interface AddStorageModalProps {
   open: boolean
@@ -81,12 +88,8 @@ export function AddStorageModal({
           selectedPlatform.configScheme
         )
         setSchemes(parsedSchemes)
-        // 初始化表单数据
-        const initialData: Record<string, string> = {}
-        parsedSchemes.forEach((field) => {
-          initialData[field.identifier] = ''
-        })
-        setFormData(initialData)
+        // 初始化表单数据（布尔字段默认 "false"）
+        setFormData(buildInitialFormData(parsedSchemes))
         setErrors({})
       } catch (error) {
         toast.error(t('addModal.toastSchemeError'))
@@ -124,6 +127,7 @@ export function AddStorageModal({
     }
 
     schemes.forEach((field) => {
+      if (!isFieldVisible(field, formData)) return
       if (field.validation.required && !formData[field.identifier]?.trim()) {
         newErrors[field.identifier] = t('addModal.toastEnterField', {
           label: field.label,
@@ -220,43 +224,81 @@ export function AddStorageModal({
           {/* 配置字段 */}
           {schemes.length > 0 && (
             <>
-              {schemes.map((field) => (
+              {schemes.map((field) =>
+                !isFieldVisible(field, formData) ? null : (
                 <div key={field.identifier} className='space-y-3'>
-                  <Label htmlFor={field.identifier}>
-                    {field.validation.required && (
-                      <span className='relative top-0.5 text-red-500'>* </span>
-                    )}
-                    {field.label}
-                  </Label>
-                  <Input
-                    id={field.identifier}
-                    type={
-                      isSensitiveField(field.identifier) ? 'password' : 'text'
-                    }
-                    autoComplete={
-                      isSensitiveField(field.identifier)
-                        ? 'new-password'
-                        : undefined
-                    }
-                    value={formData[field.identifier] || ''}
-                    onChange={(e) => {
-                      setFormData({
-                        ...formData,
-                        [field.identifier]: e.target.value,
-                      })
-                      clearFieldError(field.identifier)
-                    }}
-                    placeholder={t('addModal.fieldPh', { label: field.label })}
-                    className={errors[field.identifier] ? 'border-red-500' : ''}
-                  />
-                  {errors[field.identifier] && (
-                    <div className='flex items-center gap-1 text-sm text-red-500'>
-                      <AlertCircle className='h-3 w-3' />
-                      <span>{errors[field.identifier]}</span>
+                  {isBooleanField(field) ? (
+                    <div className='flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5'>
+                      <div className='min-w-0'>
+                        <Label htmlFor={field.identifier} className='cursor-pointer'>
+                          {field.label}
+                        </Label>
+                        {field.description && (
+                          <p className='mt-0.5 text-xs text-muted-foreground'>
+                            {field.description}
+                          </p>
+                        )}
+                      </div>
+                      <Switch
+                        id={field.identifier}
+                        checked={formData[field.identifier] === 'true'}
+                        onCheckedChange={(checked) => {
+                          setFormData({
+                            ...formData,
+                            [field.identifier]: String(checked),
+                          })
+                          clearFieldError(field.identifier)
+                        }}
+                      />
                     </div>
+                  ) : (
+                    <>
+                      <Label htmlFor={field.identifier}>
+                        {field.validation.required && (
+                          <span className='relative top-0.5 text-red-500'>* </span>
+                        )}
+                        {field.label}
+                      </Label>
+                      <Input
+                        id={field.identifier}
+                        type={
+                          isSensitiveField(field.identifier) ? 'password' : 'text'
+                        }
+                        autoComplete={
+                          isSensitiveField(field.identifier)
+                            ? 'new-password'
+                            : undefined
+                        }
+                        value={formData[field.identifier] || ''}
+                        onChange={(e) => {
+                          setFormData({
+                            ...formData,
+                            [field.identifier]: e.target.value,
+                          })
+                          clearFieldError(field.identifier)
+                        }}
+                        placeholder={
+                          field.placeholder ||
+                          t('addModal.fieldPh', { label: field.label })
+                        }
+                        className={errors[field.identifier] ? 'border-red-500' : ''}
+                      />
+                      {field.description && (
+                        <p className='text-xs text-muted-foreground'>
+                          {field.description}
+                        </p>
+                      )}
+                      {errors[field.identifier] && (
+                        <div className='flex items-center gap-1 text-sm text-red-500'>
+                          <AlertCircle className='h-3 w-3' />
+                          <span>{errors[field.identifier]}</span>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
-              ))}
+                )
+              )}
 
               {/* 备注 */}
               <div className='space-y-3'>
@@ -312,7 +354,7 @@ export function AddStorageModal({
               !selectedPlatformId ||
               isSubmitting ||
               !schemes.every((field) =>
-                field.validation.required
+                field.validation.required && isFieldVisible(field, formData)
                   ? formData[field.identifier]?.trim()
                   : true
               )

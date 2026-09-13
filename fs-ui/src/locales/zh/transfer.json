@@ -24,6 +24,9 @@
   },
   "table": {
     "colFileName": "文件名称",
+    "colType": "类型",
+    "typeUpload": "上传",
+    "typeDownload": "下载",
     "colSize": "文件大小",
     "colStatus": "状态",
     "colProgress": "进度",

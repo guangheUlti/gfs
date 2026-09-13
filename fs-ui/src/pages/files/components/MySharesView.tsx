@@ -162,10 +162,6 @@ export function MySharesView() {
     }
   }, [searchKeyword, pagination.pageIndex, pagination.pageSize])
 
-  const handleRefresh = () => {
-    void fetchSharePage()
-  }
-
   const handleClearAllShares = () => {
     setClearAllDialogVisible(true)
   }
@@ -643,7 +639,6 @@ export function MySharesView() {
             onSearch={commitSearch}
             onUpload={() => {}}
             onCreateFolder={() => {}}
-            onRefresh={handleRefresh}
             hideActions={true}
             selectMode={selectMode}
             onToggleSelectMode={

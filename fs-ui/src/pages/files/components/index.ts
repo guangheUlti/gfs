@@ -1,5 +1,6 @@
 export { Toolbar } from './Toolbar'
 export { FileBreadcrumb } from './FileBreadcrumb'
+export { StorageSwitcher } from './StorageSwitcher'
 export { FileGridView } from './FileGridView'
 export { FileListView } from './FileListView'
 export { CreateFolderModal } from './CreateFolderModal'

@@ -199,8 +199,8 @@ export default function TransferPage() {
         )}
       </div>
 
-      {/* 主内容区域 */}
-      <div className='flex-1 overflow-auto px-3 pt-1 pb-3 sm:px-6 sm:pt-1.5 sm:pb-6'>
+      {/* 主内容区域：不能带纵向 padding-top，否则吸顶表头钉在内边距下沿，行内容会从缝隙中穿出 */}
+      <div className='flex-1 overflow-auto px-3 pb-3 sm:px-6 sm:pb-6'>
         {loading ? (
           <div className='flex h-full items-center justify-center'>
             <p className='text-muted-foreground'>{tc('loading')}</p>
@@ -236,6 +236,7 @@ export default function TransferPage() {
               loading={loading}
               showActions={activeTab !== 'completed'}
               showCompleteTime={activeTab === 'completed'}
+              showTaskType={activeTab === 'completed'}
               onPause={handlePause}
               onResume={handleResume}
               onCancel={handleCancel}

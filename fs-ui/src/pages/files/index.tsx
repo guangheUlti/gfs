@@ -34,6 +34,7 @@ import { NoPermission } from '@/components/no-permission'
 import {
   Toolbar,
   FileBreadcrumb,
+  StorageSwitcher,
   FileGridView,
   FileListView,
   CreateFolderModal,
@@ -218,6 +219,23 @@ export default function FilesPage() {
   }
 
   /**
+   * 切换当前存储：清空搜索与选中，回到新存储的根目录；URL 无变化（本就在根目录）时手动刷新
+   */
+  const handleStorageSwitch = () => {
+    clearSelection()
+    setSelectMode(false)
+    fileList.setSearchInput('')
+    const params = new URLSearchParams(searchParams)
+    const hadScopedParams = params.has('keyword') || params.has('parentId')
+    params.delete('keyword')
+    params.delete('parentId')
+    navigate(`/files?${params.toString()}`)
+    if (!hadScopedParams) {
+      fileList.refresh()
+    }
+  }
+
+  /**
    * 处理文件点击
    */
   const handleFileClick = (file: FileItem) => {
@@ -327,6 +345,11 @@ export default function FilesPage() {
           />
         </div>
 
+        {/* 存储切换器：多存储激活时在根面包屑旁切换当前存储（仅全部文件视图） */}
+        {isAllFilesView && (
+          <StorageSwitcher onChanged={handleStorageSwitch} />
+        )}
+
         {/* 右侧工具栏 */}
         <Toolbar
           searchKeyword={fileList.searchInput}
@@ -335,7 +358,6 @@ export default function FilesPage() {
           onUpload={handleOpenUploadModal}
           onCreateFolder={operations.openCreateFolderModal}
           onCreateText={operations.openCreateTextModal}
-          onRefresh={fileList.refresh}
           hideActions={!isAllFilesView}
           selectMode={selectMode}
           onToggleSelectMode={

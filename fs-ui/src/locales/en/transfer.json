@@ -24,6 +24,9 @@
   },
   "table": {
     "colFileName": "File",
+    "colType": "Type",
+    "typeUpload": "Upload",
+    "typeDownload": "Download",
     "colSize": "Size",
     "colStatus": "Status",
     "colProgress": "Progress",

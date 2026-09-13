@@ -63,10 +63,10 @@ export function AppSidebar() {
 
   return (
     <Sidebar variant='sidebar' collapsible='icon'>
-      {/* 折叠/展开开关融入侧栏自身：展开时贴用户行右缘，折叠时居于头像下方 */}
+      {/* 折叠/展开开关融入侧栏自身：展开时贴用户行右缘，折叠后隐藏（入口移至页脚最底部） */}
       <SidebarHeader className='relative'>
         <NavUser user={user} />
-        <SidebarTrigger className='absolute end-2 top-1/2 -translate-y-1/2 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:static group-data-[collapsible=icon]:translate-y-0 group-data-[collapsible=icon]:self-center' />
+        <SidebarTrigger className='absolute end-2 top-1/2 -translate-y-1/2 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:hidden' />
       </SidebarHeader>
       <SidebarContent>
         {navGroups.map((group, index) => (
@@ -80,6 +80,8 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <StorageUsageBar />
+        {/* 折叠后展开按钮固定在菜单栏最底部（折叠时存储用量条不渲染，页脚即空） */}
+        <SidebarTrigger className='hidden self-center text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:flex' />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

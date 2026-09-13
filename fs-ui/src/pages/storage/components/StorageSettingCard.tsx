@@ -3,6 +3,7 @@ import type { StorageSetting, ConfigScheme } from '@/types/storage'
 import {
   Database,
   Eye,
+  Info,
   Settings,
   Trash2,
   Link as LinkIcon,
@@ -31,6 +32,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Tooltip,
   TooltipContent,
@@ -46,6 +48,12 @@ import {
   DescriptionFieldValueRow,
 } from '@/components/field-layout'
 import { isSensitiveField } from '../utils'
+import {
+  buildInitialFormData,
+  isBooleanField,
+  isFieldVisible,
+  normalizeConfigValue,
+} from '../utils'
 
 interface StorageSettingCardProps {
   setting: StorageSetting
@@ -70,7 +78,7 @@ export function StorageSettingCard({
   const [isRescanning, setIsRescanning] = useState(false)
 
   const isMountPlatform = setting.storagePlatform?.identifier === 'LocalMount'
-  // 内置本地存储是后端虚拟行（id=Local，不落库）：没有配置项，只支持"切换回本地存储"
+  // 内置本地存储（id=Local）：恒启用，支持查看/编辑根目录，不支持禁用与删除
   const isBuiltinLocal = setting.storagePlatform?.identifier === 'Local'
 
   const schemes: ConfigScheme[] = JSON.parse(
@@ -139,9 +147,12 @@ export function StorageSettingCard({
 
   // 打开编辑模态框
   const handleOpenEdit = () => {
-    const initialData: Record<string, string> = {}
+    const initialData = buildInitialFormData(schemes)
     schemes.forEach((field) => {
-      initialData[field.identifier] = configData[field.identifier] || ''
+      initialData[field.identifier] = normalizeConfigValue(
+        field,
+        configData[field.identifier]
+      )
     })
     setEditFormData(initialData)
     setEditRemark(setting.remark || '')
@@ -165,6 +176,7 @@ export function StorageSettingCard({
     const newErrors: Record<string, string> = {}
 
     schemes.forEach((field) => {
+      if (!isFieldVisible(field, editFormData)) return
       if (
         field.validation.required &&
         !editFormData[field.identifier]?.trim()
@@ -231,6 +243,19 @@ export function StorageSettingCard({
     setIsLoading(true)
     try {
       await toggleStorageSetting(setting.id.toString(), action)
+      // 多激活下禁用不再自动切换平台；若禁用的是当前选中的存储，清除本地选择以回退内置本地存储
+      if (action === 0) {
+        try {
+          const stored = JSON.parse(
+            localStorage.getItem('current-storage-platform') || 'null'
+          )
+          if (stored?.settingId === setting.id.toString()) {
+            localStorage.removeItem('current-storage-platform')
+          }
+        } catch {
+          // 本地数据异常时忽略，由文件页兜底回退
+        }
+      }
       toast.success(
         action === 1
           ? t('card.enabledToast', { name: setting.storagePlatform.name })
@@ -307,25 +332,26 @@ export function StorageSettingCard({
 
         {/* Actions Menu */}
         {isBuiltinLocal ? (
-          setting.enabled === 1 ? (
-            <div className='mt-4'>
-              <Badge variant='outline' className='text-muted-foreground'>
-                {t('card.usingNow')}
-              </Badge>
-            </div>
-          ) : (
-            <div className='mt-4 flex flex-wrap items-center gap-2'>
-              <Button
-                variant='default'
-                size='sm'
-                onClick={() => setToggleDialogOpen(true)}
-                disabled={isLoading}
-                className='min-w-[60px]'
-              >
-                {t('card.enable')}
-              </Button>
-            </div>
-          )
+          <div className='mt-4 flex flex-wrap items-center gap-2'>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={() => setViewModalOpen(true)}
+              className='min-w-[70px] flex-1'
+            >
+              <Eye className='mr-1.5 h-3 w-3' />
+              {t('card.view')}
+            </Button>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={handleOpenEdit}
+              className='min-w-[70px] flex-1'
+            >
+              <Settings className='mr-1.5 h-3 w-3' />
+              {t('card.edit')}
+            </Button>
+          </div>
         ) : (
           <div className='mt-4 flex flex-wrap items-center gap-2'>
             <Button
@@ -460,46 +486,90 @@ export function StorageSettingCard({
           <DialogHeader>
             <DialogTitle>{t('card.editTitle')}</DialogTitle>
           </DialogHeader>
+          {isBuiltinLocal && (
+            <div className='flex items-start gap-2 text-xs text-primary'>
+              <Info className='mt-0.5 h-3 w-3 flex-shrink-0' />
+              <span>{t('card.localEditHint')}</span>
+            </div>
+          )}
           <div className='space-y-6'>
-            {schemes.map((field) => (
+            {schemes.map((field) =>
+              !isFieldVisible(field, editFormData) ? null : (
               <div key={field.identifier} className='space-y-3'>
-                <Label htmlFor={`edit-${field.identifier}`}>
-                  {field.validation.required && (
-                    <span className='relative top-0.5 text-red-500'>* </span>
-                  )}
-                  {field.label}
-                </Label>
-                <Input
-                  id={`edit-${field.identifier}`}
-                  type={
-                    isSensitiveField(field.identifier) ? 'password' : 'text'
-                  }
-                  autoComplete={
-                    isSensitiveField(field.identifier)
-                      ? 'new-password'
-                      : undefined
-                  }
-                  value={editFormData[field.identifier] || ''}
-                  onChange={(e) => {
-                    setEditFormData({
-                      ...editFormData,
-                      [field.identifier]: e.target.value,
-                    })
-                    clearEditFieldError(field.identifier)
-                  }}
-                  placeholder={t('addModal.fieldPh', { label: field.label })}
-                  className={
-                    editErrors[field.identifier] ? 'border-red-500' : ''
-                  }
-                />
-                {editErrors[field.identifier] && (
-                  <div className='flex items-center gap-1 text-sm text-red-500'>
-                    <AlertCircle className='h-3 w-3' />
-                    <span>{editErrors[field.identifier]}</span>
+                {isBooleanField(field) ? (
+                  <div className='flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5'>
+                    <div className='min-w-0'>
+                      <Label htmlFor={`edit-${field.identifier}`} className='cursor-pointer'>
+                        {field.label}
+                      </Label>
+                      {field.description && (
+                        <p className='mt-0.5 text-xs text-muted-foreground'>
+                          {field.description}
+                        </p>
+                      )}
+                    </div>
+                    <Switch
+                      id={`edit-${field.identifier}`}
+                      checked={editFormData[field.identifier] === 'true'}
+                      onCheckedChange={(checked) => {
+                        setEditFormData({
+                          ...editFormData,
+                          [field.identifier]: String(checked),
+                        })
+                        clearEditFieldError(field.identifier)
+                      }}
+                    />
                   </div>
+                ) : (
+                  <>
+                    <Label htmlFor={`edit-${field.identifier}`}>
+                      {field.validation.required && (
+                        <span className='relative top-0.5 text-red-500'>* </span>
+                      )}
+                      {field.label}
+                    </Label>
+                    <Input
+                      id={`edit-${field.identifier}`}
+                      type={
+                        isSensitiveField(field.identifier) ? 'password' : 'text'
+                      }
+                      autoComplete={
+                        isSensitiveField(field.identifier)
+                          ? 'new-password'
+                          : undefined
+                      }
+                      value={editFormData[field.identifier] || ''}
+                      onChange={(e) => {
+                        setEditFormData({
+                          ...editFormData,
+                          [field.identifier]: e.target.value,
+                        })
+                        clearEditFieldError(field.identifier)
+                      }}
+                      placeholder={
+                        field.placeholder ||
+                        t('addModal.fieldPh', { label: field.label })
+                      }
+                      className={
+                        editErrors[field.identifier] ? 'border-red-500' : ''
+                      }
+                    />
+                    {field.description && (
+                      <p className='text-xs text-muted-foreground'>
+                        {field.description}
+                      </p>
+                    )}
+                    {editErrors[field.identifier] && (
+                      <div className='flex items-center gap-1 text-sm text-red-500'>
+                        <AlertCircle className='h-3 w-3' />
+                        <span>{editErrors[field.identifier]}</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
-            ))}
+              )
+            )}
             <div className='space-y-3'>
               <Label htmlFor='edit-remark'>{t('card.remarkField')}</Label>
               <Input
@@ -521,7 +591,7 @@ export function StorageSettingCard({
               disabled={
                 isLoading ||
                 !schemes.every((field) =>
-                  field.validation.required
+                  field.validation.required && isFieldVisible(field, editFormData)
                     ? editFormData[field.identifier]?.trim()
                     : true
                 )

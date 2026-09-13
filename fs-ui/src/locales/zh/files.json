@@ -20,6 +20,8 @@
     "totalCount": "共 {{total}} 项",
     "selectAll": "全选",
     "deselectAll": "取消全选",
+    "storageSwitch": "切换存储",
+    "storageLocal": "本地存储",
     "select": "选择",
     "done": "完成",
     "ariaGrid": "网格视图",
@@ -62,7 +64,8 @@
   },
   "toolbar": {
     "searchPlaceholder": "搜索文件名",
-    "search": "搜索"
+    "search": "搜索",
+    "clearSearch": "清空搜索"
   },
   "bulk": {
     "ariaBar": "文件列表批量操作",
@@ -347,8 +350,17 @@
     "expandList": "展开缩略图",
     "playlist": "播放列表",
     "autoNext": "自动连播",
+    "playMode": "播放模式",
+    "playSequential": "顺序播放",
+    "playOnce": "单曲播放",
+    "playRepeatOne": "单曲循环",
+    "playShuffle": "随机播放",
     "play": "播放",
     "pause": "暂停",
-    "embedFail": "内嵌预览页加载失败，请稍后重试"
+    "embedFail": "内嵌预览页加载失败，请稍后重试",
+    "videoLoading": "视频加载中…",
+    "videoLoadFail": "该视频编码格式浏览器不支持，无法在线播放",
+    "videoLoadFailHint": "可下载后使用本地播放器播放",
+    "videoFrameFail": "视频画面编码（如 HEVC/H.265）当前浏览器不支持，仅能播放声音"
   }
 }

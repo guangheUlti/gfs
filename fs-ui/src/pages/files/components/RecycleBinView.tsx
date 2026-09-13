@@ -123,10 +123,6 @@ export default function RecycleBinView() {
     }
   }, [searchKeyword, pagination.pageIndex, pagination.pageSize])
 
-  const handleRefresh = () => {
-    void fetchRecyclePage()
-  }
-
   const handleRestoreSingle = (fileId: string, fileName: string) => {
     setOperatingItem({ id: fileId, name: fileName })
     setRestoreDialogOpen(true)
@@ -434,7 +430,6 @@ export default function RecycleBinView() {
             onSearch={commitSearch}
             onUpload={() => {}}
             onCreateFolder={() => {}}
-            onRefresh={handleRefresh}
             hideActions={true}
             selectMode={selectMode}
             onToggleSelectMode={

@@ -20,6 +20,8 @@
     "totalCount": "{{total}} items",
     "selectAll": "Select all",
     "deselectAll": "Deselect all",
+    "storageSwitch": "Switch storage",
+    "storageLocal": "Local Storage",
     "select": "Select",
     "done": "Done",
     "ariaGrid": "Grid view",
@@ -62,7 +64,8 @@
   },
   "toolbar": {
     "searchPlaceholder": "Search file name",
-    "search": "Search"
+    "search": "Search",
+    "clearSearch": "Clear search"
   },
   "bulk": {
     "ariaBar": "Bulk actions",
@@ -347,8 +350,17 @@
     "expandList": "Expand Thumbnails",
     "playlist": "Playlist",
     "autoNext": "Auto Play Next",
+    "playMode": "Play Mode",
+    "playSequential": "Sequential",
+    "playOnce": "Play Once",
+    "playRepeatOne": "Repeat One",
+    "playShuffle": "Shuffle",
     "play": "Play",
     "pause": "Pause",
-    "embedFail": "Failed to load embedded preview page. Try again later."
+    "embedFail": "Failed to load embedded preview page. Try again later.",
+    "videoLoading": "Loading video…",
+    "videoLoadFail": "This video codec is not supported by the browser and can't be played online",
+    "videoLoadFailHint": "Download it and play with a local player",
+    "videoFrameFail": "The video track codec (e.g. HEVC/H.265) is not supported in this browser — audio only"
   }
 }

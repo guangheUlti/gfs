@@ -21,6 +21,7 @@ interface TransferTableProps {
   loading: boolean
   showActions?: boolean
   showCompleteTime?: boolean
+  showTaskType?: boolean
   onPause: (taskId: string) => void
   onResume: (taskId: string) => void
   onCancel: (taskId: string) => void
@@ -64,10 +65,17 @@ const getStatusBadgeClass = (status: TaskStatus): string => {
   }
 }
 
+/** 类型徽章双色：上传蓝 / 下载紫，与状态徽章同为浅色调 */
+const getTypeBadgeClass = (taskType: TransferTask['taskType']): string =>
+  taskType === 'upload'
+    ? 'border-transparent bg-primary/10 text-primary'
+    : 'border-transparent bg-violet-500/15 text-violet-600 dark:text-violet-500'
+
 export default function TransferTable({
   tasks,
   showActions = false,
   showCompleteTime = false,
+  showTaskType = false,
   onPause,
   onResume,
   onCancel,
@@ -111,7 +119,7 @@ export default function TransferTable({
     ].includes(status)
 
   return (
-    <div className='rounded-xl bg-background'>
+    <div className='mt-1 rounded-xl bg-background sm:mt-1.5'>
       {/* 不加 overflow-hidden：那会成了 sticky 表头最近的滚动祖先，把粘性锁死在本块内 */}
       {/* containerClassName 必须清掉自带的 overflow-auto，否则嵌套滚动容器同样锁死 sticky 表头；窄屏下不压缩列宽，横向滚动交给页面滚动容器 */}
       {/* table-fixed：列宽由表头固定分配，文件名列吃剩余宽度并截断，避免各行宽窄不一 */}
@@ -124,6 +132,11 @@ export default function TransferTable({
             <TableHead className='text-muted-foreground h-11 px-4 font-medium'>
               {t('table.colFileName')}
             </TableHead>
+            {showTaskType && (
+              <TableHead className='text-muted-foreground h-11 w-24 px-4 font-medium'>
+                {t('table.colType')}
+              </TableHead>
+            )}
             <TableHead className='text-muted-foreground h-11 w-44 px-4 font-medium'>
               {t('table.colSize')}
             </TableHead>
@@ -162,6 +175,22 @@ export default function TransferTable({
                     {task.fileName}
                   </span>
                 </TableCell>
+
+                {showTaskType && (
+                  <TableCell className='px-4 py-3.5'>
+                    <Badge
+                      variant='outline'
+                      className={
+                        'rounded-full px-2.5 whitespace-nowrap ' +
+                        getTypeBadgeClass(task.taskType)
+                      }
+                    >
+                      {task.taskType === 'upload'
+                        ? t('table.typeUpload')
+                        : t('table.typeDownload')}
+                    </Badge>
+                  </TableCell>
+                )}
 
                 <TableCell className='px-4 py-3.5 whitespace-nowrap tabular-nums'>
                   {task.status === 'uploading' ||
