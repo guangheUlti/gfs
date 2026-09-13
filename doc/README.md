@@ -10,6 +10,7 @@
 | [file-share-design.md](file-share-design.md) | 机制设计 | 文件分享：创建、提取码、匿名下载/直链、访问记录 | 2026-09-12 |
 | [storage-plugin-expansion-guide.md](storage-plugin-expansion-guide.md) | 实施指南 | 存储插件扩展：SMB/WebDAV/SFTP/FTP 插件与本地目录挂载 | 2026-09-09 |
 | [webdav-sftp-service-guide.md](webdav-sftp-service-guide.md) | 实施指南 | 对外文件服务：WebDAV + SFTP 服务端 | 2026-09-11 |
+| [dev-handoff-guide.md](dev-handoff-guide.md) | 实施指南 | 开发交接：环境工具链、API 配方、架构要点、缓存陷阱、验证流程 | 2026-09-13 |
 
 ## 命名规范
 
