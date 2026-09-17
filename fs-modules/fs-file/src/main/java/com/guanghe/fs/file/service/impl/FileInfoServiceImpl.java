@@ -160,6 +160,31 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     }
 
     @Override
+    public InputStream openRangeStream(String fileId, long start, long end) {
+        FileInfo fileInfo = getAuthorizedFile(fileId);
+        if (fileInfo.getIsDir()) {
+            throw new StorageOperationException(I18nUtils.getMessage("file.cannot.download.dir", new Object[]{fileId}));
+        }
+        if (fileInfo.getIsDeleted()) {
+            throw new StorageOperationException(I18nUtils.getMessage("file.deleted", new Object[]{fileId}));
+        }
+
+        long size = fileInfo.getSize() == null ? 0 : fileInfo.getSize();
+        if (start < 0 || end < 0 || start >= size || start > end) {
+            throw new BusinessException("Invalid byte range [" + start + ", " + end + "] for size " + size);
+        }
+
+        // 根据文件记录中的 storagePlatformSettingId 获取对应的存储服务
+        try {
+            IStorageOperationService storageService = storageServiceFacade.getStorageService(fileInfo.getStoragePlatformSettingId());
+            return storageService.downloadFileRange(fileInfo.getObjectKey(), start, end);
+        } catch (StorageOperationException e) {
+            log.error("从存储平台范围下载文件失败: fileId={}, objectKey={}", fileId, fileInfo.getObjectKey(), e);
+            throw e;
+        }
+    }
+
+    @Override
     public String getFileUrl(String fileId, Integer expireSeconds) {
         FileInfo fileInfo = getAuthorizedFile(fileId);
         if (fileInfo.getIsDir()) {

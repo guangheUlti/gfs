@@ -23,6 +23,8 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * WebDAV 单控制器：/dav/** 按 HTTP method 分发（不用 @RequestMapping 的 method 属性，
@@ -40,6 +42,9 @@ import java.util.List;
 public class DavController {
 
     private static final String ALLOW = "OPTIONS, GET, HEAD, PUT, PROPFIND, MKCOL, DELETE, MOVE, COPY";
+
+    /** 仅匹配单段 bytes 范围：bytes=start-end / bytes=N- / bytes=-N */
+    private static final Pattern RANGE_PATTERN = Pattern.compile("bytes=(\\d*)-(\\d*)");
 
     private final FileInfoService fileInfoService;
     private final DavPathResolver pathResolver;
@@ -132,7 +137,7 @@ public class DavController {
         response.getOutputStream().write(body);
     }
 
-    /** GET/HEAD：流式输出文件内容 */
+    /** GET/HEAD：流式输出文件内容（支持 HTTP Range 分片/断点续传） */
     private void handleGet(HttpServletRequest request, HttpServletResponse response, String relativePath)
             throws IOException {
         DavPathResolver.ResolvedPath resolved = resolveQuietly(response, relativePath);
@@ -145,18 +150,45 @@ public class DavController {
         }
         FileInfo file = resolved.file();
         long size = file.getSize() == null ? 0 : file.getSize();
-        response.setStatus(HttpServletResponse.SC_OK);
+        boolean head = "HEAD".equals(request.getMethod().toUpperCase());
+
+        // 公共响应头（GET 与 HEAD 通用）
         response.setContentType(StrUtil.blankToDefault(file.getMimeType(), "application/octet-stream"));
         response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''"
                 + URLEncoder.encode(file.getDisplayName(), StandardCharsets.UTF_8).replace("+", "%20"));
-        response.setContentLengthLong(size);
         response.setHeader("Last-Modified", PropfindXmlWriter.formatHttpDate(file.getUploadTime()));
         response.setHeader("ETag", "\"" + file.getId() + "-" + (file.getUpdateTime() == null ? 0
                 : file.getUpdateTime().atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()) + "\"");
-        if ("HEAD".equals(request.getMethod().toUpperCase())) {
-            return;
+        response.setHeader("Accept-Ranges", "bytes");
+
+        // 解析 Range 头（仅对 GET 生效，HEAD 恒返回全量元数据）
+        Range range = null;
+        String rangeHeader = request.getHeader("Range");
+        if (!head && StrUtil.isNotBlank(rangeHeader) && rangeHeader.startsWith("bytes=")) {
+            range = parseRange(rangeHeader, size);
+            if (range == null || range.start >= size || range.start > range.end) {
+                // 请求范围不能满足（start 越界或 start>end）
+                response.setStatus(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE); // 416
+                response.setHeader("Content-Range", "bytes */" + size);
+                return;
+            }
+            long end = Math.min(range.end, size - 1);
+            response.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT); // 206
+            response.setHeader("Content-Range", "bytes " + range.start + "-" + end + "/" + size);
+            response.setContentLengthLong(end - range.start + 1);
+        } else {
+            // 无 Range：全量下载（HEAD 仅回元数据，不输出 body）
+            response.setStatus(HttpServletResponse.SC_OK);
+            response.setContentLengthLong(size);
+            if (head) {
+                return;
+            }
+            range = new Range(0, size - 1);
         }
-        try (InputStream in = fileInfoService.downloadFile(file.getId());
+
+        try (InputStream in = (rangeHeader != null && !head)
+                ? fileInfoService.openRangeStream(file.getId(), range.start(), Math.min(range.end(), size - 1))
+                : fileInfoService.downloadFile(file.getId());
              OutputStream out = response.getOutputStream()) {
             in.transferTo(out);
             out.flush();
@@ -166,6 +198,38 @@ public class DavController {
                 response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             }
         }
+    }
+
+    /**
+     * 解析单段 bytes Range 头。
+     * 支持 bytes=N-M（闭区间）、bytes=N-（开放端到尾）、bytes=-N（末尾 N 字节）。
+     * 无法解析或存在多余范围时返回 null（由调用方按 416 处理）。
+     */
+    private Range parseRange(String rangeHeader, long size) {
+        Matcher matcher = RANGE_PATTERN.matcher(rangeHeader);
+        if (!matcher.matches()) {
+            return null;
+        }
+        String startGroup = matcher.group(1);
+        String endGroup = matcher.group(2);
+        if (startGroup.isEmpty()) {
+            // 后缀形式 bytes=-N：取最后 N 字节
+            if (endGroup.isEmpty()) {
+                return null;
+            }
+            long suffix = Long.parseLong(endGroup);
+            if (suffix <= 0) {
+                return null;
+            }
+            return new Range(Math.max(size - suffix, 0), size - 1);
+        }
+        long start = Long.parseLong(startGroup);
+        long end = endGroup.isEmpty() ? size - 1 : Long.parseLong(endGroup);
+        return new Range(start, end);
+    }
+
+    /** 字节区间值对象 */
+    private record Range(long start, long end) {
     }
 
     /** PUT：上传/覆盖（目标同名文件存在 = 覆盖语义） */

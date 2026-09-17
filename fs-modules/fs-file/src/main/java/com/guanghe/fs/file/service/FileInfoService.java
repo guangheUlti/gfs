@@ -43,6 +43,16 @@ public interface FileInfoService extends IService<FileInfo> {
     InputStream downloadFile(String fileId);
 
     /**
+     * 按字节区间读取文件内容（支持 HTTP Range 分片/断点续传）。
+     *
+     * @param fileId 文件ID
+     * @param start  起始字节（含）
+     * @param end    结束字节（含）
+     * @return 文件输入流（仅含 [start, end] 区间内容）
+     */
+    InputStream openRangeStream(String fileId, long start, long end);
+
+    /**
      * 获取文件访问URL
      *
      * @param fileId        文件ID
