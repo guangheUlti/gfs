@@ -10,11 +10,13 @@ import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.guanghe.fs.file.domain.FileInfo;
 import com.guanghe.fs.file.domain.FileShare;
 import com.guanghe.fs.file.domain.FileShareItem;
+import com.guanghe.fs.file.domain.dto.CreateDirectLinkCmd;
 import com.guanghe.fs.file.domain.dto.CreateFileShareAccessRecordCmd;
 import com.guanghe.fs.file.domain.dto.CreateShareCmd;
 import com.guanghe.fs.file.domain.dto.VerifyShareCodeCmd;
 import com.guanghe.fs.file.domain.event.CreateFileShareAccessRecordEvent;
 import com.guanghe.fs.file.domain.qry.FileShareQry;
+import com.guanghe.fs.file.domain.vo.DirectLinkVO;
 import com.guanghe.fs.file.domain.vo.FileDownloadVO;
 import com.guanghe.fs.file.domain.vo.FileShareThinVO;
 import com.guanghe.fs.file.domain.vo.FileShareVO;
@@ -43,11 +45,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.InputStream;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static com.guanghe.fs.file.domain.table.FileInfoTableDef.FILE_INFO;
+import static com.guanghe.fs.file.domain.table.FileShareItemTableDef.FILE_SHARE_ITEM;
 import static com.guanghe.fs.file.domain.table.FileShareTableDef.FILE_SHARE;
 
 /**
@@ -184,6 +189,88 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
         updateFileLastAccessTime(cmd.getFileIds());
 
         return buildShareVO(share);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DirectLinkVO createDirectLink(CreateDirectLinkCmd cmd) {
+        String userId = StpUtil.getLoginIdAsString();
+        String fileId = cmd.getFileId();
+
+        FileInfo fileInfo = fileInfoService.getOne(new QueryWrapper()
+                .where(FILE_INFO.ID.eq(fileId))
+                .and(FILE_INFO.USER_ID.eq(userId))
+                .and(FILE_INFO.IS_DELETED.eq(false)));
+        if (fileInfo == null) {
+            throw new BusinessException(I18nUtils.getMessage("file.not.exist", new Object[]{fileId}));
+        }
+        if (Boolean.TRUE.equals(fileInfo.getIsDir())) {
+            throw new BusinessException(I18nUtils.getMessage("file.not.file"));
+        }
+
+        // 祖先文件 id 链（含自身），覆盖「文件直接被分享」与「文件位于被分享文件夹内」两种情况
+        Set<String> candidateIds = new HashSet<>();
+        collectAncestorIds(fileInfo, candidateIds);
+
+        String shareId = findReusableShareId(userId, candidateIds);
+        if (shareId == null) {
+            // 复用未命中，创建最小分享（无提取码、scope=download、默认7天）
+            CreateShareCmd createCmd = new CreateShareCmd();
+            createCmd.setFileIds(List.of(fileId));
+            createCmd.setShareName(fileInfo.getDisplayName());
+            createCmd.setExpireType(cmd.getExpireType() == null ? 1 : cmd.getExpireType());
+            createCmd.setScope("download");
+            createCmd.setNeedShareCode(false);
+            createCmd.setMaxDownloadCount(cmd.getMaxDownloadCount());
+            shareId = createShare(createCmd).getId();
+        }
+
+        DirectLinkVO vo = new DirectLinkVO();
+        vo.setShareId(shareId);
+        vo.setFileId(fileId);
+        vo.setDirectUrl("/apis/share/" + shareId + "/raw/" + fileId);
+        return vo;
+    }
+
+    /**
+     * 查找可复用的未过期分享：其分享项命中候选文件集合，取最近创建的一条
+     */
+    private String findReusableShareId(String userId, Set<String> candidateIds) {
+        if (CollUtil.isEmpty(candidateIds)) {
+            return null;
+        }
+        List<FileShareItem> matchItems = fileShareItemService.list(new QueryWrapper()
+                .where(FILE_SHARE_ITEM.FILE_ID.in(new ArrayList<>(candidateIds))));
+        if (CollUtil.isEmpty(matchItems)) {
+            return null;
+        }
+        Set<String> shareIdSet = matchItems.stream()
+                .map(FileShareItem::getShareId)
+                .collect(Collectors.toSet());
+        FileShare reusable = this.getOne(new QueryWrapper()
+                .where(FILE_SHARE.ID.in(shareIdSet))
+                .and(FILE_SHARE.USER_ID.eq(userId))
+                .and(FILE_SHARE.EXPIRE_TIME.isNull().or(FILE_SHARE.EXPIRE_TIME.gt(LocalDateTime.now())))
+                .orderBy(FILE_SHARE.CREATED_AT.desc()));
+        return reusable == null ? null : reusable.getId();
+    }
+
+    /**
+     * 沿 parentId 向上收集祖先 id（含自身）
+     */
+    private void collectAncestorIds(FileInfo fileInfo, Set<String> ids) {
+        FileInfo current = fileInfo;
+        Set<String> visited = new HashSet<>();
+        while (current != null && visited.add(current.getId())) {
+            ids.add(current.getId());
+            if (StringUtils.isEmpty(current.getParentId())) {
+                break;
+            }
+            current = fileInfoService.getOne(new QueryWrapper()
+                    .where(FILE_INFO.ID.eq(current.getParentId()))
+                    .and(FILE_INFO.USER_ID.eq(current.getUserId()))
+                    .and(FILE_INFO.IS_DELETED.eq(false)));
+        }
     }
 
 

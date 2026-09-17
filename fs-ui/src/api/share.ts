@@ -8,6 +8,8 @@ import type {
   ShareThin,
   ShareValidParams,
   ShareAccessRecord,
+  DirectLinkParams,
+  DirectLinkResponse,
 } from '@/types/share'
 import { request } from './request'
 import service from './request'
@@ -24,6 +26,13 @@ export function getMySharePage(params?: SharePageQuery) {
  */
 export function shareFiles(params: ShareCreateParams) {
   return request.post<ShareCreateResponse>('/apis/share/create', params)
+}
+
+/**
+ * 生成/获取直链（单个文件，创建或复用分享）
+ */
+export function createDirectLink(params: DirectLinkParams) {
+  return request.post<DirectLinkResponse>('/apis/share/direct-link', params)
 }
 
 /**

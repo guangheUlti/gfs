@@ -141,3 +141,27 @@ export interface ShareAccessRecord {
   /** 访问时间 */
   accessTime: string
 }
+
+/**
+ * 创建/获取直链参数
+ */
+export interface DirectLinkParams {
+  /** 文件ID（仅支持单个文件） */
+  fileId: string
+  /** 有效期类型：1-7天 2-30天 3-自定义 4-永久（默认 1-7天） */
+  expireType?: number
+  /** 最大下载次数（可选） */
+  maxDownloadCount?: number
+}
+
+/**
+ * 直链返回
+ */
+export interface DirectLinkResponse {
+  /** 分享ID */
+  shareId: string
+  /** 文件ID */
+  fileId: string
+  /** 直链相对路径（免登录即可访问下载） */
+  directUrl: string
+}

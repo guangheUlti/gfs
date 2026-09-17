@@ -235,6 +235,13 @@ public class FileTransferController {
         return Result.ok(result, "文件夹下载任务已创建");
     }
 
+    @PostMapping("/batch-download/tasks")
+    @Operation(summary = "创建批量下载任务", description = "异步打包多个文件/文件夹并返回进度")
+    public Result<FolderDownloadTaskVO> createBatchDownloadTask(@RequestBody @Validated List<String> ids) {
+        FolderDownloadTaskVO result = fileTransferTaskService.createBatchDownloadTask(ids);
+        return Result.ok(result, "批量下载任务已创建");
+    }
+
     @GetMapping("/folder-download/tasks/{taskId}")
     @Operation(summary = "查询文件夹下载任务进度", description = "查询文件夹打包进度")
     public Result<FolderDownloadTaskVO> getFolderDownloadTask(@PathVariable String taskId) {

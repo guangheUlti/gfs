@@ -31,6 +31,10 @@
     "dragMoveToMulti": " ({{count}} items)",
     "emptyTitle": "No files",
     "emptyDesc": "Upload or create a folder to get started",
+    "searchBanner": "Searching “{{keyword}}”",
+    "searchEmptyTitle": "No results for “{{keyword}}”",
+    "searchEmptyDesc": "Try a different keyword, or clear the search to browse everything",
+    "clearSearch": "Clear search",
     "uploadFile": "Upload",
     "newFolder": "New folder",
     "newTextFile": "New TXT",
@@ -49,6 +53,7 @@
     "preview": "Preview",
     "edit": "Edit",
     "share": "Share",
+    "copyDirectLink": "Copy direct link",
     "favorite": "Add to favorites",
     "unfavorite": "Remove from favorites",
     "download": "Download",
@@ -74,7 +79,10 @@
     "ariaShare": "Share",
     "ariaFavorite": "Favorite",
     "ariaMove": "Move",
-    "ariaTrash": "Move to trash"
+    "ariaTrash": "Move to trash",
+    "downloadPrompt": "Packing files, please wait...",
+    "downloadReady": "Packed, download started",
+    "downloadError": "Failed to pack and download"
   },
   "grid": {
     "favorite": "Favorite",
@@ -304,6 +312,8 @@
     "unfavOk": "Removed from favorites",
     "favFail": "Could not favorite",
     "unfavFail": "Could not unfavorite",
+    "copyDirectLinkOk": "Direct link copied, paste it to download without login",
+    "copyDirectLinkFail": "Failed to create/copy direct link",
     "uploadFileAdded": "Files added to upload queue",
     "uploadCheckProgress": "Check transfer panel for progress"
   },

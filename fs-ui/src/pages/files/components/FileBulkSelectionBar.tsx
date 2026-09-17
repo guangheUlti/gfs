@@ -4,6 +4,7 @@ import {
   Heart,
   Move,
   Trash2,
+  Download,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { BulkSelectionBar } from '@/components/bulk-selection-bar'
@@ -21,6 +22,7 @@ interface FileBulkSelectionBarProps {
   onFavorite: () => void
   onMove: () => void
   onDelete: () => void
+  onDownload: () => void
   onClear: () => void
 }
 
@@ -31,6 +33,7 @@ export function FileBulkSelectionBar({
   onFavorite,
   onMove,
   onDelete,
+  onDownload,
   onClear,
 }: FileBulkSelectionBarProps) {
   const { t } = useTranslation('files')
@@ -43,6 +46,26 @@ export function FileBulkSelectionBar({
       ariaLabel={t('bulk.ariaBar')}
       className='bottom-14 sm:bottom-16'
     >
+      <RequirePermission code='file:read'>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type='button'
+              variant='outline'
+              size='icon'
+              className='size-8 shrink-0'
+              onClick={onDownload}
+              aria-label={t('bulk.ariaDownload')}
+            >
+              <Download />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{t('rowMenu.download')}</p>
+          </TooltipContent>
+        </Tooltip>
+      </RequirePermission>
+
       <RequirePermission code='file:share'>
         <Tooltip>
           <TooltipTrigger asChild>

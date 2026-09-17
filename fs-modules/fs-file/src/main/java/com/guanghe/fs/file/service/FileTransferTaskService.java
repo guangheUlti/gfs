@@ -109,6 +109,14 @@ public interface FileTransferTaskService extends IService<FileTransferTask> {
     FolderDownloadTaskVO createFolderDownloadTask(String folderId);
 
     /**
+     * 创建批量下载打包任务
+     *
+     * @param ids 文件/文件夹ID列表
+     * @return 任务进度
+     */
+    FolderDownloadTaskVO createBatchDownloadTask(List<String> ids);
+
+    /**
      * 查询文件夹下载打包任务进度
      *
      * @param taskId 任务ID

@@ -45,6 +45,10 @@ logs/
 
 .freebuff/
 
+### IDE / internal agent dirs ###
+.trae/
+.webtest/
+
 ### Frontend (fs-ui) ###
 node_modules/
 fs-ui/dist/

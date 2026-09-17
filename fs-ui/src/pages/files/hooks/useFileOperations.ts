@@ -12,6 +12,7 @@ import {
   favoriteFile,
   unfavoriteFile,
 } from '@/api/file'
+import { createDirectLink } from '@/api/share'
 import { usePreviewStore } from '@/store/preview'
 import { useTransferStore } from '@/store/transfer'
 
@@ -190,6 +191,23 @@ export function useFileOperations(
   }, [])
 
   /**
+   * 生成/获取直链并复制到剪贴板（免登录下载链接）
+   */
+  const copyDirectLink = useCallback(
+    async (file: FileItem) => {
+      try {
+        const res = await createDirectLink({ fileId: file.id })
+        const fullUrl = `${window.location.origin}${res.directUrl}`
+        await navigator.clipboard.writeText(fullUrl)
+        toast.success(t('operations.copyDirectLinkOk'))
+      } catch (error) {
+        toast.error(t('operations.copyDirectLinkFail'))
+      }
+    },
+    [t]
+  )
+
+  /**
    * 删除文件
    */
   const handleDelete = useCallback(async () => {
@@ -362,6 +380,7 @@ export function useFileOperations(
     handleMove,
     openShareModal,
     openBatchShareModal,
+    copyDirectLink,
     openDeleteConfirm,
     openBatchDeleteConfirm,
     handleDelete,

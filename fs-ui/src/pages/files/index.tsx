@@ -8,10 +8,18 @@ import {
   Upload,
   FolderPlus,
   RefreshCw,
+  Search,
+  X,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import {
+  createBatchDownloadTask,
+  getFolderDownloadTask,
+  downloadFolderDownloadZip,
+} from '@/api/transfer'
 import { usePermission } from '@/hooks/use-permission'
 import { Button } from '@/components/ui/button'
 import {
@@ -84,6 +92,12 @@ export default function FilesPage() {
   const [draggedCount, setDraggedCount] = useState(0)
 
   const fileScrollAreaRef = useRef<HTMLDivElement>(null)
+
+  // 批量 zip 打包下载中，用于防止重复触发与组件卸载后的清理
+  const batchDownloadRef = useRef<{
+    active: boolean
+    onCancel: (() => void) | null
+  }>({ active: false, onCancel: null })
 
   const fileList = useFileList()
 
@@ -290,6 +304,70 @@ export default function FilesPage() {
   }
 
   /**
+   * 批量 zip 打包下载：创建任务后轮询进度，完成后触发下载
+   */
+  const handleBatchDownload = async () => {
+    if (selectedFiles.length === 0) return
+    if (batchDownloadRef.current.active) return
+
+    const ids = selectedFiles.map((f) => f.id)
+    let stopped = false
+    const stopPolling = () => {
+      stopped = true
+      batchDownloadRef.current.active = false
+      batchDownloadRef.current.onCancel = null
+    }
+
+    try {
+      const task = await createBatchDownloadTask(ids)
+      if (!task?.taskId) {
+        toast.error(t('bulk.downloadError'))
+        return
+      }
+      batchDownloadRef.current.active = true
+      batchDownloadRef.current.onCancel = stopPolling
+      toast.info(t('bulk.downloadPrompt'))
+
+      const poll = async () => {
+        if (stopped) return
+        try {
+          const current = await getFolderDownloadTask(task.taskId)
+          if (stopped) return
+          if (current.status === 'completed') {
+            stopPolling()
+            await downloadFolderDownloadZip(task.taskId)
+            toast.success(t('bulk.downloadReady'))
+            return
+          }
+          if (current.status === 'failed' || current.status === 'canceled') {
+            stopPolling()
+            toast.error(current.errorMessage || t('bulk.downloadError'))
+            return
+          }
+          // queued / scaning / scanning / packing 时继续轮询
+          setTimeout(poll, 1000)
+        } catch {
+          stopPolling()
+          toast.error(t('bulk.downloadError'))
+        }
+      }
+      poll()
+    } catch {
+      stopPolling()
+      toast.error(t('bulk.downloadError'))
+    }
+  }
+
+  /**
+   * 组件卸载时停止批量打包轮询
+   */
+  useEffect(() => {
+    return () => {
+      batchDownloadRef.current.onCancel?.()
+    }
+  }, [])
+
+  /**
    * 拖拽移动文件
    */
   const handleMoveFiles = async (fileIds: string[], targetDirId: string) => {
@@ -331,18 +409,38 @@ export default function FilesPage() {
     <div className='flex h-full flex-col'>
       {/* 顶部工具栏：窄屏时标题与工具栏各占一行；顶部留白大、底部留白小，分隔线贴近内容 */}
       <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 pt-4 pb-3 sm:px-6 sm:pt-6 sm:pb-4'>
-        {/* 面包屑导航 */}
+        {/* 面包屑导航；搜索态改为提示条 */}
         <div className='w-full min-w-0 sm:w-auto sm:flex-1'>
-          <FileBreadcrumb
-            breadcrumbPath={fileList.breadcrumbPath}
-            customTitle={
-              fileList.breadcrumbPath.length === 0 &&
-              (isFavoritesView || isRecentsView || isTypeFilter || isDirFilter)
-                ? specialViewTitle
-                : undefined
-            }
-            onNavigate={fileList.navigateToFolder}
-          />
+          {fileList.searchKeyword ? (
+            <div className='flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground'>
+              <Search className='h-4 w-4 shrink-0' />
+              <span className='min-w-0 truncate'>
+                {t('index.searchBanner', {
+                  keyword: fileList.searchKeyword,
+                })}
+              </span>
+              <Button
+                variant='ghost'
+                size='sm'
+                className='h-6 shrink-0 gap-1 px-1.5 text-xs'
+                onClick={() => fileList.commitSearch('')}
+              >
+                <X className='h-3.5 w-3.5' />
+                {t('index.clearSearch')}
+              </Button>
+            </div>
+          ) : (
+            <FileBreadcrumb
+              breadcrumbPath={fileList.breadcrumbPath}
+              customTitle={
+                fileList.breadcrumbPath.length === 0 &&
+                (isFavoritesView || isRecentsView || isTypeFilter || isDirFilter)
+                  ? specialViewTitle
+                  : undefined
+              }
+              onNavigate={fileList.navigateToFolder}
+            />
+          )}
         </div>
 
         {/* 存储切换器：多存储激活时在根面包屑旁切换当前存储（仅全部文件视图） */}
@@ -437,6 +535,36 @@ export default function FilesPage() {
                   <p className='text-muted-foreground'>{tc('loading')}</p>
                 </div>
               ) : fileList.fileList.length === 0 ? (
+                fileList.searchKeyword ? (
+                  <div className='flex h-full items-center justify-center'>
+                    <Empty className='border-none'>
+                      <EmptyHeader>
+                        <EmptyMedia variant='icon'>
+                          <Search className='h-12 w-12' />
+                        </EmptyMedia>
+                        <EmptyTitle>
+                          {t('index.searchEmptyTitle', {
+                            keyword: fileList.searchKeyword,
+                          })}
+                        </EmptyTitle>
+                        <EmptyDescription>
+                          {t('index.searchEmptyDesc')}
+                        </EmptyDescription>
+                      </EmptyHeader>
+                      <EmptyContent>
+                        <Button
+                          size='sm'
+                          variant='outline'
+                          onClick={() => fileList.commitSearch('')}
+                        >
+                          <X className='mr-2 h-4 w-4' />
+                          {t('index.clearSearch')}
+                        </Button>
+                      </EmptyContent>
+                    </Empty>
+                  </div>
+                ) : (
+              <>
                 <div className='flex h-full items-center justify-center'>
                   <Empty className='border-none'>
                     <EmptyHeader>
@@ -472,17 +600,21 @@ export default function FilesPage() {
                     )}
                   </Empty>
                 </div>
+              </>
+                )
               ) : (
                 /* 不撑满高度：内容不足时强撑到 100% 会因亚像素取整虚报溢出，白得一个滚动条 */
                 <div className='min-h-0'>
                   {viewMode === 'grid' ? (
                     <FileGridView
                       fileList={fileList.fileList}
+                      searchKeyword={fileList.searchKeyword}
                       selectedKeys={selectedKeys}
                       onSelectionChange={setSelectedKeys}
                       onFileClick={handleFileClick}
                       onDownload={operations.handleDownload}
                       onShare={operations.openShareModal}
+                      onCopyDirectLink={operations.copyDirectLink}
                       onDelete={operations.openDeleteConfirm}
                       onPermanentDelete={operations.openPermanentDeleteConfirm}
                       onRename={operations.openRenameModal}
@@ -510,12 +642,14 @@ export default function FilesPage() {
                   ) : (
                     <FileListView
                       fileList={fileList.fileList}
+                      searchKeyword={fileList.searchKeyword}
                       selectedKeys={selectedKeys}
                       onSelectionChange={setSelectedKeys}
                       onFileClick={handleFileClick}
                       onSortChange={fileList.handleSortChange}
                       onDownload={operations.handleDownload}
                       onShare={operations.openShareModal}
+                      onCopyDirectLink={operations.copyDirectLink}
                       onDelete={operations.openDeleteConfirm}
                       onPermanentDelete={operations.openPermanentDeleteConfirm}
                       onRename={operations.openRenameModal}
@@ -640,6 +774,7 @@ export default function FilesPage() {
         onFavorite={handleBatchFavorite}
         onMove={handleBatchMove}
         onDelete={handleBatchDelete}
+        onDownload={handleBatchDownload}
         onClear={clearSelection}
       />
 

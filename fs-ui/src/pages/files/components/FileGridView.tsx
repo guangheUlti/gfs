@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { FileItem } from '@/types/file'
+import { Highlight } from '@/components/Highlight'
 import {
   MoreHorizontal,
   Download,
   Share2,
+  Link as LinkIcon,
   Heart,
   Move,
   Trash2,
@@ -40,11 +42,14 @@ import { FileListScrollSentinel } from './FileListScrollSentinel'
 
 interface FileGridViewProps {
   fileList: FileItem[]
+  /** 当前生效的搜索关键词，用于结果高亮 */
+  searchKeyword?: string
   selectedKeys: string[]
   onSelectionChange: (keys: string[]) => void
   onFileClick: (file: FileItem) => void
   onDownload: (file: FileItem | FileItem[]) => void
   onShare: (file: FileItem) => void
+  onCopyDirectLink: (file: FileItem) => void
   onDelete: (file: FileItem) => void
   onPermanentDelete: (file: FileItem) => void
   onRename: (file: FileItem) => void
@@ -73,11 +78,13 @@ interface FileGridViewProps {
 
 export function FileGridView({
   fileList,
+  searchKeyword,
   selectedKeys,
   onSelectionChange,
   onFileClick,
   onDownload,
   onShare,
+  onCopyDirectLink,
   onDelete,
   onPermanentDelete,
   onRename,
@@ -301,6 +308,17 @@ export function FileGridView({
                             {t('rowMenu.share')}
                           </DropdownMenuItem>
                         )}
+                        {!file.isDir && canShare && (
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onCopyDirectLink(file)
+                            }}
+                          >
+                            <LinkIcon className='mr-2 h-4 w-4' />
+                            {t('rowMenu.copyDirectLink')}
+                          </DropdownMenuItem>
+                        )}
                         {canWrite && (
                           <DropdownMenuItem
                             onClick={(e) => {
@@ -424,7 +442,7 @@ export function FileGridView({
                     className='mb-1 line-clamp-2 break-words px-1 text-center text-sm leading-snug font-normal text-foreground'
                     title={file.displayName}
                   >
-                    {file.displayName}
+                    <Highlight text={file.displayName} keyword={searchKeyword} />
                   </div>
 
                   {/* 修改时间：与列表视图同一套固定格式，不让网格出现「今天」而列表出现日期 */}
@@ -549,6 +567,17 @@ export function FileGridView({
                       >
                         <Share2 className='mr-2 h-4 w-4' />
                         {t('rowMenu.share')}
+                      </ContextMenuItem>
+                    )}
+                    {!file.isDir && canShare && (
+                      <ContextMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onCopyDirectLink(file)
+                        }}
+                      >
+                        <LinkIcon className='mr-2 h-4 w-4' />
+                        {t('rowMenu.copyDirectLink')}
                       </ContextMenuItem>
                     )}
                     {canWrite && (

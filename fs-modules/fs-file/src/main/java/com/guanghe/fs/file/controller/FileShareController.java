@@ -1,6 +1,7 @@
 package com.guanghe.fs.file.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import com.guanghe.fs.file.domain.dto.CreateDirectLinkCmd;
 import com.guanghe.fs.file.domain.dto.CreateShareCmd;
 import com.guanghe.fs.file.domain.dto.VerifyShareCodeCmd;
 import com.guanghe.fs.file.domain.qry.FileShareQry;
@@ -79,6 +80,13 @@ public class FileShareController {
                 "分享文件数: " + cmd.getFileIds().size()
         );
         return Result.ok(fileShareVO);
+    }
+
+    @PostMapping("/direct-link")
+    @Operation(summary = "生成/获取直链", description = "对单个文件创建或复用分享，返回免登录直链")
+    @SaCheckPermission("file:share")
+    public Result<DirectLinkVO> createDirectLink(@RequestBody @Validated CreateDirectLinkCmd cmd) {
+        return Result.ok(fileShareService.createDirectLink(cmd));
     }
 
     @DeleteMapping("/cancels")

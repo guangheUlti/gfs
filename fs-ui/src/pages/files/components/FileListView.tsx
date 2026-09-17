@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { FileItem, SortOrder } from '@/types/file'
+import { Highlight } from '@/components/Highlight'
 import {
   Download,
   Share2,
+  Link as LinkIcon,
   Heart,
   Move,
   Trash2,
@@ -59,12 +61,15 @@ export function FileListRowActionIcon() {
 
 interface FileListViewProps {
   fileList: FileItem[]
+  /** 当前生效的搜索关键词，用于结果高亮 */
+  searchKeyword?: string
   selectedKeys: string[]
   onSelectionChange: (keys: string[]) => void
   onFileClick: (file: FileItem) => void
   onSortChange: (field: string, direction: SortOrder) => void
   onDownload: (file: FileItem | FileItem[]) => void
   onShare: (file: FileItem) => void
+  onCopyDirectLink: (file: FileItem) => void
   onDelete: (file: FileItem) => void
   onPermanentDelete: (file: FileItem) => void
   onRename: (file: FileItem) => void
@@ -92,11 +97,13 @@ interface FileListViewProps {
 
 export function FileListView({
   fileList,
+  searchKeyword,
   selectedKeys,
   onSelectionChange,
   onFileClick,
   onDownload,
   onShare,
+  onCopyDirectLink,
   onDelete,
   onPermanentDelete,
   onRename,
@@ -318,7 +325,10 @@ export function FileListView({
                           )}
                           title={file.displayName}
                         >
-                          {file.displayName}
+                          <Highlight
+                            text={file.displayName}
+                            keyword={searchKeyword}
+                          />
                         </span>
                       </div>
                     </TableCell>
@@ -396,6 +406,17 @@ export function FileListView({
                             >
                               <Share2 className='size-4' />
                               {t('rowMenu.share')}
+                            </DropdownMenuItem>
+                          )}
+                          {!file.isDir && canShare && (
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onCopyDirectLink(file)
+                              }}
+                            >
+                              <LinkIcon className='size-4' />
+                              {t('rowMenu.copyDirectLink')}
                             </DropdownMenuItem>
                           )}
                           {!file.isDir && canRead && (
@@ -603,6 +624,17 @@ export function FileListView({
                         >
                           <Share2 className='mr-2 h-4 w-4' />
                           {t('rowMenu.share')}
+                        </ContextMenuItem>
+                      )}
+                      {!file.isDir && canShare && (
+                        <ContextMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onCopyDirectLink(file)
+                          }}
+                        >
+                          <LinkIcon className='mr-2 h-4 w-4' />
+                          {t('rowMenu.copyDirectLink')}
                         </ContextMenuItem>
                       )}
                       {canWrite && (

@@ -5,6 +5,7 @@ import type {
   CheckUploadResultVO,
   InitDownloadCmd,
   InitDownloadResultVO,
+  FolderDownloadTaskVO,
 } from '@/types/transfer'
 import { request } from './request'
 import service from './request'
@@ -123,4 +124,67 @@ export function downloadChunk(
  */
 export function getDownloadedChunks(taskId: string) {
   return request.get<number[]>(`/apis/transfer/download/chunks/${taskId}`)
+}
+
+/**
+ * 创建批量 zip 打包下载任务
+ */
+export function createBatchDownloadTask(ids: string[]) {
+  return request.post<FolderDownloadTaskVO>(
+    '/apis/transfer/batch-download/tasks',
+    ids
+  )
+}
+
+/**
+ * 查询批量 zip 打包下载任务进度
+ */
+export function getFolderDownloadTask(taskId: string) {
+  return request.get<FolderDownloadTaskVO>(
+    `/apis/transfer/folder-download/tasks/${taskId}`
+  )
+}
+
+/**
+ * 从 Content-Disposition 响应头中解析文件名
+ */
+function getFileNameFromContentDisposition(
+  value: string | undefined
+): string | undefined {
+  if (!value) return undefined
+  // 优先匹配 RFC5987 的 filename*=UTF-8''<encoded>，再回退到普通 filename=
+  const star = value.match(/filename\*=UTF-8''([^;]+)/i)
+  if (star?.[1]) {
+    try {
+      return decodeURIComponent(star[1])
+    } catch {
+      // 解码失败时回退到普通 filename
+    }
+  }
+  const plain = value.match(/filename="?([^";]+)"?/i)
+  return plain?.[1]?.trim() || undefined
+}
+
+/**
+ * 下载已打包好的 zip（触发浏览器下载）
+ */
+export async function downloadFolderDownloadZip(taskId: string) {
+  const res = await service.get<Blob>(
+    `/apis/transfer/folder-download/tasks/${taskId}/file`,
+    { responseType: 'blob' }
+  )
+  const blob = res.data
+  const fileName =
+    getFileNameFromContentDisposition(res.headers?.['content-disposition']) ||
+    'batch-download.zip'
+
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }

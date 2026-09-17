@@ -1327,6 +1327,60 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     }
 
     @Override
+    public FolderDownloadTaskVO createBatchDownloadTask(List<String> ids) {
+        cleanupExpiredFolderDownloadTasks();
+        String userId = StpUtil.getLoginIdAsString();
+        String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
+
+        if (ids == null || ids.isEmpty()) {
+            throw new BusinessException("请至少选择一个文件或文件夹");
+        }
+
+        List<FileInfo> sources = new ArrayList<>(ids.size());
+        for (String id : ids) {
+            FileInfo source = fileInfoService.getById(id);
+            if (source == null || Boolean.TRUE.equals(source.getIsDeleted())) {
+                throw new BusinessException("文件或文件夹不存在");
+            }
+            if (!userId.equals(source.getUserId())) {
+                throw new BusinessException(I18nUtils.getMessage("file.no.permission.download"));
+            }
+            sources.add(source);
+        }
+
+        FolderDownloadTask task = new FolderDownloadTask();
+        task.taskId = IdUtil.fastSimpleUUID();
+        task.userId = userId;
+        task.storagePlatformSettingId = storagePlatformSettingId;
+        task.folderId = null;
+        task.folderName = "批量下载";
+        task.batchSources = sources;
+        task.status = "queued";
+        task.progress = 0;
+        task.totalFiles = 0;
+        task.processedFiles = 0;
+        task.totalBytes = 0L;
+        task.processedBytes = 0L;
+        task.message = "正在创建下载任务";
+        task.createdAt = System.currentTimeMillis();
+        task.updatedAt = task.createdAt;
+        task.lastActivityAt = task.createdAt;
+        FutureTask<Void> buildFuture = new FutureTask<>(() -> {
+            buildBatchDownloadTask(task, sources);
+            return null;
+        });
+        task.buildFuture = buildFuture;
+        folderDownloadTasks.put(task.taskId, task);
+        try {
+            fileMergeExecutor.execute(buildFuture);
+        } catch (RuntimeException e) {
+            folderDownloadTasks.remove(task.taskId, task);
+            throw e;
+        }
+        return toFolderDownloadTaskVO(task);
+    }
+
+    @Override
     public FolderDownloadTaskVO getFolderDownloadTask(String taskId) {
         cleanupExpiredFolderDownloadTasks();
         return toFolderDownloadTaskVO(getAuthorizedFolderDownloadTask(taskId));
@@ -1482,6 +1536,110 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                 folderDownloadTasks.remove(task.taskId, task);
             }
         }
+    }
+
+    private void buildBatchDownloadTask(FolderDownloadTask task, List<FileInfo> sources) {
+        task.buildStarted = true;
+        Path zipPath = null;
+        try {
+            checkFolderDownloadCancellation(task);
+            updateFolderDownloadTask(task, "scanning", 0, "正在统计文件");
+            int totalFiles = 0;
+            long totalBytes = 0L;
+            for (FileInfo source : sources) {
+                checkFolderDownloadCancellation(task);
+                touchFolderDownloadTask(task);
+                if (Boolean.TRUE.equals(source.getIsDir())) {
+                    FolderDownloadScanResult scanResult = scanDirectory(source, new HashSet<>(), task);
+                    totalFiles += scanResult.totalFiles;
+                    totalBytes += scanResult.totalBytes;
+                } else {
+                    totalFiles += 1;
+                    totalBytes += source.getSize() == null ? 0L : source.getSize();
+                }
+            }
+            synchronized (task) {
+                task.totalFiles = totalFiles;
+                task.totalBytes = totalBytes;
+                touchFolderDownloadTask(task);
+            }
+
+            zipPath = createFolderDownloadZipPath(FOLDER_DOWNLOAD_TASK_PREFIX);
+            synchronized (task) {
+                task.zipPath = zipPath;
+                task.zipFileName = buildZipFileName(task.folderName);
+            }
+
+            updateFolderDownloadTask(task, "packing", 0, "正在打包");
+            try (ZipOutputStream zipOutputStream = new ZipOutputStream(Files.newOutputStream(zipPath))) {
+                Set<String> usedTopNames = new HashSet<>();
+                for (FileInfo source : sources) {
+                    checkFolderDownloadCancellation(task);
+                    String topName = dedupeZipName(sanitizeZipName(source.getDisplayName()), usedTopNames);
+                    if (Boolean.TRUE.equals(source.getIsDir())) {
+                        writeDirectoryToZipWithProgress(source, topName, zipOutputStream, new HashSet<>(), task);
+                    } else {
+                        writeFileToZipWithProgress(source, topName, zipOutputStream, task);
+                    }
+                }
+            }
+
+            synchronized (task) {
+                checkFolderDownloadCancellation(task);
+                task.status = "completed";
+                task.progress = 100;
+                task.zipSize = Files.size(zipPath);
+                task.message = "打包完成，准备下载";
+                task.completedAt = System.currentTimeMillis();
+                task.updatedAt = task.completedAt;
+                task.lastActivityAt = task.completedAt;
+            }
+            log.info("批量打包完成: taskId={}, zipSize={}", task.taskId, task.zipSize);
+        } catch (FolderDownloadCanceledException e) {
+            log.info("批量打包任务已取消: taskId={}", task.taskId);
+            markFolderDownloadCanceled(task, e.getMessage());
+        } catch (Exception e) {
+            if (task.cancelRequested) {
+                log.info("批量打包任务中断并取消: taskId={}", task.taskId);
+                markFolderDownloadCanceled(task, "批量打包已取消");
+            } else {
+                log.error("批量打包任务失败: taskId={}", task.taskId, e);
+                synchronized (task) {
+                    task.status = "failed";
+                    task.progress = 0;
+                    task.errorMessage = e.getMessage();
+                    task.message = "打包失败";
+                    task.updatedAt = System.currentTimeMillis();
+                    task.lastActivityAt = task.updatedAt;
+                    task.completedAt = task.updatedAt;
+                }
+            }
+        } finally {
+            if (!"completed".equals(task.status)) {
+                deleteFolderDownloadZip(task.zipPath != null ? task.zipPath : zipPath);
+            }
+            task.currentInputStream = null;
+            task.buildFinished.countDown();
+            if ("canceled".equals(task.status)) {
+                folderDownloadTasks.remove(task.taskId, task);
+            }
+        }
+    }
+
+    private String dedupeZipName(String rawName, Set<String> usedNames) {
+        String name = rawName;
+        if (usedNames.add(name)) {
+            return name;
+        }
+        int dot = rawName.lastIndexOf('.');
+        String base = dot > 0 ? rawName.substring(0, dot) : rawName;
+        String extension = dot > 0 ? rawName.substring(dot) : "";
+        int counter = 1;
+        do {
+            name = base + " (" + counter + ")" + extension;
+            counter++;
+        } while (!usedNames.add(name));
+        return name;
     }
 
     private FolderDownloadScanResult scanDirectory(FileInfo dirInfo, Set<String> visitedDirIds,
@@ -2079,6 +2237,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
         private String storagePlatformSettingId;
         private String folderId;
         private String folderName;
+        private List<FileInfo> batchSources;
         private volatile String status;
         private Integer progress;
         private Integer totalFiles;

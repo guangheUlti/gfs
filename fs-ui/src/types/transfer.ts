@@ -162,6 +162,31 @@ export interface InitDownloadResultVO {
 }
 
 /**
+ * 文件夹批量打包下载任务状态
+ */
+export type FolderDownloadTaskStatus =
+  | 'queued'
+  | 'scaning'
+  | 'scanning'
+  | 'packing'
+  | 'completed'
+  | 'failed'
+  | 'canceled'
+
+/**
+ * 文件夹批量打包下载任务VO
+ */
+export interface FolderDownloadTaskVO {
+  taskId: string
+  status: FolderDownloadTaskStatus
+  progress: number
+  totalFiles: number
+  processedFiles: number
+  message?: string
+  errorMessage?: string
+}
+
+/**
  * 文件传输任务VO
  */
 export interface FileTransferTaskVO {

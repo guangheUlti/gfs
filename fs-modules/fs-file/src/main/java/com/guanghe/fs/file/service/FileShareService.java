@@ -2,9 +2,11 @@ package com.guanghe.fs.file.service;
 
 import com.mybatisflex.core.service.IService;
 import com.guanghe.fs.file.domain.FileShare;
+import com.guanghe.fs.file.domain.dto.CreateDirectLinkCmd;
 import com.guanghe.fs.file.domain.dto.CreateShareCmd;
 import com.guanghe.fs.file.domain.dto.VerifyShareCodeCmd;
 import com.guanghe.fs.file.domain.qry.FileShareQry;
+import com.guanghe.fs.file.domain.vo.DirectLinkVO;
 import com.guanghe.fs.file.domain.vo.FileDownloadVO;
 import com.guanghe.fs.file.domain.vo.FileShareThinVO;
 import com.guanghe.fs.file.domain.vo.FileShareVO;
@@ -44,6 +46,14 @@ public interface FileShareService extends IService<FileShare> {
      * @param cmd 创建分享参数
      */
     FileShareVO createShare(CreateShareCmd cmd);
+
+    /**
+     * 创建或复用直链（免登录临时下载链接）
+     *
+     * @param cmd 直链参数
+     * @return 直链信息
+     */
+    DirectLinkVO createDirectLink(CreateDirectLinkCmd cmd);
 
     /**
      * 取消分享
