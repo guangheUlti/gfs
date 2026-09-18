@@ -218,20 +218,55 @@ bin\uninstall-service.bat :: 移除开机自启（不影响运行中的服务与
 
 ---
 
-## 界面预览
+## 架构概览
 
-| 功能   | 效果图                                                                                                                  | 效果图                                                                                                                     | 效果图                                                                                                                          |
-|------|----------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------|
-| 登录   | <img alt="login.png"  width="600" src=".images/login.png"/>                                                          | <img alt="register.png"  width="600" src=".images/register.png"/>          |                                                                                                                              |
-| 我的文件 | <img alt="grid_file.png" width="600" src=".images/grid_file.png"/>      | <img alt="file.png" width="600" src=".images/file.png"/>                   |                                                                                                                              |
-| 回收站  | <img alt="recycle.png" width="600" src=".images/recycle.png"/>          | <img alt="recycle_clear.png" width="600" src=".images/recycle_clear.png"/> |                                                                                                                              |
-| 分享文件 | <img alt="share.png" width="600" src=".images/share.png"/>              | <img alt="share_create.png" width="600" src=".images/share_create.png"/>   | <img alt="share_list.png" width="600" src=".images/share_list.png"/>            |
-| 移动文件 | <img alt="move.png" width="600" src=".images/move.png"/>                |                                                                                                                         |                                                                                                                              |
-| 传输   | <img alt="transmission.png" width="600" src=".images/transmission.png"/> |                                                                                                                         |                                                                                                                              |
-| 存储平台 | <img alt="storage.png" width="600" src=".images/storage.png"/>          | <img alt="add_storage.png" width="600" src=".images/add_storage.png"/>     | <img alt="enable_storage.png" width="600" src=".images/enable_storage.png"/>    |
-| 个人信息 | <img alt="profile.png" width="600" src=".images/profile.png"/>          | <img alt="profile_auth.png" width="600" src=".images/profile_auth.png"/>   |                                                                                                                              |
+```mermaid
+flowchart TB
+    subgraph UI["前端 fs-ui (React 19 + Vite)"]
+        UI_PAGES["页面 & 组件<br/>文件 / 分享 / 回收站 / 传输"]
+        UI_HTTP["HTTP 客户端<br/>/apis + SSE + WebSocket"]
+    end
 
----
+    subgraph ADMIN["启动与装配 fs-admin"]
+        ADMIN_APP["FsAdminApplication"]
+    end
+
+    subgraph MODULES["业务模块 fs-modules"]
+        FILE["fs-file<br/>文件 / 分片上传 / 转码预览"]
+        STORAGE["fs-storage<br/>存储平台管理"]
+        SERVICE["fs-service<br/>WebDAV / SFTP 服务端"]
+        SYSTEM["fs-system<br/>用户 / 注册审核 / 登录管理"]
+        LOG["fs-log<br/>操作日志"]
+    end
+
+    subgraph FRAMEWORK["框架层 fs-framework"]
+        CORE["fs-common-core"]
+        ORM["fs-orm (MyBatis-Flex)"]
+        SECURITY["fs-security (Sa-Token)"]
+        PREVIEW["fs-preview (LibreOffice)"]
+        REDIS["fs-redis"]
+        SSE["fs-sse"]
+        SWAGGER["fs-swagger"]
+        NOTIFY["fs-notify (邮件)"]
+        SPLUGIN["fs-storage-plugin<br/>本地 / OSS / MinIO / SMB / WebDAV / SFTP / FTP"]
+    end
+
+    subgraph INFRA["基础设施"]
+        MYSQL[("MySQL / PostgreSQL")]
+        REDIS_DB[("Redis")]
+    end
+
+    subgraph BOM["依赖版本统一 fs-dependencies (BOM)"]
+    end
+
+    UI_HTTP --> ADMIN_APP
+    UI_PAGES --> UI_HTTP
+
+    ADMIN_APP --> FILE & STORAGE & SERVICE & SYSTEM & LOG
+    MODULES --> FRAMEWORK
+    FRAMEWORK --> BOM & REDIS_DB & MYSQL
+    SERVICE -. "对外协议" .-> UI_HTTP
+```
 
 ## 项目结构
 
