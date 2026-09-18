@@ -54,32 +54,6 @@ spring:
   #    prefix: classpath:/templates/
   #    encoding: UTF-8
 
-  # 邮件配置
-  mail:
-    # 开关
-    enable: true
-    #smtp服务主机  163邮箱则为smtp.163.com（password 需填邮箱的 SMTP 授权码）
-    host: smtp.163.com
-    #编码集
-    default-encoding: UTF-8
-    #发送邮件的账户
-    username: 18903378092@163.com
-    form: GFS <18903378092@163.com>
-    #授权码
-    password: ${MAIL_PASSWORD:}
-    properties:
-      mail:
-        smtp:
-          ssl:
-            enable: true
-          socketFactory:
-            port: 465
-            class: javax.net.ssl.SSLSocketFactory
-          auth: true
-          starttls:
-            enable: true
-            required: true
-
 --- # mybatis-flex配置
 mybatis-flex:
   # 搜索指定包别名

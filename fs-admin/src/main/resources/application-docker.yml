@@ -46,23 +46,6 @@ spring:
           max-idle: 10
           # 连接池中的最小空闲连接
           min-idle: 0
-  mail:
-    host: smtp.163.com
-    username: 18903378092@163.com
-    password: ${MAIL_PASSWORD:}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-            required: true
-          ssl:
-            enable: true
-            socketFactory:
-              port: 465
-              class: javax.net.ssl.SSLSocketFactory
-    default-encoding: utf-8
   cache:
     # 缓存类型 redis、none(不使用缓存)
     type: redis

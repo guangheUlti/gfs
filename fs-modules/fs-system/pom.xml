@@ -32,10 +32,6 @@
         </dependency>
         <dependency>
             <groupId>com.guanghe.fs</groupId>
-            <artifactId>fs-notify</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.guanghe.fs</groupId>
             <artifactId>fs-swagger</artifactId>
         </dependency>
         <dependency>

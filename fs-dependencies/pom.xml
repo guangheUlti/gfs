@@ -110,11 +110,6 @@
             </dependency>
             <dependency>
                 <groupId>com.guanghe.fs</groupId>
-                <artifactId>fs-notify</artifactId>
-                <version>${revision}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.guanghe.fs</groupId>
                 <artifactId>fs-orm</artifactId>
                 <version>${revision}</version>
             </dependency>

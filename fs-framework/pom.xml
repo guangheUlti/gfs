@@ -16,7 +16,6 @@
 
     <modules>
         <module>fs-common-core</module>
-        <module>fs-notify</module>
         <module>fs-orm</module>
         <module>fs-preview</module>
         <module>fs-redis</module>
