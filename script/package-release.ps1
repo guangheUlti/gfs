@@ -14,6 +14,10 @@
 #   - release\deploy-package\lib\{jdk,mysql,redis} are third-party runtimes that
 #     are NOT tracked by git (see .gitignore). They must already exist locally for
 #     the zip to be self-contained; the script only warns when one is missing.
+#   - The jar serves the SPA from classpath:/static/ (WebMvcConfig routes /**
+#     there), so before the backend build the script mirrors fs-ui\dist into
+#     fs-admin\src\main\resources\static; with -SkipBuild it verifies the jar
+#     already embeds that bundle and fails loudly when it is stale (bit v4.0.0).
 #   - The zip is meant to be attached to a GitHub Release, never committed.
 # ============================================================================
 
@@ -30,6 +34,7 @@ $RepoRoot = Split-Path -Parent $PSScriptRoot
 $PkgDir   = Join-Path $RepoRoot 'release\deploy-package'
 $JarPath  = Join-Path $RepoRoot 'fs-admin\target\fs-admin.jar'
 $DistPath = Join-Path $RepoRoot 'fs-ui\dist'
+$StaticPath = Join-Path $RepoRoot 'fs-admin\src\main\resources\static'
 
 function Write-Step([string]$msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 
@@ -58,12 +63,61 @@ if (-not $SkipBuild) {
         finally { Pop-Location }
     }
 
+    Write-Step 'Syncing frontend bundle into jar embedded static'
+    if (-not (Test-Path $DistPath)) { throw "frontend dist not found: $DistPath" }
+    $null = & robocopy $DistPath $StaticPath /MIR /NFL /NDL /NJH /NJS /NP
+    if ($LASTEXITCODE -gt 7) { throw "robocopy (embedded static sync) failed ($LASTEXITCODE)" }
+    $st = Get-ChildItem $StaticPath -Recurse -File
+    Write-Host ("  static          : {0} files mirrored from dist (jar serves classpath:/static/)" -f $st.Count)
+
     Write-Step 'Building backend'
     & $MavenCmd clean package -DskipTests -q
     if ($LASTEXITCODE -ne 0) { throw "maven package failed ($LASTEXITCODE)" }
 }
 
 if (-not (Test-Path $JarPath)) { throw "backend jar not found: $JarPath (run without -SkipBuild)" }
+
+# ------------------------------------------------- embedded frontend check ---
+# A jar built without the dist sync above ships a stale UI while frontend/ in
+# the package looks fresh - the browser then loads old assets. Fail loudly.
+function Get-IndexAssetRefs([string]$htmlPath) {
+    if (-not (Test-Path $htmlPath)) { return $null }
+    ([regex]::Matches((Get-Content $htmlPath -Raw), 'assets/[\w.-]+\.(?:js|css)') |
+        ForEach-Object { $_.Value } | Sort-Object -Unique)
+}
+function Get-EmbeddedIndexRefs([string]$jar) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($jar)
+    try {
+        $entry = $zip.GetEntry('BOOT-INF/classes/static/index.html')
+        if (-not $entry) { return $null }
+        $reader = New-Object System.IO.StreamReader($entry.Open())
+        try {
+            ([regex]::Matches($reader.ReadToEnd(), 'assets/[\w.-]+\.(?:js|css)') |
+                ForEach-Object { $_.Value } | Sort-Object -Unique)
+        }
+        finally { $reader.Dispose() }
+    }
+    finally { $zip.Dispose() }
+}
+if (Test-Path $DistPath) {
+    $distRefs = @(Get-IndexAssetRefs (Join-Path $DistPath 'index.html'))
+    $jarRefs  = @(Get-EmbeddedIndexRefs $JarPath)
+    if ($distRefs.Count -gt 0 -and $jarRefs.Count -gt 0) {
+        if (Compare-Object $distRefs $jarRefs) {
+            throw (@(
+                'backend jar embeds a STALE frontend (BOOT-INF/classes/static/index.html != fs-ui/dist/index.html)',
+                "  dist refs: $($distRefs -join ', ')",
+                "  jar refs : $($jarRefs -join ', ')",
+                'Rebuild without -SkipBuild so dist is mirrored into fs-admin/src/main/resources/static first.'
+            ) -join "`n")
+        }
+        Write-Host ("  embedded frontend check: OK ({0} asset refs match dist)" -f $distRefs.Count)
+    }
+    else {
+        Write-Warning 'Could not verify embedded frontend (no asset refs in dist or jar index.html).'
+    }
+}
 
 # ----------------------------------------------------------- stage output ---
 Write-Step 'Staging jar and frontend into deploy-package'
