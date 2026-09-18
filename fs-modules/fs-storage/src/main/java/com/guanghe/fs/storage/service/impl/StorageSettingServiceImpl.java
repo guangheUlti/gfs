@@ -464,12 +464,14 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
         storageServiceFacade.removeInstance(id);
 
         // 挂载平台删除：卸载 = 只清网盘索引（含挂载点与回收站记录），绝不碰真实文件（8.4-⑧）
-        if ("LocalMount".equals(storageSetting.getPlatformIdentifier())) {
-            try {
+        // 能力位驱动：LocalMount / SMB 等一切 isMountMode 平台统一走索引清理，禁止字符串比较
+        try {
+            IStorageOperationService instance = storageServiceFacade.getStorageService(id);
+            if (instance != null && instance.isMountMode()) {
                 mountUnmountConsumer.accept(id);
-            } catch (Exception e) {
-                log.error("挂载卸载清理索引失败: settingId={}", id, e);
             }
+        } catch (Exception e) {
+            log.error("挂载卸载清理索引失败: settingId={}", id, e);
         }
 
         log.info("存储配置已删除并移除缓存: settingId={}", id);
@@ -481,6 +483,14 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
                 new QueryWrapper()
                         .where(STORAGE_SETTING.PLATFORM_IDENTIFIER.eq(platformIdentifier))
                         .and(STORAGE_SETTING.ENABLED.eq(CommonConstant.Y))
+        );
+    }
+
+    @Override
+    public List<StorageSetting> listEnabledSettings() {
+        return this.list(
+                new QueryWrapper()
+                        .where(STORAGE_SETTING.ENABLED.eq(CommonConstant.Y))
         );
     }
 

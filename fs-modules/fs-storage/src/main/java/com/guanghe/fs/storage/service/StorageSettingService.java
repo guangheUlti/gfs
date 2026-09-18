@@ -66,4 +66,11 @@ public interface StorageSettingService extends IService<StorageSetting> {
      * @return
      */
     List<StorageSetting> listByPlatformIdentifier(String platformIdentifier);
+
+    /**
+     * 列出所有启用的存储配置（不限平台，供能力位驱动的调用方自行过滤，如挂载扫描器）
+     *
+     * @return 启用中的存储配置列表
+     */
+    List<StorageSetting> listEnabledSettings();
 }

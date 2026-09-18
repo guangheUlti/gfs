@@ -90,14 +90,18 @@ public class MountScanService {
         scanAll();
     }
 
-    /** 扫描所有启用的 LocalMount 设置（不写死"至多一个"） */
+    /** 扫描所有启用的挂载式设置（能力位驱动，覆盖 LocalMount/SMB 等一切 isMountMode 平台） */
     public void scanAll() {
         if (!scanEnabled) {
             return;
         }
-        List<StorageSetting> settings = storageSettingService.listByPlatformIdentifier("LocalMount");
+        List<StorageSetting> settings = storageSettingService.listEnabledSettings();
         for (StorageSetting setting : settings) {
             try {
+                IStorageOperationService instance = storageServiceFacade.getStorageService(setting.getId());
+                if (!instance.isMountMode()) {
+                    continue;
+                }
                 scanSetting(setting);
             } catch (Exception e) {
                 log.error("挂载扫描失败: settingId={}", setting.getId(), e);

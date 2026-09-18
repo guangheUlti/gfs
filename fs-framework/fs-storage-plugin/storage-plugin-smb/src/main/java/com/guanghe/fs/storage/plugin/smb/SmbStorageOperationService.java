@@ -33,7 +33,9 @@ import java.util.List;
  * SMB/CIFS 网络共享存储插件（基于 smbj）
  * <p>
  * 纯对象式存储（同 Local/Minio 模式）：分片先落本地 temp，complete 时合并写远程。
- * SMBClient 实例线程安全可跨线程共享；连接/会话/共享每次操作建立、用完即断。
+ * SMBClient 实例线程安全可跨线程共享。连接模型：实例内维持一条常驻 Connection/Session/DiskShare
+ * （NAS 普遍限制单账号会话数，若每次操作新建会话则只增不销，堆满后 NAS 以 STATUS_REQUEST_NOT_ACCEPTED 拒绝认证），
+ * 连接失效时自动整链重建，close() 时统一释放。
  *
  * @Author: guangheUlti
  * @Date: 2026/09/09
@@ -49,6 +51,10 @@ import java.util.List;
 public class SmbStorageOperationService extends AbstractTempChunkStorageService {
 
     private SMBClient client;
+    /** 常驻连接/会话/共享：首次使用建立，失效自动重建，close 时统一释放 */
+    private Connection connection;
+    private Session session;
+    private DiskShare diskShare;
     private String host;
     private int port;
     private String domain;
@@ -112,10 +118,9 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
 
         this.client = new SMBClient();
         try {
-            DiskShare diskShare = openShare();
-            closeShare(diskShare);
-            // 仅验证连通性，不做任何写操作
-            log.info("{} SMB 连接测试通过: {}:{}/{}", getLogPrefix(), host, port, share);
+            // 建立并保持常驻连接/会话/共享（即连通性验证，后续操作直接复用）
+            openShare();
+            log.info("{} SMB 连接建立成功（常驻会话）: {}:{}/{}", getLogPrefix(), host, port, share);
         } catch (Exception e) {
             closeQuietly();
             throw new StorageConfigException("SMB 连接失败: " + rootMessage(e));
@@ -130,24 +135,60 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
     }
 
     /**
-     * 每次操作建立连接/会话/共享（实例被缓存跨线程共享，用完即断）
+     * 获取常驻共享：已连接直接复用；失效/断开则在锁内整链重建 Connection→Session→Share。
+     * 所有短操作（列举/上传/删除/重命名等）共用这一条连接，不再每次操作新建会话。
      */
     private DiskShare openShare() {
-        try {
-            Connection connection = client.connect(host, port);
-            Session session = authenticate(connection);
-            return (DiskShare) session.connectShare(share);
-        } catch (Exception e) {
-            throw new StorageOperationException("SMB 连接失败: " + rootMessage(e), e);
+        // synchronized 而非 ReentrantLock：插件实例可能由框架以不执行字段初始化器的方式创建
+        synchronized (this) {
+            if (diskShare != null) {
+                try {
+                    if (diskShare.isConnected()) {
+                        return diskShare;
+                    }
+                } catch (Exception ignored) {
+                }
+                log.warn("{} SMB 常驻连接失效，重建连接", getLogPrefix());
+                closeShareTree();
+            }
+            try {
+                if (client == null) {
+                    client = new SMBClient();
+                }
+                connection = client.connect(host, port);
+                session = authenticate(connection);
+                diskShare = (DiskShare) session.connectShare(share);
+                return diskShare;
+            } catch (Exception e) {
+                closeShareTree();
+                throw new StorageOperationException("SMB 连接失败: " + rootMessage(e), e);
+            }
         }
     }
 
-    private void closeShare(DiskShare diskShare) {
-        if (diskShare != null) {
+    /**
+     * 兼容占位：常驻模型下操作结束不再关闭共享（实例 close/重连时统一释放）。
+     */
+    private void closeShare(DiskShare ignored) {
+        // no-op
+    }
+
+    /** 释放常驻连接/会话/共享整链（幂等） */
+    private void closeShareTree() {
+        diskShare = null;
+        if (session != null) {
             try {
-                diskShare.close();
+                session.close();
             } catch (Exception ignored) {
             }
+            session = null;
+        }
+        if (connection != null) {
+            try {
+                connection.close();
+            } catch (Exception ignored) {
+            }
+            connection = null;
         }
     }
 
@@ -213,8 +254,8 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
                     SMB2CreateDisposition.FILE_OPEN,
                     EnumSet.of(SMB2CreateOptions.FILE_NON_DIRECTORY_FILE)
             );
-            // getInputStream() 从文件头开始读；流关闭时连带关闭远程句柄与共享
-            return new SmbRangeInputStream(diskShare, remoteFile,
+            // getInputStream() 从文件头开始读；流关闭时关闭远程文件句柄（常驻共享不受影响）
+            return new SmbRangeInputStream(remoteFile,
                     remoteFile.getInputStream(), startByte, length);
         } catch (StorageOperationException e) {
             closeShare(diskShare);
@@ -325,6 +366,13 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
     }
 
     @Override
+    public boolean isMountMode() {
+        // SMB 共享是目录树镜像（共享名即挂载根），与 LocalMount 同为挂载式存储：
+        // 文件列表走挂载点懒创建 + MountScanService 同步，而非上传式 object_key 索引
+        return true;
+    }
+
+    @Override
     public List<StorageObjectEntry> listObjects(String dirKey) {
         ensureNotPrototype();
         DiskShare diskShare = openShare();
@@ -425,6 +473,7 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
     }
 
     private void closeQuietly() {
+        closeShareTree();
         if (client != null) {
             try {
                 client.close();
@@ -506,18 +555,17 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
     }
 
     /**
-     * SMB Range 读取流：从远程文件指定偏移读取指定长度，close 时关闭远程句柄与共享
+     * SMB Range 读取流：从远程文件指定偏移读取指定长度，close 时仅关闭远程文件句柄
+     * （共享为实例级常驻连接，不能随流关闭）
      */
     private static class SmbRangeInputStream extends InputStream {
-        private final DiskShare share;
         private final com.hierynomus.smbj.share.File remoteFile;
         private final InputStream inner;
         private long toSkip;
         private long remaining;
 
-        SmbRangeInputStream(DiskShare share, com.hierynomus.smbj.share.File remoteFile,
+        SmbRangeInputStream(com.hierynomus.smbj.share.File remoteFile,
                             InputStream inner, long offset, long length) {
-            this.share = share;
             this.remoteFile = remoteFile;
             this.inner = new BufferedInputStream(inner, 65536);
             this.toSkip = Math.max(0, offset);
@@ -570,12 +618,6 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
             try {
                 remoteFile.close();
             } catch (Exception ignored) {
-            }
-            if (share != null) {
-                try {
-                    share.close();
-                } catch (Exception ignored) {
-                }
             }
         }
     }
