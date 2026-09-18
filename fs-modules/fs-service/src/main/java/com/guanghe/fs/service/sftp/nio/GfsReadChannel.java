@@ -4,35 +4,43 @@ import cn.hutool.core.io.IoUtil;
 import com.guanghe.fs.file.domain.FileInfo;
 import com.guanghe.fs.file.service.FileInfoService;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.NonReadableChannelException;
+import java.nio.channels.NonWritableChannelException;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.NoSuchFileException;
 
 /**
- * GFS 只读通道：open 时 downloadFile(fileId)；seek 用 skip 重开流（小文件足够；
- * 后续优化可换存储层 downloadFileRange）。
+ * GFS 只读通道：基于 {@link FileInfoService#openRangeStream} 的真随机读。
+ *
+ * <p>MINA SFTP 的每个 READ 请求都带显式偏移，内部会先 {@code position(offset)} 再读。
+ * 这里 position 变化时只记录目标偏移并丢弃旧流，下次 read 才按
+ * {@code [position, size-1]} 字节区间开流——存储层 downloadFileRange 按需取数
+ * （本地 lseek / 远程 Range 读 / 加密文件 CTR 计数器精确定位），seek 为 O(1)，
+ * 满足视频播放器拖动进度条、读尾部 moov 元数据等随机读场景。</p>
+ *
+ * <p>顺序读（offset == 当前位置）不会重开流，整个顺序下载只建立一次存储连接。</p>
  */
 class GfsReadChannel implements SeekableByteChannel {
+
+    /** 缓冲窗口大小：减少底层随机读的系统调用/网络往返次数 */
+    private static final int READ_BUFFER = 64 * 1024;
 
     private final GfsPath path;
     private long position;
     private boolean open = true;
 
+    /** 当前偏移起的字节区间流（惰性打开；null = 未打开或已 EOF） */
+    private InputStream current;
+
+    /** 构造时仅校验文件存在性（OPEN 阶段快速失败），不建立存储连接 */
     GfsReadChannel(GfsPath path) throws IOException {
         this.path = path;
-        openAndSkip(0);
-    }
-
-    private InputStream current;
-    private long currentBase;
-
-    private void openAndSkip(long from) throws IOException {
-        IoUtil.close(current);
-        current = null;
+        this.position = 0L;
         FileInfo file = resolveFile();
         if (file == null) {
             throw new NoSuchFileException(path.getAbsolutePath());
@@ -40,26 +48,66 @@ class GfsReadChannel implements SeekableByteChannel {
         if (Boolean.TRUE.equals(file.getIsDir())) {
             throw new IOException("is a directory: " + path.getAbsolutePath());
         }
-        InputStream in = path.getFileSystem().bridge().runAs(path.getFileSystem().userId(),
-                () -> files().downloadFile(file.getId()));
-        if (from > 0) {
-            long skipped = in.skip(from);
-            if (skipped < from) {
-                // skip 短跳：按字节读掉剩余
-                long remaining = from - skipped;
-                byte[] sink = new byte[8192];
-                while (remaining > 0) {
-                    long read = in.read(sink, 0, (int) Math.min(sink.length, remaining));
-                    if (read < 0) {
-                        break;
-                    }
-                    remaining -= read;
+    }
+
+    @Override
+    public synchronized int read(ByteBuffer dst) throws IOException {
+        ensureOpen();
+        int want = dst.remaining();
+        if (want == 0) {
+            return 0;
+        }
+        if (current == null) {
+            openAt(position);
+        }
+        if (current == null) {
+            // 起始偏移已越界（EOF），未开流
+            return -1;
+        }
+        int total = 0;
+        if (dst.hasArray()) {
+            // 堆缓冲：直读进目标数组，免一次拷贝
+            int off = dst.arrayOffset() + dst.position();
+            while (total < want) {
+                int n = current.read(dst.array(), off + total, want - total);
+                if (n < 0) {
+                    break;
                 }
+                total += n;
+            }
+            dst.position(dst.position() + total);
+        } else {
+            byte[] chunk = new byte[Math.min(want, READ_BUFFER)];
+            while (total < want) {
+                int n = current.read(chunk, 0, Math.min(chunk.length, want - total));
+                if (n < 0) {
+                    break;
+                }
+                dst.put(chunk, 0, n);
+                total += n;
             }
         }
-        this.current = in;
-        this.currentBase = from;
-        this.position = from;
+        position += total;
+        return total > 0 ? total : -1;
+    }
+
+    /**
+     * 在 from 偏移打开字节区间流（read 到 EOF）；from 越界时不打开（保持 EOF 语义）。
+     * openRangeStream 内部完成鉴权与存储路由（含加密文件按 CTR 计数器重定位）。
+     */
+    private void openAt(long from) throws IOException {
+        FileInfo file = resolveFile();
+        if (file == null) {
+            throw new NoSuchFileException(path.getAbsolutePath());
+        }
+        long size = file.getSize() == null ? 0L : file.getSize();
+        if (from >= size) {
+            return;
+        }
+        long end = size - 1;
+        InputStream range = path.getFileSystem().bridge().runAs(path.getFileSystem().userId(),
+                () -> files().openRangeStream(file.getId(), from, end));
+        this.current = new BufferedInputStream(range, READ_BUFFER);
     }
 
     private FileInfo resolveFile() {
@@ -71,83 +119,35 @@ class GfsReadChannel implements SeekableByteChannel {
     }
 
     @Override
-    public int read(ByteBuffer dst) throws IOException {
-        ensureOpen();
-        if (current == null) {
-            openAndSkip(position);
-        }
-        if (position < currentBase || position >= currentBase + buffered()) {
-            // 简化：位置总是在 currentBase 之后（我们只顺序读）；如需回退则重开
-            if (position < currentBase) {
-                openAndSkip(position);
-            }
-        }
-        if (!current.markSupported()) {
-            return readSlow(dst);
-        }
-        int want = dst.remaining();
-        byte[] chunk = new byte[want];
-        int total = 0;
-        while (total < want) {
-            int n = current.read(chunk, total, want - total);
-            if (n < 0) {
-                break;
-            }
-            total += n;
-        }
-        if (total <= 0) {
-            return -1;
-        }
-        dst.put(chunk, 0, total);
-        position += total;
-        return total;
-    }
-
-    private long buffered() {
-        // 未知剩余量，交给 EOF 信号
-        return Long.MAX_VALUE / 2;
-    }
-
-    private int readSlow(ByteBuffer dst) throws IOException {
-        byte[] chunk = new byte[dst.remaining()];
-        int n = current.read(chunk);
-        if (n > 0) {
-            dst.put(chunk, 0, n);
-            position += n;
-        }
-        return n;
-    }
-
-    @Override
     public int write(ByteBuffer src) {
         throw new NonReadableChannelException();
     }
 
     @Override
-    public long position() {
+    public synchronized long position() {
         return position;
     }
 
+    /**
+     * 变更位置只记录偏移并丢弃旧流；下次 read 才按新偏移开流（真随机读，无 skip 丢弃）。
+     * 相同位置的 position 调用保留现有流，保证顺序读不重开存储连接。
+     */
     @Override
-    public SeekableByteChannel position(long newPosition) throws IOException {
+    public synchronized SeekableByteChannel position(long newPosition) throws IOException {
         ensureOpen();
         if (newPosition < 0) {
             throw new IOException("negative position");
         }
-        if (newPosition < currentBase || (current == null && newPosition > 0)) {
-            openAndSkip(newPosition);
-        } else if (newPosition > position && current != null) {
-            long toSkip = newPosition - position;
-            long skipped = current.skip(toSkip);
-            position += skipped;
-        } else {
+        if (newPosition != position) {
             position = newPosition;
+            IoUtil.close(current);
+            current = null;
         }
         return this;
     }
 
     @Override
-    public long size() {
+    public synchronized long size() {
         try {
             FileInfo file = resolveFile();
             return file == null || file.getSize() == null ? 0 : file.getSize();
@@ -158,16 +158,16 @@ class GfsReadChannel implements SeekableByteChannel {
 
     @Override
     public SeekableByteChannel truncate(long size) {
-        throw new java.nio.channels.NonWritableChannelException();
+        throw new NonWritableChannelException();
     }
 
     @Override
-    public boolean isOpen() {
+    public synchronized boolean isOpen() {
         return open;
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         open = false;
         IoUtil.close(current);
         current = null;
