@@ -247,7 +247,6 @@ flowchart TB
         REDIS["fs-redis"]
         SSE["fs-sse"]
         SWAGGER["fs-swagger"]
-        NOTIFY["fs-notify (邮件)"]
         SPLUGIN["fs-storage-plugin<br/>本地 / OSS / MinIO / SMB / WebDAV / SFTP / FTP"]
     end
 
@@ -276,7 +275,6 @@ gfs/
 ├── fs-dependencies/             # 依赖版本管理（BOM）
 ├── fs-framework/                # 框架层
 │   ├── fs-common-core/          # 公共核心模块
-│   ├── fs-notify/               # 通知模块（邮件通知）
 │   ├── fs-orm/                  # ORM 配置模块
 │   ├── fs-preview/              # 预览封装模块
 │   ├── fs-redis/                # Redis 配置模块
