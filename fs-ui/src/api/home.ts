@@ -71,6 +71,9 @@ export interface SystemInfo {
   jvmUsedBytes: number | null
   jvmMaxBytes: number | null
   jvmCommittedBytes: number | null
+  osTotalMemoryBytes: number | null
+  osUsedMemoryBytes: number | null
+  osFreeMemoryBytes: number | null
   javaVersion: string | null
   startTime: string | null
   uptimeText: string | null
@@ -82,4 +85,28 @@ export interface SystemInfo {
 
 export function getSystemInfo() {
   return request.get<SystemInfo>('/apis/home/system/info')
+}
+
+/** 对应后端 JvmMemoryVO：JVM 最大内存配置 */
+export interface JvmMemory {
+  /** 已保存的配置值（MB）；未配置为 null，表示使用 JVM 默认 */
+  configuredMaxMemoryMb: number | null
+  /** 当前运行实例实际最大堆内存（字节） */
+  runtimeMaxBytes: number
+}
+
+export function getJvmMemory() {
+  return request.get<JvmMemory>('/apis/system/jvm-memory')
+}
+
+/** 保存 JVM 最大内存配置（MB），仅落盘，重启后端后生效；null 表示清除配置用 JVM 默认 */
+export function saveJvmMemory(maxMemoryMb: number | null) {
+  return request.post<void>('/apis/system/jvm-memory', { maxMemoryMb })
+}
+
+/** 重启后端使 JVM 内存配置生效（高风险管理操作，需确认）；可选先保存新值再重启 */
+export function restartBackend(maxMemoryMb?: number | null) {
+  return request.post<void>('/apis/system/jvm-memory/restart', {
+    maxMemoryMb: maxMemoryMb === undefined ? null : maxMemoryMb,
+  })
 }

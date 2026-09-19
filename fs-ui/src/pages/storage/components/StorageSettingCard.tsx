@@ -359,11 +359,10 @@ export function StorageSettingCard({
               size='sm'
               onClick={() => setToggleDialogOpen(true)}
               disabled={isLoading}
-              className='min-w-[60px]'
+              className='min-w-[70px] flex-1'
             >
               {setting.enabled === 1 ? t('card.disable') : t('card.enable')}
             </Button>
-            <div className='h-6 w-px bg-border' />
             <Button
               variant='outline'
               size='sm'

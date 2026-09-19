@@ -14,6 +14,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -47,6 +49,7 @@ public class StoragePlatformAutoRegister implements ApplicationRunner {
     private final ObjectMapper objectMapper;
     private final StorageSettingService storageSettingService;
     private final StorageServiceFacade storageServiceFacade;
+    private final CacheManager cacheManager;
 
     @Override
     public void run(@NonNull ApplicationArguments args) {
@@ -113,6 +116,7 @@ public class StoragePlatformAutoRegister implements ApplicationRunner {
                     storageSettingService.removeById(setting.getId());
                 }
                 storagePlatformMapper.deleteById(row.getId());
+                evictPlatformCaches(row.getIdentifier());
                 log.warn("清理孤儿存储平台: {}", row.getIdentifier());
             } catch (Exception e) {
                 log.error("清理孤儿存储平台失败: {}", row.getIdentifier(), e);
@@ -141,6 +145,7 @@ public class StoragePlatformAutoRegister implements ApplicationRunner {
             platform.setIsDefault(Boolean.TRUE.equals(metadata.getIsDefault()) ? 1 : 0);
 
             storagePlatformMapper.insert(platform);
+            evictPlatformCaches(metadata.getIdentifier());
             log.debug("新增存储平台: {}", metadata.getIdentifier());
             return SyncResult.INSERTED;
         }
@@ -156,6 +161,7 @@ public class StoragePlatformAutoRegister implements ApplicationRunner {
             // 注意：不更新 is_default，保留管理员设置
 
             storagePlatformMapper.update(existing);
+            evictPlatformCaches(metadata.getIdentifier());
             log.debug("更新存储平台: {}", metadata.getIdentifier());
             return SyncResult.UPDATED;
         }
@@ -197,6 +203,32 @@ public class StoragePlatformAutoRegister implements ApplicationRunner {
         } catch (Exception e) {
             log.warn("无效的配置Schema，使用空对象: {}", e.getMessage());
             return "{}";
+        }
+    }
+
+    /**
+     * 失效平台相关缓存，使前端重新按最新 configScheme 组装设置/活动平台。
+     * 平台 schema 变更后若不失效，运行实例可能继续返回旧 schema（如跨实例复用的 Redis 缓存）。
+     *
+     * @param identifier 平台标识
+     */
+    private void evictPlatformCaches(String identifier) {
+        try {
+            Cache platformCache = cacheManager.getCache("storagePlatform");
+            if (platformCache != null) {
+                platformCache.evict(identifier);
+            }
+            Cache settingsCache = cacheManager.getCache("storageSettings");
+            if (settingsCache != null) {
+                settingsCache.clear();
+            }
+            Cache activeCache = cacheManager.getCache("storageActivePlatforms");
+            if (activeCache != null) {
+                activeCache.clear();
+            }
+            log.debug("已失效存储平台缓存: {}", identifier);
+        } catch (Exception e) {
+            log.warn("失效存储平台缓存异常: {}", e.getMessage());
         }
     }
 

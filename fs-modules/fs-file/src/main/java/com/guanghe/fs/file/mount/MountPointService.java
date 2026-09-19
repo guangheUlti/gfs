@@ -54,6 +54,17 @@ public class MountPointService {
                 .and(FILE_INFO.IS_DIR.eq(true))
                 .and(FILE_INFO.IS_DELETED.eq(false)));
         if (existing != null) {
+            // 懒升级：早年逻辑对未配挂载名的设置统一用了通用默认名，配置里若存在更精确的名称（如 SMB 共享名）则就地改正
+            String resolved = readMountName(setting);
+            if (DEFAULT_MOUNT_NAME.equals(existing.getDisplayName())
+                    && !DEFAULT_MOUNT_NAME.equals(resolved)) {
+                String finalName = dedupeName(userId, resolved, settingId);
+                existing.setDisplayName(finalName);
+                existing.setOriginalName(finalName);
+                existing.setUpdateTime(LocalDateTime.now());
+                fileInfoService.updateById(existing);
+                log.info("升级挂载点显示名: userId={}, settingId={}, name={}", userId, settingId, finalName);
+            }
             return existing;
         }
         String mountName = readMountName(setting);
@@ -76,16 +87,25 @@ public class MountPointService {
         return mountPoint;
     }
 
-    /** 从配置 JSON 读取挂载显示名（缺省"本地挂载"） */
+    /** 从配置 JSON 读取挂载显示名：优先显式 mountName，SMB 场景回退为共享名，兜底通用默认名 */
     private String readMountName(Map<String, Object> setting) {
         Object configData = setting.get("configData");
         if (configData instanceof String && StrUtil.isNotEmpty((String) configData)) {
             try {
                 Map<String, Object> config = JsonUtils.parseObject((String) configData,
                         new TypeReference<Map<String, Object>>() { });
-                Object name = config == null ? null : config.get("mountName");
-                if (name != null && MountManager.isValidNameSegment(String.valueOf(name).trim())) {
-                    return String.valueOf(name).trim();
+                if (config != null) {
+                    // 1) 显式配置的挂载名（用户自定义）
+                    Object name = config.get("mountName");
+                    if (name != null && MountManager.isValidNameSegment(String.valueOf(name).trim())) {
+                        return String.valueOf(name).trim();
+                    }
+                    // 2) SMB：未配挂载名时用共享名作为挂载名（动态共享模式下共享名为空，落到默认名）
+                    Object share = config.get("smbShare");
+                    if (share != null && StrUtil.isNotEmpty(String.valueOf(share).trim())
+                            && MountManager.isValidNameSegment(String.valueOf(share).trim())) {
+                        return String.valueOf(share).trim();
+                    }
                 }
             } catch (Exception e) {
                 log.warn("解析挂载配置失败，使用默认挂载名: setting={}", setting.get("id"), e);

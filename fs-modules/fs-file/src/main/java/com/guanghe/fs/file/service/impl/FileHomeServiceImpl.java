@@ -228,6 +228,19 @@ public class FileHomeServiceImpl implements FileHomeService {
             }
         }
 
+        // OS 物理内存（总量/已用/剩余）
+        if (osBean instanceof com.sun.management.OperatingSystemMXBean sunBean) {
+            try {
+                long totalMem = sunBean.getTotalPhysicalMemorySize();
+                long freeMem = sunBean.getFreePhysicalMemorySize();
+                vo.setOsTotalMemoryBytes(totalMem);
+                vo.setOsFreeMemoryBytes(freeMem);
+                vo.setOsUsedMemoryBytes(Math.max(0L, totalMem - freeMem));
+            } catch (Exception e) {
+                log.debug("OS 物理内存采集失败: {}", e.getMessage());
+            }
+        }
+
         // JVM 堆内存
         vo.setJvmUsedBytes(runtime.totalMemory() - runtime.freeMemory());
         vo.setJvmCommittedBytes(runtime.totalMemory());
@@ -249,7 +262,14 @@ public class FileHomeServiceImpl implements FileHomeService {
                 if (configId == null || configId.isBlank()) {
                     vo.setStorageType("Local");
                     Object basePath = localStorageManager.getEffectiveProperties().get("basePath");
-                    vo.setStoragePath(basePath == null ? null : String.valueOf(basePath));
+                    if (basePath == null) {
+                        vo.setStoragePath(null);
+                    } else {
+                        // 展示为绝对路径，避免 ./storage 这类相对路径二义性（相对启动目录）
+                        String p = java.nio.file.Paths.get(String.valueOf(basePath).trim())
+                                .toAbsolutePath().normalize().toString();
+                        vo.setStoragePath(p);
+                    }
                 } else {
                     vo.setStorageType("自定义存储");
                 }

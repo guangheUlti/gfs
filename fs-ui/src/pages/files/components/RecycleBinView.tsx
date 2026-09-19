@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { formatFileSize, formatFileListDisplayTime } from '@/utils/format'
 import { usePermission } from '@/hooks/use-permission'
 import { useToolbarSearch } from '@/hooks/useToolbarSearch'
+import { useMarqueeSelection } from '../hooks/useMarqueeSelection'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -99,6 +100,15 @@ export default function RecycleBinView() {
     useToolbarSearch('keyword')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 })
   const prevSearchKeyword = useRef(searchKeyword)
+
+  // 鼠标框选：仅从列表空白处起拖，拖出的矩形实时决定选中项
+  const marqueeScrollRef = useRef<HTMLDivElement | null>(null)
+  const { marqueeRect, onMarqueePointerDown, shouldSuppressClick } =
+    useMarqueeSelection({
+      containerRef: marqueeScrollRef,
+      enabled: !loading && fileList.length > 0,
+      onChange: setSelectedIds,
+    })
 
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -499,7 +509,20 @@ export default function RecycleBinView() {
             </div>
           ) : (
             <>
-              <div className='min-h-0 flex-1 overflow-auto px-3 pb-3 sm:px-6 sm:pb-6'>
+              <div
+                ref={marqueeScrollRef}
+                className='min-h-0 flex-1 overflow-auto px-3 pb-3 sm:px-6 sm:pb-6'
+                onPointerDown={onMarqueePointerDown}
+                onClick={(e) => {
+                  // 框选刚松手时浏览器会补发一次 click，别让它把选中清掉
+                  if (shouldSuppressClick()) return
+                  const tgt = e.target as HTMLElement
+                  if (tgt.closest('[data-file-id]')) return
+                  if (tgt.closest('thead')) return
+                  if (tgt.closest('button')) return
+                  setSelectedIds([])
+                }}
+              >
                 {/* 窄屏不压缩列宽，改为横向滚动保留全部列；
                     containerClassName 必须清掉自带的 overflow-auto，否则它就成了粘性表头最近的滚动祖先 */}
                 <Table
@@ -535,6 +558,7 @@ export default function RecycleBinView() {
                         <ContextMenu key={row.id}>
                           <ContextMenuTrigger asChild>
                             <TableRow
+                              data-file-id={row.original.id}
                               className={cn(
                                 'group border-b-0 transition-colors',
                                 'hover:bg-primary/[0.06]',
@@ -628,6 +652,19 @@ export default function RecycleBinView() {
           )}
         </div>
       </div>
+
+      {/* 框选矩形：视口坐标 + fixed，与命中测试用的 getBoundingClientRect 同源 */}
+      {marqueeRect && (
+        <div
+          className='pointer-events-none fixed z-[80] rounded-sm border border-primary/40 bg-primary/10'
+          style={{
+            top: marqueeRect.top,
+            left: marqueeRect.left,
+            width: marqueeRect.width,
+            height: marqueeRect.height,
+          }}
+        />
+      )}
 
       {selectedIds.length > 0 && canOperateRecycle && (
         <BulkSelectionBar

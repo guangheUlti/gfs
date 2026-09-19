@@ -46,6 +46,15 @@ public class SystemInfoVO implements Serializable {
     @Schema(description = "JVM 已提交堆内存字节数")
     private Long jvmCommittedBytes;
 
+    @Schema(description = "操作系统物理内存总字节数，采集失败为 null")
+    private Long osTotalMemoryBytes;
+
+    @Schema(description = "操作系统物理内存已用字节数，采集失败为 null")
+    private Long osUsedMemoryBytes;
+
+    @Schema(description = "操作系统物理内存剩余字节数，采集失败为 null")
+    private Long osFreeMemoryBytes;
+
     @Schema(description = "JVM 版本")
     private String javaVersion;
 

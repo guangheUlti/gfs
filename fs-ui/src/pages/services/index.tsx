@@ -5,15 +5,12 @@ import { ServiceSettingCard } from './components/ServiceSettingCard'
 import { UsageTips } from './components/UsageTips'
 
 /**
- * 对外文件服务配置页：WebDAV 与 SFTP 两张卡片并列展示
+ * 对外文件服务配置页：全部 SPI 注册服务卡片并列展示（webdav/sftp/ftp…）
  * 服务卡片内容多，不跟存储配置页共用等分网格，大屏下一行两张等宽卡片
  */
 export default function ServicesPage() {
   const { t } = useTranslation('services')
   const { data: settings = [], isLoading } = useServiceSettings()
-
-  const findByType = (serviceType: 'webdav' | 'sftp') =>
-    settings.find((s) => s.serviceType === serviceType)
 
   return (
     <div className='flex h-full flex-col'>
@@ -25,18 +22,20 @@ export default function ServicesPage() {
         </div>
       </div>
 
-      <div className='flex-1 overflow-auto px-3 pt-1 pb-3 sm:px-6 sm:pt-1.5 sm:pb-6'>
+      <div className='flex-1 overflow-auto px-3 pt-4 pb-3 sm:px-6 sm:pt-5 sm:pb-6'>
         {isLoading ? (
           <div className='flex h-64 items-center justify-center'>
             <p className='text-muted-foreground'>{t('page.loading')}</p>
           </div>
         ) : (
           <div className='grid grid-cols-1 gap-4 lg:grid-cols-2'>
-            <ServiceColumn
-              serviceType='webdav'
-              setting={findByType('webdav')}
-            />
-            <ServiceColumn serviceType='sftp' setting={findByType('sftp')} />
+            {settings.map((setting) => (
+              <ServiceColumn
+                key={setting.serviceType}
+                serviceType={setting.serviceType}
+                setting={setting}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -48,7 +47,7 @@ function ServiceColumn({
   serviceType,
   setting,
 }: {
-  serviceType: 'webdav' | 'sftp'
+  serviceType: ServiceSettingVO['serviceType']
   setting?: ServiceSettingVO
 }) {
   const { t } = useTranslation('services')
@@ -63,7 +62,7 @@ function ServiceColumn({
 
   return (
     <ServiceSettingCard setting={setting}>
-      <UsageTips serviceType={serviceType} />
+      <UsageTips setting={setting} />
     </ServiceSettingCard>
   )
 }

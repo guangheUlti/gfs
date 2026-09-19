@@ -18,10 +18,13 @@ public class SmbConfig {
     /** 端口（默认445），字符串入参（前端按 string 提交） */
     private String smbPort;
 
-    /** 域（可选） */
+    /** 是否启用域账号（AD/域）；true 时才使用 smbDomain，否则按本地/工作组账号处理 */
+    private boolean smbDomainEnabled;
+
+    /** 域（可选，仅在 smbDomainEnabled=true 时参与认证） */
     private String smbDomain;
 
-    /** 共享名 */
+    /** 共享名（空 = 动态共享模式：在文件页根目录列出主机全部共享） */
     private String smbShare;
 
     /** 用户名 */
@@ -30,8 +33,8 @@ public class SmbConfig {
     /** 密码 */
     private String smbPassword;
 
-    /** 分片临时目录（可选，默认 ${java.io.tmpdir}/gfs-storage-temp/smb） */
-    private String tempPath;
+    /** 是否匿名访问（Guest）；true 时用户名/密码可不填，用匿名会话建连 */
+    private boolean smbAnonymous;
 
     /** 从 StorageConfig 转换为配置对象 */
     public static SmbConfig toObject(StorageConfig config) {

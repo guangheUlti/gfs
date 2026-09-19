@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import {
@@ -10,23 +10,14 @@ import {
   RiComputerLine,
   RiEqualizer2Fill,
   RiEqualizer2Line,
+  RiServerFill,
+  RiServerLine,
   RiTShirtFill,
   RiTShirtLine,
   RiUserSettingsFill,
   RiUserSettingsLine,
 } from '@remixicon/react'
-import { X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { NoPermission } from '@/components/no-permission'
-import {
-  useSettingsModal,
-  type SettingsTab,
-} from '@/contexts/settings-modal-context'
 import type { SidebarNavIconPair } from '@/components/layout/types'
 import { SettingsProfile } from './profile'
 import { SettingsAppearance } from './appearance'
@@ -34,8 +25,18 @@ import { SettingsTransfer } from './transfer'
 import { SettingsUserApproval } from './user-approval'
 import { SettingsLoginManagement } from './login-management'
 import { SettingsFeatureToggles } from './feature-toggles'
+import { SettingsSystemManagement } from './system-management'
 import { SidebarNav, type SettingsNavGroup } from './components/sidebar-nav'
 import { useAuth } from '@/contexts/auth-context'
+
+export type SettingsTab =
+  | 'profile'
+  | 'appearance'
+  | 'transfer'
+  | 'user-approval'
+  | 'login-management'
+  | 'feature-toggles'
+  | 'system-management'
 
 interface NavItemConfig {
   title: string
@@ -93,6 +94,12 @@ function buildNavConfig(
           icon: { line: RiEqualizer2Line, fill: RiEqualizer2Fill },
           superAdminOnly: true,
         },
+        {
+          title: t('nav.systemManagement'),
+          tab: 'system-management',
+          icon: { line: RiServerLine, fill: RiServerFill },
+          superAdminOnly: true,
+        },
       ],
     },
   ]
@@ -144,15 +151,22 @@ function SettingsPanel({ tab }: { tab: SettingsTab }) {
       ) : (
         <NoPermission />
       )
+    case 'system-management':
+      return user?.isSuperAdmin ? (
+        <SettingsSystemManagement />
+      ) : (
+        <NoPermission />
+      )
     default:
       return <SettingsProfile />
   }
 }
 
-export function SettingsDialog() {
+/** 设置页：直接占用右侧主内容区（与文件/存储/服务等页面一致），而非弹层 */
+export function SettingsPage() {
   const { t } = useTranslation('settings')
-  const { open, setOpen, tab, setTab } = useSettingsModal()
   const { user } = useAuth()
+  const [tab, setTab] = useState<SettingsTab>('profile')
 
   const navGroups = useMemo(
     () => toNavGroups(buildNavConfig(t), !!user?.isSuperAdmin),
@@ -160,38 +174,25 @@ export function SettingsDialog() {
   )
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent
-        showCloseButton={false}
-        className='flex h-[min(92vh,960px)] max-h-[92vh] w-[min(1240px,calc(100%-32px))] max-w-none translate-x-[-50%] translate-y-[-50%] flex-col gap-0 overflow-hidden border bg-background p-0 shadow-xl sm:max-w-none sm:rounded-xl'
-      >
-        <div className='flex h-12 shrink-0 items-center justify-between border-b px-6 md:px-8'>
-          <DialogTitle className='text-base font-semibold tracking-tight'>
+    <div className='flex h-full flex-col'>
+      {/* 顶部标题区：与其他页面共用 inset-divider 页头，保证距顶部距离/标题字号/下划线一致 */}
+      <div className='inset-divider flex flex-wrap items-center gap-x-4 gap-y-3 px-3 pt-4 pb-3 sm:px-6 sm:pt-6 sm:pb-4'>
+        <div className='flex h-9 w-full min-w-0 items-center sm:w-auto sm:flex-1'>
+          <h2 className='text-xl font-semibold tracking-tight'>
             {t('dialog.title')}
-          </DialogTitle>
-          <Button
-            type='button'
-            variant='ghost'
-            size='icon'
-            className='size-8 shrink-0'
-            onClick={() => setOpen(false)}
-            aria-label={t('dialog.closeAria')}
-          >
-            <X className='size-4' />
-          </Button>
+          </h2>
         </div>
-
-        <div className='flex min-h-0 min-w-0 flex-1 flex-col md:flex-row'>
-          <SidebarNav
-            groups={navGroups}
-            activeTab={tab}
-            onSelectTab={setTab}
-          />
-          <div className='min-h-0 min-w-0 flex-1 overflow-y-auto bg-background px-6 py-6 sm:px-8 md:px-12 md:py-8 lg:px-16'>
-            <SettingsPanel tab={tab} />
-          </div>
+      </div>
+      <div className='flex min-h-0 min-w-0 flex-1 flex-col md:flex-row'>
+        <SidebarNav
+          groups={navGroups}
+          activeTab={tab}
+          onSelectTab={setTab}
+        />
+        <div className='min-h-0 min-w-0 flex-1 overflow-y-auto bg-background px-6 pt-3 pb-10 sm:px-8 md:pt-4 md:pb-12 lg:px-16'>
+          <SettingsPanel tab={tab} />
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   )
 }

@@ -91,7 +91,7 @@ export default function StoragePage() {
       </div>
 
       {/* 主内容区域 */}
-      <div className='flex-1 overflow-auto px-3 pt-1 pb-3 sm:px-6 sm:pt-1.5 sm:pb-6'>
+      <div className='flex-1 overflow-auto px-3 pt-4 pb-3 sm:px-6 sm:pt-5 sm:pb-6'>
         {isLoading ? (
           <div className='flex h-64 items-center justify-center'>
             <p className='text-muted-foreground'>{tc('loading')}</p>

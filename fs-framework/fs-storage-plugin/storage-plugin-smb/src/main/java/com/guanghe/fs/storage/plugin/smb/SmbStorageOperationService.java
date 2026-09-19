@@ -35,7 +35,7 @@ import java.util.List;
  * 纯对象式存储（同 Local/Minio 模式）：分片先落本地 temp，complete 时合并写远程。
  * SMBClient 实例线程安全可跨线程共享。连接模型：实例内维持一条常驻 Connection/Session/DiskShare
  * （NAS 普遍限制单账号会话数，若每次操作新建会话则只增不销，堆满后 NAS 以 STATUS_REQUEST_NOT_ACCEPTED 拒绝认证），
- * 连接失效时自动整链重建，close() 时统一释放。
+ * 连接失效时自动整链重建，close() 时统一释放。匿名访问：匿名开关开启时用 Guest 会话建连（用户名/密码可不填）。
  *
  * @Author: guangheUlti
  * @Date: 2026/09/09
@@ -61,7 +61,8 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
     private String share;
     private String username;
     private String password;
-    private String tempRoot;
+    /** 是否匿名/ Guest 访问 */
+    private boolean smbAnonymous;
 
     public SmbStorageOperationService() {
         super();
@@ -73,7 +74,8 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
 
     @Override
     protected String getTempRoot() {
-        return tempRoot;
+        // 分片临时目录固定于运行目录 storage/temp/smb（与 storage/ssh 同级），分片上传时按需自动创建
+        return "storage/temp/smb";
     }
 
     @Override
@@ -82,14 +84,18 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
         if (isBlank(cfg.getSmbHost())) {
             throw new StorageConfigException("SMB 配置错误：服务器地址不能为空");
         }
+        // 单共享模型：共享名必填
         if (isBlank(cfg.getSmbShare())) {
             throw new StorageConfigException("SMB 配置错误：共享名不能为空");
         }
-        if (isBlank(cfg.getSmbUsername())) {
-            throw new StorageConfigException("SMB 配置错误：用户名不能为空");
-        }
-        if (isBlank(cfg.getSmbPassword())) {
-            throw new StorageConfigException("SMB 配置错误：密码不能为空");
+        // 匿名访问时用户名/密码可不填
+        if (!cfg.isSmbAnonymous()) {
+            if (isBlank(cfg.getSmbUsername())) {
+                throw new StorageConfigException("SMB 配置错误：用户名不能为空");
+            }
+            if (isBlank(cfg.getSmbPassword())) {
+                throw new StorageConfigException("SMB 配置错误：密码不能为空");
+            }
         }
         String port = cfg.getSmbPort();
         if (!isBlank(port)) {
@@ -110,17 +116,19 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
         SmbConfig cfg = readConfig(config);
         this.host = cfg.getSmbHost().trim();
         this.port = isBlank(cfg.getSmbPort()) ? 445 : Integer.parseInt(cfg.getSmbPort().trim());
-        this.domain = isBlank(cfg.getSmbDomain()) ? null : cfg.getSmbDomain().trim();
+        // 域仅在开启域账号开关（smbDomainEnabled）时参与认证
+        this.domain = cfg.isSmbDomainEnabled() && !isBlank(cfg.getSmbDomain())
+                ? cfg.getSmbDomain().trim() : null;
         this.share = cfg.getSmbShare().trim();
-        this.username = cfg.getSmbUsername().trim();
-        this.password = cfg.getSmbPassword();
-        this.tempRoot = resolveTempRoot(cfg.getTempPath(), "smb");
+        this.username = isBlank(cfg.getSmbUsername()) ? "" : cfg.getSmbUsername().trim();
+        this.password = cfg.getSmbPassword() == null ? "" : cfg.getSmbPassword();
+        this.smbAnonymous = cfg.isSmbAnonymous();
 
         this.client = new SMBClient();
         try {
             // 建立并保持常驻连接/会话/共享（即连通性验证，后续操作直接复用）
             openShare();
-            log.info("{} SMB 连接建立成功（常驻会话）: {}:{}/{}", getLogPrefix(), host, port, share);
+            log.info("{} SMB 连接建立成功（常驻会话）: {}:{}/{} 匿名={}", getLogPrefix(), host, port, share, smbAnonymous);
         } catch (Exception e) {
             closeQuietly();
             throw new StorageConfigException("SMB 连接失败: " + rootMessage(e));
@@ -128,6 +136,10 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
     }
 
     private Session authenticate(Connection connection) throws IOException {
+        if (smbAnonymous) {
+            // 匿名/Guest：以 Guest 会话访问（多数服务器允许 Guest 读共享）
+            return connection.authenticate(AuthenticationContext.guest());
+        }
         AuthenticationContext authContext = domain != null
                 ? new AuthenticationContext(username, password.toCharArray(), domain)
                 : new AuthenticationContext(username, password.toCharArray(), "");
@@ -164,13 +176,6 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
                 throw new StorageOperationException("SMB 连接失败: " + rootMessage(e), e);
             }
         }
-    }
-
-    /**
-     * 兼容占位：常驻模型下操作结束不再关闭共享（实例 close/重连时统一释放）。
-     */
-    private void closeShare(DiskShare ignored) {
-        // no-op
     }
 
     /** 释放常驻连接/会话/共享整链（幂等） */
@@ -221,8 +226,6 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
         } catch (Exception e) {
             log.error("{} 文件上传失败: objectKey={}", getLogPrefix(), objectKey, e);
             throw new StorageOperationException("SMB 文件上传失败: " + rootMessage(e), e);
-        } finally {
-            closeShare(diskShare);
         }
     }
 
@@ -242,7 +245,6 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
         try {
             String path = smbPath(objectKey);
             if (!diskShare.fileExists(path)) {
-                closeShare(diskShare);
                 throw new StorageOperationException("文件不存在: " + objectKey);
             }
             long length = endByte - startByte + 1;
@@ -258,10 +260,8 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
             return new SmbRangeInputStream(remoteFile,
                     remoteFile.getInputStream(), startByte, length);
         } catch (StorageOperationException e) {
-            closeShare(diskShare);
             throw e;
         } catch (Exception e) {
-            closeShare(diskShare);
             log.error("{} Range读取文件失败: objectKey={}, start={}, end={}",
                     getLogPrefix(), objectKey, startByte, endByte, e);
             throw new StorageOperationException("SMB 读取文件失败: " + rootMessage(e), e);
@@ -282,8 +282,6 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
         } catch (Exception e) {
             log.error("{} 文件删除失败: objectKey={}", getLogPrefix(), objectKey, e);
             throw new StorageOperationException("SMB 文件删除失败: " + rootMessage(e), e);
-        } finally {
-            closeShare(diskShare);
         }
     }
 
@@ -319,8 +317,6 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
         } catch (Exception e) {
             log.error("{} 重命名失败: {} -> {}", getLogPrefix(), objectKey, destObjectKey, e);
             throw new StorageOperationException("SMB 重命名失败: " + rootMessage(e), e);
-        } finally {
-            closeShare(diskShare);
         }
     }
 
@@ -344,8 +340,6 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
         } catch (Exception e) {
             log.error("{} 检查文件存在失败: objectKey={}", getLogPrefix(), objectKey, e);
             throw new StorageOperationException("SMB 检查文件存在失败: " + rootMessage(e), e);
-        } finally {
-            closeShare(diskShare);
         }
     }
 
@@ -360,8 +354,6 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
         } catch (Exception e) {
             log.error("{} 创建目录失败: dirKey={}", getLogPrefix(), dirKey, e);
             throw new StorageOperationException("SMB 创建目录失败: " + rootMessage(e), e);
-        } finally {
-            closeShare(diskShare);
         }
     }
 
@@ -402,8 +394,6 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
         } catch (Exception e) {
             log.error("{} 列举目录失败: dirKey={}", getLogPrefix(), dirKey, e);
             throw new StorageOperationException("SMB 列举目录失败: " + rootMessage(e), e);
-        } finally {
-            closeShare(diskShare);
         }
     }
 
@@ -420,8 +410,6 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
         } catch (Exception e) {
             log.error("{} 删除目录失败: dirKey={}", getLogPrefix(), dirKey, e);
             throw new StorageOperationException("SMB 删除目录失败: " + rootMessage(e), e);
-        } finally {
-            closeShare(diskShare);
         }
     }
 
@@ -447,8 +435,6 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
         } catch (Exception e) {
             log.error("{} 合并文件写入远程失败: objectKey={}", getLogPrefix(), objectKey, e);
             throw new StorageOperationException("SMB 合并文件写入失败: " + rootMessage(e), e);
-        } finally {
-            closeShare(diskShare);
         }
     }
 
@@ -462,8 +448,6 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
         } catch (Exception e) {
             log.warn("{} 获取剩余容量失败: {}", getLogPrefix(), e.getMessage());
             return null;
-        } finally {
-            closeShare(diskShare);
         }
     }
 

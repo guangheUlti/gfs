@@ -2,7 +2,6 @@ import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RiSettings3Fill, RiSettings3Line } from '@remixicon/react'
 import { useAuth } from '@/contexts/auth-context'
-import { useSettingsModal } from '@/contexts/settings-modal-context'
 import { usePermission } from '@/hooks/use-permission'
 import { useFeatureStore } from '@/store/feature'
 import {
@@ -23,7 +22,6 @@ export function AppSidebar() {
   const { t } = useTranslation('layout')
   const { user: authUser } = useAuth()
   const { hasPermission } = usePermission()
-  const { openSettings } = useSettingsModal()
   const featureToggles = useFeatureStore((s) => s.toggles)
 
   // 使用真实用户信息，如果未登录则使用占位符
@@ -43,7 +41,7 @@ export function AppSidebar() {
           (!item.featureKey || !!featureToggles[item.featureKey])
       ),
     }))
-    // 系统分组末尾注入「设置」：全局弹窗而非路由，人人可用，不参与权限过滤
+    // 系统分组末尾注入「设置」：独立路由页面，人人可用，不参与权限过滤
     .map((group) =>
       group.titleKey === 'sidebar.groups.system'
         ? {
@@ -52,8 +50,8 @@ export function AppSidebar() {
               ...group.items,
               {
                 titleKey: 'sidebar.nav.settings',
+                url: '/settings',
                 icon: { line: RiSettings3Line, fill: RiSettings3Fill },
-                onClick: () => openSettings(),
               },
             ],
           }

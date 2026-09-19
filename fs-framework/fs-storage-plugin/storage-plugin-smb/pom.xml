@@ -18,6 +18,7 @@
             <groupId>com.guanghe.fs</groupId>
             <artifactId>storage-plugin-core</artifactId>
         </dependency>
+        <!-- smbj：唯一 SMB 库，承担全部文件读写（本项目经实测可在 NAS 上正常认证） -->
         <dependency>
             <groupId>com.hierynomus</groupId>
             <artifactId>smbj</artifactId>

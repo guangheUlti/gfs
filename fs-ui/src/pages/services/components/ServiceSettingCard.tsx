@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Globe, SquareTerminal } from 'lucide-react'
+import { Globe, HardDrive, SquareTerminal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
@@ -25,7 +25,8 @@ interface ServiceSettingCardProps {
 export function ServiceSettingCard({ setting, children }: ServiceSettingCardProps) {
   const { t } = useTranslation('services')
   const queryClient = useQueryClient()
-  const isSftp = setting.serviceType === 'sftp'
+  // socket 型服务（sftp/ftp）才有端口/地址表单与「保存」按钮；webdav 仅开关语义
+  const socketBased = setting.port != null
 
   const [port, setPort] = useState(String(setting.port ?? 9022))
   const [bindAddress, setBindAddress] = useState(setting.bindAddress || '0.0.0.0')
@@ -47,7 +48,7 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
     mutationFn: (enabled: boolean) =>
       updateServiceConfig(setting.serviceType, {
         enabled,
-        ...(isSftp ? { port: Number(port), bindAddress: bindAddress.trim() } : {}),
+        ...(socketBased ? { port: Number(port), bindAddress: bindAddress.trim() } : {}),
       }),
     onSuccess: () => {
       toast.success(t('toast.saveOk'))
@@ -73,7 +74,7 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
   const busy = configMutation.isPending || actionMutation.isPending
 
   const validatePort = (): boolean => {
-    if (!isSftp) return true
+    if (!socketBased) return true
     const n = Number(port)
     if (!Number.isInteger(n) || n < 1024 || n > 65535) {
       setPortError(t('form.portInvalid'))
@@ -116,15 +117,17 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
       <div className='flex items-start justify-between gap-3 border-b px-5 py-4'>
         <div className='flex min-w-0 items-center gap-3'>
           <div className='flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted'>
-            {isSftp ? (
+            {setting.serviceType === 'sftp' ? (
               <SquareTerminal className='h-5 w-5 text-muted-foreground' />
+            ) : setting.serviceType === 'ftp' ? (
+              <HardDrive className='h-5 w-5 text-muted-foreground' />
             ) : (
               <Globe className='h-5 w-5 text-muted-foreground' />
             )}
           </div>
           <div className='min-w-0'>
-            <h3 className='truncate font-semibold'>
-              {isSftp ? 'SFTP' : 'WebDAV'}
+            <h3 className='truncate font-semibold uppercase'>
+              {setting.serviceType}
             </h3>
             <p className='truncate text-xs text-muted-foreground'>
               {t(`page.${setting.serviceType}Desc`)}
@@ -148,12 +151,12 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
           />
         </div>
 
-        {isSftp && (
+        {socketBased && (
           <>
             <div className='space-y-1.5'>
-              <Label htmlFor='sftp-port'>{t('form.port')}</Label>
+              <Label htmlFor={`${setting.serviceType}-port`}>{t('form.port')}</Label>
               <Input
-                id='sftp-port'
+                id={`${setting.serviceType}-port`}
                 type='number'
                 min={1024}
                 max={65535}
@@ -168,9 +171,9 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
               )}
             </div>
             <div className='space-y-1.5'>
-              <Label htmlFor='sftp-bind'>{t('form.bindAddress')}</Label>
+              <Label htmlFor={`${setting.serviceType}-bind`}>{t('form.bindAddress')}</Label>
               <Input
-                id='sftp-bind'
+                id={`${setting.serviceType}-bind`}
                 placeholder={t('form.bindAddressPh')}
                 value={bindAddress}
                 onChange={(e) => setBindAddress(e.target.value)}
@@ -193,7 +196,7 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
 
       {/* 操作区 */}
       <div className='flex items-center gap-2 border-t px-5 py-3'>
-        {isSftp && (
+        {socketBased && (
           <Button
             size='sm'
             disabled={toggling || isBusyAction}

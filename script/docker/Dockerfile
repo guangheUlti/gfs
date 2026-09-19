@@ -11,7 +11,6 @@ RUN sed -i 's@//.*archive.ubuntu.com@//mirrors.aliyun.com@g' /etc/apt/sources.li
         locales \
         xfonts-utils \
         fontconfig \
-        libreoffice-nogui \
         fonts-wqy-microhei \
         fonts-wqy-zenhei \
         xfonts-wqy && \
@@ -27,7 +26,7 @@ ENV LANG=zh_CN.UTF-8 \
     LC_ALL=zh_CN.UTF-8 \
     JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 
-# 挂载点（LibreOffice 转换大文件时建议 /tmp 有足够空间）
+# 挂载点（大文件流式交付建议 /tmp 有足够空间）
 VOLUME /tmp
 
 # 6. 处理自定义字体（防止转换 PDF 时中文字体缺失）

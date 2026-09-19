@@ -33,9 +33,6 @@ public class FtpConfig {
     /** 控制连接编码（默认UTF-8） */
     private String controlEncoding;
 
-    /** 分片临时目录（可选，默认 ${java.io.tmpdir}/gfs-storage-temp/ftp） */
-    private String tempPath;
-
     /** 从 StorageConfig 转换为配置对象 */
     public static FtpConfig toObject(StorageConfig config) {
         return config.toObject(FtpConfig.class);

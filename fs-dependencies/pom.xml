@@ -31,6 +31,7 @@
         <commons-net.version>3.11.0</commons-net.version>
         <sa-token.version>1.45.0</sa-token.version>
         <sshd.version>2.13.2</sshd.version>
+        <ftpserver.version>1.2.1</ftpserver.version>
         <springdoc.version>3.0.2</springdoc.version>
         <tika.version>2.7.0</tika.version>
         <thumbnailator.version>0.4.19</thumbnailator.version>
@@ -39,7 +40,6 @@
         <ip2region.version>2.7.0</ip2region.version>
         <transmittable.version>2.14.4</transmittable.version>
         <caffeine.version>3.2.3</caffeine.version>
-        <jodconverter.version>4.4.11</jodconverter.version>
         <commons-compress.version>1.28.0</commons-compress.version>
         <!--        <xz.version>1.11</xz.version>-->
         <sevenzipjbinding.version>16.02-2.01</sevenzipjbinding.version>
@@ -195,6 +195,13 @@
                 <version>${sshd.version}</version>
             </dependency>
 
+            <!-- Apache FtpServer（对外 FTP 服务端） -->
+            <dependency>
+                <groupId>org.apache.ftpserver</groupId>
+                <artifactId>ftpserver-core</artifactId>
+                <version>${ftpserver.version}</version>
+            </dependency>
+
             <!-- ORM  -->
             <dependency>
                 <groupId>com.mybatis-flex</groupId>
@@ -341,19 +348,6 @@
                 <groupId>com.github.ben-manes.caffeine</groupId>
                 <artifactId>caffeine</artifactId>
                 <version>${caffeine.version}</version>
-            </dependency>
-
-            <!-- LibreOffice 转换核心包 -->
-            <dependency>
-                <groupId>org.jodconverter</groupId>
-                <artifactId>jodconverter-local</artifactId>
-                <version>${jodconverter.version}</version>
-            </dependency>
-            <!-- Spring Boot Starter -->
-            <dependency>
-                <groupId>org.jodconverter</groupId>
-                <artifactId>jodconverter-spring-boot-starter</artifactId>
-                <version>${jodconverter.version}</version>
             </dependency>
 
             <!-- Apache Commons Compress -->

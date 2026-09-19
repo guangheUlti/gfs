@@ -24,9 +24,6 @@ public class WebdavConfig {
     /** 基础路径（可选，拼在 endpoint 后） */
     private String webdavBasePath;
 
-    /** 分片临时目录（可选，默认 ${java.io.tmpdir}/gfs-storage-temp/webdav） */
-    private String tempPath;
-
     /** 从 StorageConfig 转换为配置对象 */
     public static WebdavConfig toObject(StorageConfig config) {
         return config.toObject(WebdavConfig.class);

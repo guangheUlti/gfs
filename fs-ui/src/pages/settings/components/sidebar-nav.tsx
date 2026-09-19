@@ -20,7 +20,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
 } from '@/components/ui/sidebar'
-import type { SettingsTab } from '@/contexts/settings-modal-context'
+import type { SettingsTab } from '@/pages/settings/settings-dialog'
 import type { SidebarNavIconPair } from '@/components/layout/types'
 
 export type SettingsNavItem = {
@@ -62,7 +62,7 @@ export function SidebarNav({
   return (
     <div
       className={cn(
-        'flex min-h-0 flex-col border-sidebar-border bg-sidebar md:h-full md:min-w-54 md:max-w-[16rem] md:shrink-0 md:border-e',
+        'flex min-h-0 flex-col border-sidebar-border bg-background md:h-full md:min-w-54 md:max-w-[16rem] md:shrink-0 md:border-e md:shadow-[2px_0_8px_-6px_rgba(0,0,0,0.15)]',
         className
       )}
       {...props}

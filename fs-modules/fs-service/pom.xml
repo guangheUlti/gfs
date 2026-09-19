@@ -44,6 +44,12 @@
             <groupId>org.apache.sshd</groupId>
             <artifactId>sshd-sftp</artifactId>
         </dependency>
+
+        <!-- Apache FtpServer（FTP 服务端） -->
+        <dependency>
+            <groupId>org.apache.ftpserver</groupId>
+            <artifactId>ftpserver-core</artifactId>
+        </dependency>
     </dependencies>
 
 </project>

@@ -272,18 +272,18 @@ function StorageDetailBody({ open }: { open: boolean }) {
                   : '—'
               } />
               <Row
+                icon={MemoryStick}
+                label={t('storageDialog.osMemory')}
+                value={
+                  sysInfo.osTotalMemoryBytes != null
+                    ? `${formatCapacityBytes(sysInfo.osUsedMemoryBytes ?? 0)} / ${formatCapacityBytes(sysInfo.osTotalMemoryBytes)}`
+                    : '—'
+                }
+              />
+              <Row
                 icon={Cpu}
                 label={t('storageDialog.cpuLoad')}
                 value={formatPercent(sysInfo.systemCpuLoad ?? NaN)}
-              />
-              <Row
-                icon={MemoryStick}
-                label={t('storageDialog.jvmMemory')}
-                value={
-                  sysInfo.jvmMaxBytes != null
-                    ? `${formatCapacityBytes(sysInfo.jvmUsedBytes)} / ${formatCapacityBytes(sysInfo.jvmMaxBytes)}`
-                    : '—'
-                }
               />
               <Row icon={Info} label={t('storageDialog.java')} value={sysInfo.javaVersion ?? '—'} mono />
             </>
@@ -300,6 +300,15 @@ function StorageDetailBody({ open }: { open: boolean }) {
             </div>
           ) : (
             <>
+              <Row
+                icon={MemoryStick}
+                label={t('storageDialog.jvmMemory')}
+                value={
+                  sysInfo.jvmMaxBytes != null
+                    ? `${formatCapacityBytes(sysInfo.jvmUsedBytes)} / ${formatCapacityBytes(sysInfo.jvmMaxBytes)}`
+                    : '—'
+                }
+              />
               <Row icon={Clock3} label={t('storageDialog.startTime')} value={sysInfo.startTime ?? '—'} mono />
               <Row icon={Clock3} label={t('storageDialog.uptime')} value={sysInfo.uptimeText ?? '—'} />
               <Row icon={FolderTree} label={t('storageDialog.storageType')} value={sysInfo.storageType ?? '—'} />

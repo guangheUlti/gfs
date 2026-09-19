@@ -69,6 +69,10 @@ if not defined REDIS_PORT     set "REDIS_PORT=6379"
 if not defined REDIS_PASSWORD set "REDIS_PASSWORD="
 if not defined INNODB_POOL    set "INNODB_POOL=256M"
 if not defined JAVA_OPTS      set "JAVA_OPTS=-Xms512m -Xmx1024m"
+:: JVM 最大内存配置文件与重启标记：启动脚本读这里拼 -Xmx，后端也读同一路径。
+:: 留空/缺少时用上方的 %JAVA_OPTS% 原样启动（保持旧行为）。
+if not defined GFS_JVM_CONF   set "GFS_JVM_CONF=%CONF_DIR%\jvm-xmx.conf"
+set "GFS_JVM_FLAG=%CONF_DIR%\jvm-restart.flag"
 if not defined FS_FRONTEND_DOMAIN set "FS_FRONTEND_DOMAIN=http://localhost:%SERVER_PORT%"
 
 :: ---- boot auto start -------------------------------------------------------
@@ -101,6 +105,7 @@ if /i "%~1"=="wait_port_free"  call :wait_port_free %2 %3 & goto :eof
 if /i "%~1"=="wait_pid_free"   call :wait_pid_free %2 %3 & goto :eof
 if /i "%~1"=="require_admin"   call :require_admin   & goto :eof
 if /i "%~1"=="check_binaries"  call :check_binaries  & goto :eof
+if /i "%~1"=="read_xmx"        call :read_xmx %2     & goto :eof
 if /i "%~1"=="read_cap"        call :read_cap        & goto :eof
 echo [ERROR] env.bat: unknown helper "%~1"
 exit /b 2
@@ -268,4 +273,23 @@ set "CAP="
 if not exist "%GFS_CAPFILE%" goto :eof
 for /f "usebackq delims=" %%a in ("%GFS_CAPFILE%") do if not defined CAP set "CAP=%%a"
 del "%GFS_CAPFILE%" >nul 2>&1
+goto :eof
+
+:: ----------------------------------------------------------------------------
+:: reads integer MB from %~1 (jvm-xmx.conf) into %JVM_MEM_OPTS%
+::  - valid value N   -> "-Xms<N>m -Xmx<N>m"  (Xms=Xmx 避免 Xmx 小于旧 Xms 而启动失败)
+::  - missing/invalid -> empty (caller then uses %JAVA_OPTS% as-is)
+:read_xmx
+set "JVM_MEM_OPTS="
+if not exist "%~1" goto :eof
+for /f "usebackq delims=" %%a in ("%~1") do call :setmem %%a
+goto :eof
+
+:setmem
+if defined JVM_MEM_OPTS goto :eof
+set "_v=%~1"
+set "_v=%_v: =%"
+if "%_v%"=="" goto :eof
+echo %_v%| findstr /R "^[0-9][0-9]*$" >nul || goto :eof
+set "JVM_MEM_OPTS=-Xms%_v%m -Xmx%_v%m"
 goto :eof

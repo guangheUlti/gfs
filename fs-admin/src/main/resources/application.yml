@@ -13,7 +13,7 @@ spring:
     active: dev
   mvc:
     async:
-      # Office 转 PDF 最长等待约 335 秒，避免提前关闭对象存储文件流
+      # 预留充足超时，避免长耗时/大文件异步流式交付期间提前关闭对象存储文件流
       request-timeout: 360s
     formcontent:
       filter:

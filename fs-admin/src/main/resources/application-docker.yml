@@ -73,17 +73,6 @@ fs:
     small-file-size: 10485760
     # 缓冲区大小（字节），默认8KB
     buffer-size: 8192
-    office:
-      enabled: true
-      #LibreOffice 安装路径
-      # Linux: /usr/lib/libreoffice
-      # Windows: C:/Program Files/LibreOffice
-      # Mac: /Applications/LibreOffice.app/Contents
-      office-home: /usr/lib/libreoffice
-      task-execution-timeout: 300000
-      task-queue-timeout: 30000
-      max-tasks-per-process: 200
-      cache-path: ${java.io.tmpdir}/office-convert
 
 mybatis-flex:
   # sql审计

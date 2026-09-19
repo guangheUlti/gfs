@@ -30,9 +30,6 @@ public class SftpConfig {
     /** known_hosts 文件路径（可选，缺省宽松校验） */
     private String sftpKnownHostsPath;
 
-    /** 分片临时目录（可选，默认 ${java.io.tmpdir}/gfs-storage-temp/sftp） */
-    private String tempPath;
-
     /** 从 StorageConfig 转换为配置对象 */
     public static SftpConfig toObject(StorageConfig config) {
         return config.toObject(SftpConfig.class);

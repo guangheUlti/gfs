@@ -14,6 +14,8 @@ import com.guanghe.fs.file.domain.vo.FileVO;
 import com.guanghe.fs.file.domain.vo.FolderDownloadTaskVO;
 import com.guanghe.fs.framework.common.domain.PageResult;
 
+import java.io.InputStream;
+
 import java.util.List;
 
 /**
@@ -98,6 +100,18 @@ public interface FileShareService extends IService<FileShare> {
      * @param fileId  文件id
      */
     FileDownloadVO downloadFiles(String shareId, String fileId);
+
+    /**
+     * 获取直链文件元信息（文件名/大小），不打开数据流。
+     * 供直链端点构建交付请求（鉴权语义与 downloadFiles 一致）。
+     */
+    FileDownloadVO getShareFileMeta(String shareId, String fileId);
+
+    /**
+     * 按 Range 打开分享文件流：全量用 downloadFile，Range 用存储侧裁剪的 downloadFileRange。
+     * start=0 且 end=-1 表示全量。
+     */
+    InputStream openShareFileRange(String shareId, String fileId, long start, long end) throws Exception;
 
     /**
      * 创建分享文件夹下载任务

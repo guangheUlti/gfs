@@ -247,7 +247,7 @@ CREATE TABLE `service_settings` (
 
 LOCK TABLES `service_settings` WRITE;
 /*!40000 ALTER TABLE `service_settings` DISABLE KEYS */;
-INSERT INTO `service_settings` VALUES ('svc-sftp','sftp',0,9022,'0.0.0.0',NULL,NULL,'2026-09-18 14:15:42',NULL,0),('svc-webdav','webdav',0,NULL,'0.0.0.0',NULL,NULL,NULL,NULL,0);
+INSERT INTO `service_settings` VALUES ('svc-sftp','sftp',0,9022,'0.0.0.0',NULL,NULL,'2026-09-18 14:15:42',NULL,0),('svc-webdav','webdav',0,NULL,'0.0.0.0',NULL,NULL,NULL,NULL,0),('svc-ftp','ftp',0,9021,'0.0.0.0',NULL,NULL,NULL,NULL,0);
 /*!40000 ALTER TABLE `service_settings` ENABLE KEYS */;
 UNLOCK TABLES;
 DROP TABLE IF EXISTS `storage_platform`;

@@ -1,9 +1,9 @@
 import { request } from './request'
 
 export interface ServiceSettingVO {
-  serviceType: 'webdav' | 'sftp'
+  serviceType: 'webdav' | 'sftp' | 'ftp'
   enabled: boolean
-  /** 仅 SFTP 有值；WebDAV 复用 HTTP 80 端口 */
+  /** socket 型服务（sftp/ftp）有值；webdav 复用 HTTP 80 端口为 null */
   port: number | null
   bindAddress: string
   /** running / stopped / error */

@@ -411,11 +411,16 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
         return converter.convert(fileInfos, FileVO.class);
     }
 
-    @Override
-    public FileDownloadVO downloadFiles(String shareId, String fileId) {
+    /** 校验分享有效性并从分享内取回可访问文件元信息 */
+    private FileInfo getShareAccessibleFileInfo(String shareId, String fileId) {
         FileShare fileShare = getValidShare(shareId);
         List<String> shareFileIds = fileShareItemService.getShareFileIds(shareId);
-        FileInfo fileInfo = getShareAccessibleFile(fileShare, shareFileIds, fileId);
+        return getShareAccessibleFile(fileShare, shareFileIds, fileId);
+    }
+
+    @Override
+    public FileDownloadVO downloadFiles(String shareId, String fileId) {
+        FileInfo fileInfo = getShareAccessibleFileInfo(shareId, fileId);
 
         IStorageOperationService storageService = storageServiceFacade.getStorageService(fileInfo.getStoragePlatformSettingId());
 
@@ -432,6 +437,30 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
         downloadVO.setFileSize(fileInfo.getSize());
         downloadVO.setResource(resource);
         return downloadVO;
+    }
+
+    @Override
+    public FileDownloadVO getShareFileMeta(String shareId, String fileId) {
+        FileInfo fileInfo = getShareAccessibleFileInfo(shareId, fileId);
+        FileDownloadVO downloadVO = new FileDownloadVO();
+        downloadVO.setFileName(fileInfo.getDisplayName());
+        downloadVO.setFileSize(fileInfo.getSize());
+        return downloadVO;
+    }
+
+    @Override
+    public InputStream openShareFileRange(String shareId, String fileId, long start, long end) throws Exception {
+        FileInfo fileInfo = getShareAccessibleFileInfo(shareId, fileId);
+        IStorageOperationService storageService =
+                storageServiceFacade.getStorageService(fileInfo.getStoragePlatformSettingId());
+        // 全量：大小未知（end=-1）或范围覆盖到文件末尾且从 0 开始
+        boolean full = fileInfo.getSize() == null || end == -1
+                || (start == 0 && end >= fileInfo.getSize() - 1);
+        if (full) {
+            return storageService.downloadFile(fileInfo.getObjectKey());
+        }
+        // Range：存储层原生裁剪
+        return storageService.downloadFileRange(fileInfo.getObjectKey(), start, end);
     }
 
     @Override

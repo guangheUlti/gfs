@@ -4,7 +4,8 @@
     "loading": "Loading…",
     "loadFailed": "Failed to load service settings",
     "webdavDesc": "Reuses the main HTTP port (80) under /dav; supports Windows drive mapping",
-    "sftpDesc": "Standalone SFTP endpoint; works with sshfs mounts and clients like WinSCP"
+    "sftpDesc": "Standalone SFTP endpoint; works with sshfs mounts and clients like WinSCP",
+    "ftpDesc": "Standalone FTP endpoint; works with clients like FileZilla and resumable downloads"
   },
   "status": {
     "running": "Running",
@@ -61,6 +62,12 @@
       "sshfs": "sshfs: sshfs <user>@<host>:/ /local/mountpoint -o port={{port}}",
       "winscp": "WinSCP / FileZilla: choose SFTP, port {{port}}, and use your drive credentials",
       "readonly": "SFTP supports sequential writes only; random writes, hard links and symlinks fail explicitly"
+    },
+    "ftp": {
+      "client": "ftp client: ftp <host> {{port}} (or lftp / Explorer ftp://<host>:{{port}})",
+      "filezilla": "FileZilla / WinSCP: choose FTP (plain), port {{port}}, and use your drive credentials",
+      "pasv": "Passive data ports 50000-50100 must be allowed by the firewall; downloads support resume, uploads do not",
+      "security": "FTP is a plaintext protocol for LAN use only; prefer SFTP or WebDAV over HTTPS when exposed"
     }
   }
 }

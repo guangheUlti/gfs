@@ -59,7 +59,6 @@ public class SftpStorageOperationService extends AbstractTempChunkStorageService
     private String password;
     private String privateKeyPath;
     private String knownHostsPath;
-    private String tempRoot;
 
     public SftpStorageOperationService() {
         super();
@@ -71,7 +70,8 @@ public class SftpStorageOperationService extends AbstractTempChunkStorageService
 
     @Override
     protected String getTempRoot() {
-        return tempRoot;
+        // 分片临时目录固定于运行目录 storage/temp/sftp
+        return "storage/temp/sftp";
     }
 
     @Override
@@ -109,7 +109,6 @@ public class SftpStorageOperationService extends AbstractTempChunkStorageService
         this.password = cfg.getSftpPassword();
         this.privateKeyPath = cfg.getSftpPrivateKeyPath();
         this.knownHostsPath = cfg.getSftpKnownHostsPath();
-        this.tempRoot = resolveTempRoot(cfg.getTempPath(), "sftp");
 
         SSHClient sshClient = buildClient();
         try {

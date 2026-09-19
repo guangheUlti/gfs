@@ -196,7 +196,7 @@ export function useFileOperations(
   const copyDirectLink = useCallback(
     async (file: FileItem) => {
       try {
-        const res = await createDirectLink({ fileId: file.id })
+        const res = await createDirectLink({ fileId: file.id, expireType: 4 })
         const fullUrl = `${window.location.origin}${res.directUrl}`
         await navigator.clipboard.writeText(fullUrl)
         toast.success(t('operations.copyDirectLinkOk'))

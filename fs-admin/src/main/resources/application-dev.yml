@@ -77,19 +77,6 @@ fs:
     small-file-size: 10485760
     # 缓冲区大小（字节），默认8KB
     buffer-size: 8192
-    office:
-      enabled: true
-      #LibreOffice 安装路径（内置便携版）：相对路径按进程工作目录解析，
-      #mvn spring-boot:run 已通过 workingDirectory 指向项目根，`java -jar` 在项目根执行同理；
-      #异机器/非项目根启动时用环境变量 OFFICE_HOME 传对绝对路径即可，无需改配置文件
-      # Linux: /usr/lib/libreoffice
-      # Windows: C:/Program Files/LibreOffice
-      # Mac: /Applications/LibreOffice.app/Contents
-      office-home: ${OFFICE_HOME:./LibreOffice}
-      task-execution-timeout: 300000
-      task-queue-timeout: 30000
-      max-tasks-per-process: 200
-      cache-path: ${java.io.tmpdir}/office-convert
 
 mybatis-flex:
   # sql审计

@@ -1,14 +1,19 @@
 import { useTranslation } from 'react-i18next'
 import { Info } from 'lucide-react'
+import type { ServiceSettingVO } from '@/api/service'
 
-/** 底部挂载用法提示块（Windows 映射 / rclone / sshfs / WinSCP 示例） */
-export function UsageTips({ serviceType }: { serviceType: 'webdav' | 'sftp' }) {
+/** 底部挂载用法提示块（Windows 映射 / rclone / sshfs / WinSCP / ftp 示例），端口取自服务配置 */
+export function UsageTips({ setting }: { setting: ServiceSettingVO }) {
   const { t } = useTranslation('services')
+  const serviceType = setting.serviceType
+  const port = setting.port ?? 80
 
-  const keys: string[] =
-    serviceType === 'webdav'
-      ? ['windows', 'rclone', 'basic', 'lock']
-      : ['client', 'sshfs', 'winscp', 'readonly']
+  const keysByType: Record<string, string[]> = {
+    webdav: ['windows', 'rclone', 'basic', 'lock'],
+    sftp: ['client', 'sshfs', 'winscp', 'readonly'],
+    ftp: ['client', 'filezilla', 'pasv', 'security'],
+  }
+  const keys = keysByType[serviceType] ?? ['client']
 
   return (
     <div className='border-t bg-muted/40 px-5 py-4'>
@@ -18,7 +23,7 @@ export function UsageTips({ serviceType }: { serviceType: 'webdav' | 'sftp' }) {
       </div>
       <ul className='mt-2 list-disc space-y-1.5 pl-7 text-xs leading-relaxed text-muted-foreground'>
         {keys.map((key) => (
-          <li key={key}>{t(`usage.${serviceType}.${key}`, { port: 9022 })}</li>
+          <li key={key}>{t(`usage.${serviceType}.${key}`, { port })}</li>
         ))}
       </ul>
     </div>

@@ -1,7 +1,9 @@
 package com.guanghe.fs.service.sftp;
 
 import cn.hutool.core.util.StrUtil;
+import com.guanghe.fs.service.domain.ServiceSetting;
 import com.guanghe.fs.service.sftp.nio.GfsFileSystemFactory;
+import com.guanghe.fs.service.spi.ExternalFileService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.sshd.common.keyprovider.KeyPairProvider;
 import org.apache.sshd.server.SshServer;
@@ -15,17 +17,17 @@ import java.nio.file.Path;
 import java.util.List;
 
 /**
- * SFTP 服务端持有者（Apache MINA SSHD，默认端口 9022）。
+ * SFTP 服务端持有者（Apache MINA SSHD，默认端口 9022），SPI 实现 type=sftp。
  * 主机密钥首次启动生成并落盘，重启后指纹稳定（服务端实现指南 §4.4）。
  */
 @Slf4j
 @Component
-public class SftpServerHolder {
+public class SftpServerHolder implements ExternalFileService {
 
     private final GfsPasswordAuthenticator passwordAuthenticator;
     private final GfsFileSystemFactory fileSystemFactory;
 
-    @Value("${fs.service.sftp.host-key-path:data/ssh-host-key}")
+    @Value("${fs.service.sftp.host-key-path:storage/ssh/ssh-host-key}")
     private String hostKeyPath;
 
     private volatile SshServer server;
@@ -34,6 +36,35 @@ public class SftpServerHolder {
                             GfsFileSystemFactory fileSystemFactory) {
         this.passwordAuthenticator = passwordAuthenticator;
         this.fileSystemFactory = fileSystemFactory;
+    }
+
+    @Override
+    public String type() {
+        return "sftp";
+    }
+
+    @Override
+    public boolean socketBased() {
+        return true;
+    }
+
+    @Override
+    public Integer defaultPort() {
+        return 9022;
+    }
+
+    @Override
+    public synchronized void apply(ServiceSetting setting) {
+        int port = setting.getPort() == null ? 9022 : setting.getPort();
+        String bindAddress = StrUtil.emptyToDefault(setting.getBindAddress(), "0.0.0.0");
+        if (server != null && server.isStarted()) {
+            // 端口/地址未变时 apply 幂等；变了由管理器先 stop 再调 apply
+            if (server.getPort() == port && bindAddress.equals(server.getHost())) {
+                return;
+            }
+            stopIfRunning();
+        }
+        start(port, bindAddress);
     }
 
     public synchronized void start(int port, String bindAddress) {
@@ -63,6 +94,11 @@ public class SftpServerHolder {
         }
     }
 
+    @Override
+    public synchronized void stop() {
+        stopIfRunning();
+    }
+
     public synchronized void stopIfRunning() {
         SshServer current = this.server;
         if (current != null) {
@@ -83,6 +119,7 @@ public class SftpServerHolder {
         start(port, bindAddress);
     }
 
+    @Override
     public boolean isRunning() {
         SshServer current = this.server;
         return current != null && current.isStarted();

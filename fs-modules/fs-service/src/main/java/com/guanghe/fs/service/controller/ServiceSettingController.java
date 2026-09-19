@@ -42,6 +42,7 @@ public class ServiceSettingController {
 
     private final ServiceSettingService serviceSettingService;
     private final ProtocolServiceManager protocolServiceManager;
+    private final com.guanghe.fs.service.spi.ExternalFileServiceRegistry externalFileServiceRegistry;
 
     @Operation(summary = "全部服务配置 + 实时运行状态")
     @GetMapping("/list")
@@ -109,8 +110,9 @@ public class ServiceSettingController {
                 protocolServiceManager.apply(type, setting);
             }
             case "restart" -> {
-                // 语义：重启 = 停止（不动 enabled）后再拉起；SFTP 强停重建，WebDAV 状态重置
-                if (ServiceSettingService.TYPE_SFTP.equals(type)) {
+                // 语义：重启 = 停止（不动 enabled）后再拉起；socket 型强停重建，非 socket 型状态重置
+                com.guanghe.fs.service.spi.ExternalFileService impl = externalFileServiceRegistry.get(type);
+                if (impl != null && impl.socketBased()) {
                     setting.setEnabled(setting.getEnabled() == null || setting.getEnabled() != 1 ? 0 : 1);
                     protocolServiceManager.apply(type, setting);
                     setting.setEnabled(1);
@@ -142,7 +144,10 @@ public class ServiceSettingController {
         if (cmd.getEnabled() == null) {
             throw new BusinessException(I18nUtils.getMessage("service.port.invalid"));
         }
-        if (ServiceSettingService.TYPE_SFTP.equals(type) && cmd.getPort() != null) {
+        // socket 型服务（SFTP/FTP…）才有端口语义；从 SPI 实现取能力与默认端口
+        com.guanghe.fs.service.spi.ExternalFileService impl =
+                externalFileServiceRegistry.get(type);
+        if (impl != null && impl.socketBased() && cmd.getPort() != null) {
             if (cmd.getPort() < 1024 || cmd.getPort() > 65535) {
                 throw new BusinessException(I18nUtils.getMessage("service.port.invalid"));
             }

@@ -14,6 +14,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { RequirePermission } from '@/components/require-permission'
+import { useFeatureStore } from '@/store/feature'
 
 interface FileBulkSelectionBarProps {
   selectedCount: number
@@ -37,6 +38,8 @@ export function FileBulkSelectionBar({
   onClear,
 }: FileBulkSelectionBarProps) {
   const { t } = useTranslation('files')
+  // 收藏功能未开启时，隐藏收藏按钮（与侧边栏「收藏」菜单同开关）
+  const favoriteEnabled = useFeatureStore((s) => !!s.toggles.favorite)
   // 单选不出批量工具条：单文件操作都在右键/卡片菜单里
   if (selectedCount <= 1) return null
   return (
@@ -86,25 +89,27 @@ export function FileBulkSelectionBar({
         </Tooltip>
       </RequirePermission>
 
-      <RequirePermission code='file:write'>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type='button'
-              variant='outline'
-              size='icon'
-              className='size-8 shrink-0'
-              onClick={onFavorite}
-              aria-label={t('bulk.ariaFavorite')}
-            >
-              <Heart fill={hasUnfavorited ? 'none' : 'currentColor'} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{t('rowMenu.favorite')}</p>
-          </TooltipContent>
-        </Tooltip>
-      </RequirePermission>
+      {favoriteEnabled && (
+        <RequirePermission code='file:write'>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type='button'
+                variant='outline'
+                size='icon'
+                className='size-8 shrink-0'
+                onClick={onFavorite}
+                aria-label={t('bulk.ariaFavorite')}
+              >
+                <Heart fill={hasUnfavorited ? 'none' : 'currentColor'} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{t('rowMenu.favorite')}</p>
+            </TooltipContent>
+          </Tooltip>
+        </RequirePermission>
+      )}
 
       <RequirePermission code='file:write'>
         <Tooltip>

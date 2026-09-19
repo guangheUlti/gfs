@@ -43,6 +43,7 @@
     "cpu": "CPU",
     "cpuCores": "{{cores}} cores",
     "cpuLoad": "System load",
+    "osMemory": "System memory",
     "jvmMemory": "JVM memory",
     "java": "Java version",
     "startTime": "Started at",

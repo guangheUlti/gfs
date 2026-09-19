@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils'
 import { formatFileListDisplayTime } from '@/utils/format'
 import { isEditableSuffix } from '@/utils/preview-types'
 import { usePermission } from '@/hooks/use-permission'
+import { useFeatureStore } from '@/store/feature'
 import { Button } from '@/components/ui/button'
 import {
   ContextMenu,
@@ -106,6 +107,8 @@ export function FileGridView({
   scrollRootRef,
 }: FileGridViewProps) {
   const { t } = useTranslation('files')
+  // 收藏功能未开启时，隐藏收藏入口（与侧边栏「收藏」菜单同开关）
+  const favoriteEnabled = useFeatureStore((s) => !!s.toggles.favorite)
   const thumbnailsEnabled = useAppearanceStore(
     (state) => state.thumbnailsEnabled
   )
@@ -319,7 +322,7 @@ export function FileGridView({
                             {t('rowMenu.copyDirectLink')}
                           </DropdownMenuItem>
                         )}
-                        {canWrite && (
+                        {favoriteEnabled && canWrite && (
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation()
@@ -477,7 +480,7 @@ export function FileGridView({
                         {t('rowMenu.share')}
                       </ContextMenuItem>
                     )}
-                    {canWrite && (
+                    {favoriteEnabled && canWrite && (
                       <ContextMenuItem
                         onClick={(e) => {
                           e.stopPropagation()
@@ -580,7 +583,7 @@ export function FileGridView({
                         {t('rowMenu.copyDirectLink')}
                       </ContextMenuItem>
                     )}
-                    {canWrite && (
+                    {favoriteEnabled && canWrite && (
                       <ContextMenuItem
                         onClick={(e) => {
                           e.stopPropagation()

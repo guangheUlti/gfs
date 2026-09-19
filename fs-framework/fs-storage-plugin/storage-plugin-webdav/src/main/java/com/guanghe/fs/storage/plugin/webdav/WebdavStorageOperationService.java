@@ -41,7 +41,6 @@ public class WebdavStorageOperationService extends AbstractTempChunkStorageServi
 
     private Sardine sardine;
     private String baseUrl;
-    private String tempRoot;
 
     public WebdavStorageOperationService() {
         super();
@@ -53,7 +52,8 @@ public class WebdavStorageOperationService extends AbstractTempChunkStorageServi
 
     @Override
     protected String getTempRoot() {
-        return tempRoot;
+        // 分片临时目录固定于运行目录 storage/temp/webdav
+        return "storage/temp/webdav";
     }
 
     @Override
@@ -75,7 +75,6 @@ public class WebdavStorageOperationService extends AbstractTempChunkStorageServi
         String endpoint = trimSlashes(cfg.getWebdavEndpoint());
         String basePath = trimSlashes(cfg.getWebdavBasePath());
         this.baseUrl = endpoint + (basePath.isEmpty() ? "" : "/" + basePath);
-        this.tempRoot = resolveTempRoot(cfg.getTempPath(), "webdav");
 
         this.sardine = cfg.getWebdavUsername() == null || cfg.getWebdavUsername().isBlank()
                 ? SardineFactory.begin()

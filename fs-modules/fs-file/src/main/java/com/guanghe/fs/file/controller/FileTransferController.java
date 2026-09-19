@@ -14,6 +14,7 @@ import com.guanghe.fs.file.domain.vo.FileTransferTaskVO;
 import com.guanghe.fs.file.domain.vo.FolderDownloadTaskVO;
 import com.guanghe.fs.file.domain.vo.InitDownloadResultVO;
 import com.guanghe.fs.file.service.FileTransferTaskService;
+import com.guanghe.fs.file.serving.FileServingPipeline;
 import com.guanghe.fs.framework.common.domain.Result;
 import com.guanghe.fs.framework.common.utils.FileUtils;
 import com.guanghe.fs.framework.sse.SseConnectionManager;
@@ -36,6 +37,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -60,6 +62,7 @@ public class FileTransferController {
     private final FileTransferTaskService fileTransferTaskService;
     private final SseConnectionManager sseConnectionManager;
     private final SysOperationLogService operationLogService;
+    private final FileServingPipeline servingPipeline;
 
     @GetMapping("/files")
     @Operation(summary = "获取传输列表", description = "获取传输列表")
@@ -258,21 +261,16 @@ public class FileTransferController {
 
     @GetMapping("/folder-download/tasks/{taskId}/file")
     @Operation(summary = "下载文件夹压缩包", description = "下载已打包完成的文件夹 zip")
-    public ResponseEntity<Resource> downloadFolderTaskFile(@PathVariable String taskId) {
-        try {
-            FileDownloadVO fileDownload = fileTransferTaskService.downloadFolderTaskFile(taskId);
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.add(HttpHeaders.CONTENT_DISPOSITION,
-                    "attachment; filename=\"" + URLEncoder.encode(fileDownload.getFileName(), StandardCharsets.UTF_8) + "\"");
-            headers.add(HttpHeaders.CONTENT_TYPE, "application/zip");
-
-            return ResponseEntity.ok()
-                    .headers(headers)
-                    .contentLength(fileDownload.getFileSize())
-                    .body(fileDownload.getResource());
-        } catch (Exception e) {
-            throw new RuntimeException("文件夹下载失败", e);
-        }
+    public ResponseEntity<StreamingResponseBody> downloadFolderTaskFile(
+            @PathVariable String taskId,
+            @RequestHeader(value = "Range", required = false) String rangeHeader) {
+        FileDownloadVO fileDownload = fileTransferTaskService.downloadFolderTaskFile(taskId);
+        long size = fileDownload.getFileSize() == null ? -1 : fileDownload.getFileSize();
+        FileServingPipeline.Request request = FileServingPipeline.Request
+                .attachment(fileDownload.getFileName(), size,
+                        (start, end) -> fileDownload.getResource().getInputStream())
+                // zip 附件：范围交付无意义，统一全量
+                .withRangeAllowed(false);
+        return servingPipeline.serve(request, rangeHeader);
     }
 }

@@ -234,7 +234,7 @@ export function ShareModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-h-[85vh] sm:max-w-xl overflow-y-auto'>
+      <DialogContent className='max-h-[85vh] overflow-y-auto overflow-x-hidden sm:max-w-xl'>
         <DialogHeader>
           <DialogTitle>{t('shareModal.title')}</DialogTitle>
         </DialogHeader>
@@ -497,7 +497,7 @@ export function ShareModal({
                     {t('shareModal.rawLinkTip')}
                   </div>
                   <div className='flex items-center gap-2'>
-                    <div className='min-w-0 flex-1 truncate text-sm'>
+                    <div className='min-w-0 flex-1 truncate text-sm' title={rawLink}>
                       {rawLink}
                     </div>
                     <Button variant='outline' size='sm' onClick={handleCopyRawLink}>

@@ -1,1 +1,1 @@
-export { SettingsDialog } from './settings-dialog'
+export { SettingsPage } from './settings-dialog'

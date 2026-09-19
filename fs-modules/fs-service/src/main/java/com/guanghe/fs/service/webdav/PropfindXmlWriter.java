@@ -93,4 +93,48 @@ public final class PropfindXmlWriter {
         return wrapMultistatus("<D:response>\n  <D:href>" + escape(href) + "</D:href>\n"
                 + "  <D:propstat><D:prop/><D:status>HTTP/1.1 200 OK</D:status></D:propstat>\n</D:response>\n");
     }
+
+    /**
+     * LOCK 成功应答：&lt;D:prop&gt; 内含 &lt;D:lockdiscovery&gt;。
+     *
+     * @param href     被锁资源的 /dav href（已编码）
+     * @param token    opaquelocktoken（不带尖括号）
+     * @param scope    exclusive / shared
+     * @param owner    拥有者标签（OPTIONAL，客户端/文档标识）
+     * @param timeoutSeconds 有效期秒数
+     */
+    public static String wrapLock(String href, String token, String scope, String owner, long timeoutSeconds) {
+        return XML_DECLARATION
+                + "<D:prop xmlns:D=\"DAV:\">\n"
+                + lockDiscoveryBlock(href, token, scope, owner, timeoutSeconds)
+                + "</D:prop>\n";
+    }
+
+    /**
+     * 423 冲突应答游标：返回现有冲突锁的 lockdiscovery（供客户端判断持锁方）。
+     */
+    public static String wrapLockConflict(String href, String token, String scope, String owner,
+                                          long timeoutSeconds) {
+        return XML_DECLARATION
+                + "<D:prop xmlns:D=\"DAV:\">\n"
+                + lockDiscoveryBlock(href, token, scope, owner, timeoutSeconds)
+                + "</D:prop>\n";
+    }
+
+    private static String lockDiscoveryBlock(String href, String token, String scope, String owner,
+                                             long timeoutSeconds) {
+        StringBuilder sb = new StringBuilder(256);
+        sb.append("  <D:lockdiscovery>\n");
+        sb.append("    <D:activelock>\n");
+        sb.append("      <D:locktype><D:write/></D:locktype>\n");
+        sb.append("      <D:lockscope><D:").append(scope).append("/></D:lockscope>\n");
+        sb.append("      <D:depth>0</D:depth>\n");
+        sb.append("      <D:owner><D:href>").append(escape(owner)).append("</D:href></D:owner>\n");
+        sb.append("      <D:timeout>Second-").append(timeoutSeconds).append("</D:timeout>\n");
+        sb.append("      <D:locktoken><D:href>").append(escape(token)).append("</D:href></D:locktoken>\n");
+        sb.append("      <D:lockroot><D:href>").append(escape(href)).append("</D:href></D:lockroot>\n");
+        sb.append("    </D:activelock>\n");
+        sb.append("  </D:lockdiscovery>\n");
+        return sb.toString();
+    }
 }

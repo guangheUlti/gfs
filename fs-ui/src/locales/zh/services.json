@@ -4,7 +4,8 @@
     "loading": "加载中...",
     "loadFailed": "服务配置加载失败",
     "webdavDesc": "复用主服务 HTTP 端口（80），路径前缀 /dav，支持 Windows 网络驱动器映射",
-    "sftpDesc": "独立端口提供 SFTP 文件服务，支持 sshfs 挂载与 WinSCP 等客户端"
+    "sftpDesc": "独立端口提供 SFTP 文件服务，支持 sshfs 挂载与 WinSCP 等客户端",
+    "ftpDesc": "独立端口提供 FTP 文件服务，支持 FileZilla 等客户端与断点续传下载"
   },
   "status": {
     "running": "运行中",
@@ -61,6 +62,12 @@
       "sshfs": "sshfs：sshfs <账号>@<主机>:/ /本地挂载点 -o port={{port}}",
       "winscp": "WinSCP / FileZilla：协议选 SFTP，端口 {{port}}，账号密码为网盘登录账号",
       "readonly": "SFTP 仅支持顺序写入；随机写、硬链接、符号链接会明确报错"
+    },
+    "ftp": {
+      "client": "ftp 客户端：ftp <主机> {{port}}（或 lftp/资源管理器 ftp://<主机>:{{port}}）",
+      "filezilla": "FileZilla / WinSCP：协议选 FTP（明文），端口 {{port}}，账号密码为网盘登录账号",
+      "pasv": "被动模式数据端口 50000-50100，防火墙需放行；下载支持断点续传，上传不支持 REST 续传",
+      "security": "FTP 为明文协议，仅建议内网使用；对外暴露请改用 SFTP 或 WebDAV + HTTPS"
     }
   }
 }

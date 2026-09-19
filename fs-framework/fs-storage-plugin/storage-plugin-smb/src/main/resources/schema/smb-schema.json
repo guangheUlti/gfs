@@ -1,9 +1,10 @@
 [
   {"label":"服务器地址","dataType":"string","identifier":"smbHost","validation":{"required":true}},
   {"label":"端口","dataType":"string","identifier":"smbPort","validation":{"required":false}},
-  {"label":"域","dataType":"string","identifier":"smbDomain","validation":{"required":false}},
-  {"label":"共享名","dataType":"string","identifier":"smbShare","validation":{"required":true}},
-  {"label":"用户名","dataType":"string","identifier":"smbUsername","validation":{"required":true}},
-  {"label":"密码","dataType":"string","identifier":"smbPassword","validation":{"required":true}},
-  {"label":"分片临时目录","dataType":"string","identifier":"tempPath","validation":{"required":false}}
+  {"label":"域账号","dataType":"boolean","identifier":"smbDomainEnabled","validation":{"required":false},"description":"开启后使用域/AD 账号访问，并显示“域”输入框；关闭时按本地/工作组账号处理"},
+  {"label":"域","dataType":"string","identifier":"smbDomain","validation":{"required":false},"showIf":{"identifier":"smbDomainEnabled","value":"true"},"description":"域账号所属的域/工作域名，如 WORKGROUP 或 AD 域名"},
+  {"label":"匿名访问","dataType":"boolean","identifier":"smbAnonymous","validation":{"required":false},"description":"勾选后以 Guest/匿名身份访问，用户名与密码可不填"},
+  {"label":"共享名","dataType":"string","identifier":"smbShare","validation":{"required":false},"description":"留空则列出该主机全部共享（动态共享模式）；填写后仅访问指定共享"},
+  {"label":"用户名","dataType":"string","identifier":"smbUsername","validation":{"required":false},"showIf":{"identifier":"smbAnonymous","value":"false"}},
+  {"label":"密码","dataType":"string","identifier":"smbPassword","validation":{"required":false},"showIf":{"identifier":"smbAnonymous","value":"false"}}
 ]

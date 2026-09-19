@@ -43,6 +43,7 @@
     "cpu": "处理器",
     "cpuCores": "{{cores}} 核",
     "cpuLoad": "系统负载",
+    "osMemory": "操作系统内存",
     "jvmMemory": "JVM 内存",
     "java": "Java 版本",
     "startTime": "启动时间",

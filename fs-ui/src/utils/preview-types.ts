@@ -13,7 +13,6 @@ export interface PreviewViewerProps {
 /**
  * 预览类型分发（前端镜像后端 FileTypeEnum）：
  * - image/video/audio/pdf 走各自 viewer
- * - word/ppt 后端流转内已转 PDF（OfficeToPdfConverter），统一按 pdf 视图处理
  * - markdown 走 Markdown 渲染，text/code 走 CodeMirror
  * - excel/archive/tif/drawio 内嵌后端现成 Thymeleaf 预览页
  */
@@ -31,7 +30,6 @@ const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg']
 const VIDEO_EXTS = ['mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm']
 const AUDIO_EXTS = ['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'wma']
 const PDF_EXTS = ['pdf']
-const PDF_CONVERTED_EXTS = ['doc', 'docx', 'ppt', 'pptx']
 const MARKDOWN_EXTS = ['md', 'markdown']
 const CODE_EXTS = [
   'java', 'js', 'jsx', 'ts', 'tsx', 'py', 'c', 'cpp', 'h', 'hpp', 'cc', 'cxx',
@@ -51,7 +49,7 @@ export function getPreviewKind(suffix: string | undefined): PreviewKind {
   if (IMAGE_EXTS.includes(ext)) return 'image'
   if (VIDEO_EXTS.includes(ext)) return 'video'
   if (AUDIO_EXTS.includes(ext)) return 'audio'
-  if (PDF_EXTS.includes(ext) || PDF_CONVERTED_EXTS.includes(ext)) return 'pdf'
+  if (PDF_EXTS.includes(ext)) return 'pdf'
   if (MARKDOWN_EXTS.includes(ext)) return 'markdown'
   if (CODE_EXTS.includes(ext) || TEXT_EXTS.includes(ext)) return 'code'
   if (EMBEDDED_EXTS.includes(ext)) return 'embedded'

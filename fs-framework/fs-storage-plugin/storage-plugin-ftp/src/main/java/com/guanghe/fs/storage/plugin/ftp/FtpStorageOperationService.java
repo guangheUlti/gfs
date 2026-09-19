@@ -52,7 +52,6 @@ public class FtpStorageOperationService extends AbstractTempChunkStorageService 
     private boolean ftpsEnabled;
     private boolean passiveMode;
     private String controlEncoding;
-    private String tempRoot;
 
     public FtpStorageOperationService() {
         super();
@@ -64,7 +63,8 @@ public class FtpStorageOperationService extends AbstractTempChunkStorageService 
 
     @Override
     protected String getTempRoot() {
-        return tempRoot;
+        // 分片临时目录固定于运行目录 storage/temp/ftp
+        return "storage/temp/ftp";
     }
 
     @Override
@@ -104,7 +104,6 @@ public class FtpStorageOperationService extends AbstractTempChunkStorageService 
         this.passiveMode = cfg.getPassiveMode() == null || cfg.getPassiveMode().isBlank()
                 || "true".equalsIgnoreCase(cfg.getPassiveMode());
         this.controlEncoding = isBlank(cfg.getControlEncoding()) ? "UTF-8" : cfg.getControlEncoding().trim();
-        this.tempRoot = resolveTempRoot(cfg.getTempPath(), "ftp");
 
         FTPClient ftpClient = createClient();
         try {

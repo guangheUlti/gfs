@@ -5,6 +5,5 @@
   {"label":"密码","dataType":"string","identifier":"ftpPassword","validation":{"required":true}},
   {"label":"启用FTPS","dataType":"string","identifier":"ftpsEnabled","validation":{"required":false}},
   {"label":"被动模式","dataType":"string","identifier":"passiveMode","validation":{"required":false}},
-  {"label":"控制连接编码","dataType":"string","identifier":"controlEncoding","validation":{"required":false}},
-  {"label":"分片临时目录","dataType":"string","identifier":"tempPath","validation":{"required":false}}
+  {"label":"控制连接编码","dataType":"string","identifier":"controlEncoding","validation":{"required":false}}
 ]

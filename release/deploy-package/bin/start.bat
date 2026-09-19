@@ -1,6 +1,10 @@
 @echo off
 setlocal EnableDelayedExpansion
 
+:: watch mode entry: launched from the app section below into its own window so
+:: the app can restart itself (see run-watchdog / watchdog_core).
+if /i "%~1"=="run-watchdog" goto :run_watchdog
+
 :: ============================================================================
 ::  GFS - start Redis + MySQL + application with one command
 ::
@@ -81,7 +85,7 @@ if defined GFS_PID (
 echo [app   ] starting ...
 if defined FOREGROUND goto :run_fg
 
-start "GFS App (%SERVER_PORT%)" /min "%JAVA_EXE%" %JAVA_OPTS% -jar "%JAR_FILE%" %SPRING_ARGS%
+start "GFS App (%SERVER_PORT%)" /min "%COMSPEC%" /c ""%~dp0start.bat" run-watchdog %SERVER_PORT%"
 call "%ENV%" wait_port %SERVER_PORT% 120
 if not "!GFS_OK!"=="1" (
     echo [app   ] did not answer within 120s - check logs\gfs.log
@@ -92,9 +96,39 @@ goto :summary
 
 :run_fg
 echo [app   ] running in foreground - press Ctrl+C to stop.
-"%JAVA_EXE%" %JAVA_OPTS% -jar "%JAR_FILE%" %SPRING_ARGS%
+call :watchdog_core
+set "_rc=%ERRORLEVEL%"
 popd
-exit /b 0
+exit /b %_rc%
+
+:: --- watchdog ----------------------------------------------------------------
+:: Own window (run-watchdog) that launches the app and re-launches it whenever
+:: conf\jvm-restart.flag appears, so a config change takes effect on restart.
+:: Reads the -Xmx from jvm-xmx.conf (MB); when empty falls back to %JAVA_OPTS%.
+:run_watchdog
+if not "%~2"=="" set "SERVER_PORT=%~2"
+set "ENV=%~dp0env.bat"
+call "%ENV%"
+call "%ENV%" ensure_configs
+pushd "%PKG_ROOT%"
+call :watchdog_core
+set "_rc=%ERRORLEVEL%"
+popd
+echo [app   ] watchdog exits
+exit /b %_rc%
+
+:watchdog_core
+:watchdog_loop
+:: consume any flag left from a previous cycle, so a normal stop is never seen as a restart request
+if exist "%GFS_JVM_FLAG%" del /q "%GFS_JVM_FLAG%" >nul 2>&1
+call "%ENV%" read_xmx "%GFS_JVM_CONF%" 2>nul
+if defined JVM_MEM_OPTS (set "APP_OPTS=%JVM_MEM_OPTS%") else (set "APP_OPTS=%JAVA_OPTS%")
+echo [app   ] %time% starting - memory opts: %APP_OPTS%
+"%JAVA_EXE%" %APP_OPTS% -jar "%JAR_FILE%" %SPRING_ARGS%
+set "_code=%ERRORLEVEL%"
+echo [app   ] %time% exited with code %_code%
+if exist "%GFS_JVM_FLAG%" goto :watchdog_loop
+exit /b %_code%
 
 :summary
 echo.

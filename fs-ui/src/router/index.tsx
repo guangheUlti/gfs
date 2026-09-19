@@ -8,6 +8,7 @@ import SharePage from '@/pages/share'
 import StoragePage from '@/pages/storage'
 import ServicesPage from '@/pages/services'
 import TransferPage from '@/pages/transfer'
+import { SettingsPage } from '@/pages/settings'
 import {
   createBrowserRouter,
   Navigate,
@@ -121,6 +122,10 @@ export const router = createBrowserRouter([
       {
         path: 'transfer',
         element: <TransferPage />,
+      },
+      {
+        path: 'settings',
+        element: <SettingsPage />,
       },
     ],
   },

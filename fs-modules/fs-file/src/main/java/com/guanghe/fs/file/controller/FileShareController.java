@@ -8,8 +8,10 @@ import com.guanghe.fs.file.domain.qry.FileShareQry;
 import com.guanghe.fs.file.domain.vo.*;
 import com.guanghe.fs.file.service.FileShareAccessRecordService;
 import com.guanghe.fs.file.service.FileShareService;
+import com.guanghe.fs.file.serving.FileServingPipeline;
 import com.guanghe.fs.framework.common.domain.PageResult;
 import com.guanghe.fs.framework.common.domain.Result;
+import com.guanghe.fs.framework.preview.config.FilePreviewConfig;
 import com.guanghe.fs.log.constant.OperationType;
 import com.guanghe.fs.log.service.SysOperationLogService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,11 +20,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.MediaTypeFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -43,6 +44,12 @@ public class FileShareController {
 
     @Autowired
     private SysOperationLogService operationLogService;
+
+    @Autowired
+    private FileServingPipeline servingPipeline;
+
+    @Autowired
+    private FilePreviewConfig previewConfig;
 
     @GetMapping("/pages")
     @Operation(summary = "获取我的分享", description = "分页获取我的分享列表")
@@ -163,42 +170,18 @@ public class FileShareController {
     }
 
     @GetMapping("/{shareId}/raw/{fileId}")
-    @Operation(summary = "直链访问分享文件", description = "绕过分享页直接访问分享内文件，白名单媒体类型内联展示，其余类型转为下载")
-    public ResponseEntity<Resource> rawShareFile(@PathVariable String shareId, @PathVariable String fileId) {
-        FileDownloadVO fileDownload = fileShareService.downloadFiles(shareId, fileId);
-        String fileName = fileDownload.getFileName();
-        String encodedName = URLEncoder.encode(fileName, StandardCharsets.UTF_8);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("X-Content-Type-Options", "nosniff");
-        // 直链仅内联安全的媒体类型（排除 svg/html 等可执行内容），其余回退为附件下载
-        MediaType mediaType = MediaTypeFactory.getMediaType(fileName).orElse(null);
-        if (mediaType != null && isSafeInlineType(mediaType)) {
-            if (MediaType.TEXT_PLAIN_VALUE.equals(mediaType.toString())) {
-                mediaType = new MediaType(mediaType, StandardCharsets.UTF_8);
-            }
-            headers.add(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + encodedName + "\"");
-            headers.add(HttpHeaders.CONTENT_TYPE, mediaType.toString());
-        } else {
-            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + encodedName + "\"");
-            headers.add(HttpHeaders.CONTENT_TYPE, "application/octet-stream");
-        }
-
-        return ResponseEntity.ok()
-                .headers(headers)
-                .contentLength(fileDownload.getFileSize())
-                .body(fileDownload.getResource());
-    }
-
-    private boolean isSafeInlineType(MediaType mediaType) {
-        String type = mediaType.toString();
-        if (type.startsWith("image/")) {
-            return !type.contains("svg");
-        }
-        return type.startsWith("video/") || type.startsWith("audio/")
-                || MediaType.APPLICATION_PDF_VALUE.equals(type)
-                || MediaType.TEXT_PLAIN_VALUE.equals(type)
-                || MediaType.APPLICATION_JSON_VALUE.equals(type);
+    @Operation(summary = "直链访问分享文件", description = "绕过分享页直接访问分享内文件，白名单媒体类型内联展示（支持 Range 断点/视频拖拽），其余类型转为下载")
+    public ResponseEntity<StreamingResponseBody> rawShareFile(@PathVariable String shareId,
+                                                              @PathVariable String fileId,
+                                                              @RequestHeader(value = "Range", required = false) String rangeHeader) {
+        FileDownloadVO meta = fileShareService.getShareFileMeta(shareId, fileId);
+        long size = meta.getFileSize() == null ? -1 : meta.getFileSize();
+        FileServingPipeline.Request request = FileServingPipeline.Request
+                .inline(meta.getFileName(), size,
+                        (start, end) -> fileShareService.openShareFileRange(shareId, fileId, start, end))
+                // 直链媒体类型内联、可 Range（修复原实现不支持拖进度条）；svg/html 等不安全类型由管道自动回退 attachment
+                .withMaxRangeSize(previewConfig.getMaxRangeSize());
+        return servingPipeline.serve(request, rangeHeader);
     }
 
     @PostMapping("/{shareId}/folder-download/tasks/{folderId}")

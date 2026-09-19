@@ -2,6 +2,5 @@
   {"label":"服务端点","dataType":"string","identifier":"webdavEndpoint","validation":{"required":true}},
   {"label":"用户名","dataType":"string","identifier":"webdavUsername","validation":{"required":true}},
   {"label":"密码","dataType":"string","identifier":"webdavPassword","validation":{"required":true}},
-  {"label":"基础路径","dataType":"string","identifier":"webdavBasePath","validation":{"required":false}},
-  {"label":"分片临时目录","dataType":"string","identifier":"tempPath","validation":{"required":false}}
+  {"label":"基础路径","dataType":"string","identifier":"webdavBasePath","validation":{"required":false}}
 ]

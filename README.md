@@ -82,7 +82,7 @@
     - **SFTP 服务端**：独立端口（默认 9022，Apache MINA SSHD），支持 sshfs 挂载与 WinSCP / FileZilla / OpenSSH 客户端
     - 认证复用网盘账号（BCrypt 校验），删除进回收站与 Web 端语义一致，内容级去重秒传
     - 启用/停用热生效，服务重启后自动拉起；SFTP 主机密钥持久化，重启后客户端无指纹告警
-    - 已知限制：WebDAV 未实现 LOCK（Office 在线编辑保存可能失败，资源管理器映射不受影响）；SFTP 仅支持顺序写
+    - 已知限制：WebDAV 的 LOCK/UNLOCK 为最小内存实现（锁不持久化，重启/多实例失效，单实例够用）；SFTP 仅支持顺序写
 
 ### 预览支持
 
@@ -243,7 +243,7 @@ flowchart TB
         CORE["fs-common-core"]
         ORM["fs-orm (MyBatis-Flex)"]
         SECURITY["fs-security (Sa-Token)"]
-        PREVIEW["fs-preview (LibreOffice)"]
+        PREVIEW["fs-preview"]
         REDIS["fs-redis"]
         SSE["fs-sse"]
         SWAGGER["fs-swagger"]

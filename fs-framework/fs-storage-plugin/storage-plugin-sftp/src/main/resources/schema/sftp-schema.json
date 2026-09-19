@@ -4,6 +4,5 @@
   {"label":"用户名","dataType":"string","identifier":"sftpUsername","validation":{"required":true}},
   {"label":"密码","dataType":"string","identifier":"sftpPassword","validation":{"required":false}},
   {"label":"私钥路径","dataType":"string","identifier":"sftpPrivateKeyPath","validation":{"required":false}},
-  {"label":"KnownHosts路径","dataType":"string","identifier":"sftpKnownHostsPath","validation":{"required":false}},
-  {"label":"分片临时目录","dataType":"string","identifier":"tempPath","validation":{"required":false}}
+  {"label":"KnownHosts路径","dataType":"string","identifier":"sftpKnownHostsPath","validation":{"required":false}}
 ]

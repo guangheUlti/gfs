@@ -19,10 +19,6 @@ logs/
 # 部署包与发行包（约 1 GB，不参与镜像构建）
 release/
 
-# LibreOffice 便携版（Linux 容器用系统 libreoffice）
-LibreOffice/
-LibreOfficePortable/
-
 # 文档、图片资产（不参与构建）
 .images/
 

@@ -1,13 +1,12 @@
 package com.guanghe.fs.service.manager;
 
-import cn.hutool.core.util.StrUtil;
 import com.guanghe.fs.service.domain.ServiceSetting;
 import com.guanghe.fs.service.service.ServiceSettingService;
-import com.guanghe.fs.service.sftp.SftpServerHolder;
+import com.guanghe.fs.service.spi.ExternalFileService;
+import com.guanghe.fs.service.spi.ExternalFileServiceRegistry;
 import com.mybatisflex.core.query.QueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.SmartLifecycle;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -17,10 +16,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import static com.guanghe.fs.service.domain.table.ServiceSettingTableDef.SERVICE_SETTING;
 
 /**
- * 对外文件服务生命周期管理：
- * - 应用启动时自动拉起 enabled=1 的服务（SFTP 启动 MINA server；WebDAV 仅开关 filter 放行标志）
- * - 配置变更热生效：enabled 翻转 → start/stop；端口/地址变化且保持启用 → 重启
- * - 启动失败不抛给保存动作，状态置 error 并把异常信息带给 /list
+ * 对外文件服务生命周期管理（SPI 驱动）：
+ * - 协议实现通过 {@link ExternalFileServiceRegistry} 注册（WebDAV/SFTP/FTP…），
+ *   管理器只做生命周期编排，不含任何协议特有逻辑；
+ * - 应用启动时自动拉起 enabled=1 的服务；
+ * - 配置变更热生效：apply 交给协议实现自行启动/重启/停止；
+ * - 启动失败不抛给保存动作，状态置 error 并把异常信息带给 /list。
  */
 @Slf4j
 @Component
@@ -32,7 +33,7 @@ public class ProtocolServiceManager implements SmartLifecycle {
     public static final String STATUS_ERROR = "error";
 
     private final ServiceSettingService serviceSettingService;
-    private final ObjectProvider<SftpServerHolder> sftpServerHolderProvider;
+    private final ExternalFileServiceRegistry registry;
 
     /** 各服务运行状态（内存态，不落库） */
     private final Map<String, ServiceRuntime> runtimes = new ConcurrentHashMap<>();
@@ -40,9 +41,9 @@ public class ProtocolServiceManager implements SmartLifecycle {
     private volatile boolean running = false;
 
     public ProtocolServiceManager(ServiceSettingService serviceSettingService,
-                                  ObjectProvider<SftpServerHolder> sftpServerHolderProvider) {
+                                  ExternalFileServiceRegistry registry) {
         this.serviceSettingService = serviceSettingService;
-        this.sftpServerHolderProvider = sftpServerHolderProvider;
+        this.registry = registry;
     }
 
     @Override
@@ -64,11 +65,13 @@ public class ProtocolServiceManager implements SmartLifecycle {
     @Override
     public void stop() {
         running = false;
-        try {
-            sftpServerHolderProvider.ifAvailable(SftpServerHolder::stopIfRunning);
-        } catch (Exception e) {
-            log.warn("SFTP 服务停止异常", e);
-        }
+        registry.all().values().forEach(impl -> {
+            try {
+                impl.stop();
+            } catch (Exception e) {
+                log.warn("对外文件服务停止异常: type={}", impl.type(), e);
+            }
+        });
         runtimes.clear();
     }
 
@@ -100,32 +103,32 @@ public class ProtocolServiceManager implements SmartLifecycle {
         return runtimes.computeIfAbsent(type, t -> new ServiceRuntime(STATUS_STOPPED, null, null, null));
     }
 
-    private void applyType(String type, ServiceSetting setting) {
+    private void applyType(String type, ServiceSetting setting) throws Exception {
+        ExternalFileService impl = registry.get(type);
+        if (impl == null) {
+            log.warn("未注册的对外文件服务类型，忽略: type={}", type);
+            return;
+        }
         boolean wantRunning = setting.getEnabled() != null && setting.getEnabled() == 1;
         ServiceRuntime current = status(type);
-        boolean isRunning = STATUS_RUNNING.equals(current.status());
+        boolean isRunning = STATUS_RUNNING.equals(current.status()) || impl.isRunning();
+        int port = setting.getPort() == null ? 0 : setting.getPort();
+        String bindAddress = setting.getBindAddress();
 
-        if (ServiceSettingService.TYPE_SFTP.equals(type)) {
-            SftpServerHolder holder = sftpServerHolderProvider.getObject();
-            int port = setting.getPort() == null ? 9022 : setting.getPort();
-            String bindAddress = StrUtil.emptyToDefault(setting.getBindAddress(), "0.0.0.0");
-            if (wantRunning && isRunning) {
-                holder.restart(port, bindAddress);
-                runtimes.put(type, ServiceRuntime.running(port, bindAddress));
-            } else if (wantRunning) {
-                holder.start(port, bindAddress);
-                runtimes.put(type, ServiceRuntime.running(port, bindAddress));
-            } else if (isRunning) {
-                holder.stopIfRunning();
-                runtimes.put(type, new ServiceRuntime(STATUS_STOPPED, null, port, bindAddress));
+        if (wantRunning) {
+            // 重启判断：socket 型服务端口/地址变化需重启；非 socket 型 apply 幂等
+            boolean needRestart = isRunning && impl.socketBased()
+                    && (current.port() != null && current.port() != port
+                        || current.bindAddress() != null && !current.bindAddress().equals(bindAddress));
+            if (needRestart) {
+                impl.stop();
             }
-        } else if (ServiceSettingService.TYPE_WEBDAV.equals(type)) {
-            // WebDAV 无独立 socket：enabled 标志即运行状态，filter 据此放行或 503
-            if (wantRunning) {
-                runtimes.put(type, ServiceRuntime.running(null, setting.getBindAddress()));
-            } else {
-                runtimes.put(type, new ServiceRuntime(STATUS_STOPPED, null, null, setting.getBindAddress()));
-            }
+            impl.apply(setting);
+            runtimes.put(type, ServiceRuntime.running(impl.socketBased() ? port : null, bindAddress));
+        } else {
+            impl.stop();
+            runtimes.put(type, new ServiceRuntime(STATUS_STOPPED, null,
+                    impl.socketBased() ? port : null, bindAddress));
         }
     }
 

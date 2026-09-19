@@ -33,7 +33,8 @@ import java.util.regex.Pattern;
  * 语义约定（§6 行为边界）：
  * - DELETE = 进回收站（与 Web 端一致，可恢复）
  * - PUT 覆盖同名文件；新建走精确重名语义（不自动改名）
- * - LOCK/UNLOCK 不实现（501）；PROPPATCH 返回 207 空 multistatus（Explorer 兼容）
+ * - LOCK/UNLOCK：内存锁实现（RFC 4918），写路径对「他人独占锁」返回 423（见 {@link DavLockManager}）
+ * - PROPPATCH 返回 207 空 multistatus（Explorer 兼容）
  */
 @Slf4j
 @RestController
@@ -41,13 +42,14 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class DavController {
 
-    private static final String ALLOW = "OPTIONS, GET, HEAD, PUT, PROPFIND, MKCOL, DELETE, MOVE, COPY";
+    private static final String ALLOW = "OPTIONS, GET, HEAD, PUT, POST, PROPFIND, MKCOL, DELETE, MOVE, COPY, LOCK, UNLOCK";
 
     /** 仅匹配单段 bytes 范围：bytes=start-end / bytes=N- / bytes=-N */
     private static final Pattern RANGE_PATTERN = Pattern.compile("bytes=(\\d*)-(\\d*)");
 
     private final FileInfoService fileInfoService;
     private final DavPathResolver pathResolver;
+    private final DavLockManager lockManager;
 
     @RequestMapping("/**")
     public void handle(HttpServletRequest request, HttpServletResponse response) throws IOException {
@@ -60,14 +62,11 @@ public class DavController {
             case "GET", "HEAD" -> handleGet(request, response, relativePath);
             case "PUT" -> handlePut(request, response, relativePath);
             case "MKCOL" -> handleMkcol(response, relativePath);
-            case "DELETE" -> handleDelete(response, relativePath);
-            case "MOVE" -> handleMove(response, relativePath, request.getHeader("Destination"), false);
-            case "COPY" -> handleMove(response, relativePath, request.getHeader("Destination"), true);
-            case "LOCK", "UNLOCK" -> {
-                response.setStatus(HttpServletResponse.SC_NOT_IMPLEMENTED);
-                response.setContentType("text/plain; charset=UTF-8");
-                response.getWriter().write("LOCK/UNLOCK is not supported (documented limitation)");
-            }
+            case "DELETE" -> handleDelete(request, response, relativePath);
+            case "MOVE" -> handleMove(request, response, relativePath, request.getHeader("Destination"), false);
+            case "COPY" -> handleMove(request, response, relativePath, request.getHeader("Destination"), true);
+            case "LOCK" -> handleLock(request, response, relativePath);
+            case "UNLOCK" -> handleUnlock(request, response, relativePath);
             default -> {
                 response.setStatus(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
                 response.setHeader("Allow", ALLOW);
@@ -135,6 +134,130 @@ public class DavController {
         response.setContentType("application/xml; charset=UTF-8");
         response.setContentLength(body.length);
         response.getOutputStream().write(body);
+    }
+
+    /** LOCK：对已存在资源加写锁（RFC 4918）。最小实现不做 lock-null 资源创建。 */
+    private void handleLock(HttpServletRequest request, HttpServletResponse response, String relativePath)
+            throws IOException {
+        DavPathResolver.ResolvedPath resolved = resolveQuietly(response, relativePath);
+        if (resolved == null) {
+            return;
+        }
+        if (resolved.file() == null) {
+            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+        FileInfo file = resolved.file();
+        String owner = cn.dev33.satoken.stp.StpUtil.getLoginIdAsString();
+
+        LockBodyInfo body = parseLockBody(request.getInputStream());
+        DavLockManager.Scope scope = "shared".equals(body.scope())
+                ? DavLockManager.Scope.SHARED : DavLockManager.Scope.EXCLUSIVE;
+        String ownerLabel = StrUtil.isBlank(body.owner()) ? owner : body.owner();
+        String ifToken = request.getHeader("If");
+        long ttl = parseTimeout(request.getHeader("Timeout"));
+
+        DavLockManager.AcquireOutcome outcome =
+                lockManager.acquire(file.getId(), scope, owner, ownerLabel, ttl, ifToken);
+        if (outcome.conflict()) {
+            DavLockManager.ActiveLock clash = outcome.lock();
+            byte[] xml = PropfindXmlWriter.wrapLockConflict(href(relativePath), clash.token(),
+                    clash.scope().name().toLowerCase(), clash.ownerLabel(), clash.timeoutSeconds())
+                    .getBytes(StandardCharsets.UTF_8);
+            response.setStatus(423); // Locked
+            response.setContentType("application/xml; charset=UTF-8");
+            response.setContentLength(xml.length);
+            response.getOutputStream().write(xml);
+            return;
+        }
+
+        DavLockManager.ActiveLock lock = outcome.lock();
+        byte[] xml = PropfindXmlWriter.wrapLock(href(relativePath), lock.token(),
+                lock.scope().name().toLowerCase(), lock.ownerLabel(), lock.timeoutSeconds())
+                .getBytes(StandardCharsets.UTF_8);
+        response.setStatus(HttpServletResponse.SC_OK);
+        response.setHeader("Lock-Token", "<" + lock.token() + ">");
+        response.setHeader("Timeout", "Second-" + lock.timeoutSeconds());
+        response.setContentType("application/xml; charset=UTF-8");
+        response.setContentLength(xml.length);
+        response.getOutputStream().write(xml);
+    }
+
+    /** UNLOCK：持 Lock-Token 头释放锁；token 不匹配返回 409。 */
+    private void handleUnlock(HttpServletRequest request, HttpServletResponse response, String relativePath)
+            throws IOException {
+        String tokenHeader = request.getHeader("Lock-Token");
+        if (StrUtil.isBlank(tokenHeader)) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            return;
+        }
+        String token = tokenHeader.trim();
+        if (token.startsWith("<") && token.endsWith(">")) {
+            token = token.substring(1, token.length() - 1);
+        }
+        DavPathResolver.ResolvedPath resolved = resolveQuietly(response, relativePath);
+        if (resolved == null) {
+            return;
+        }
+        if (resolved.file() == null) {
+            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+        boolean removed = lockManager.unlock(resolved.file().getId(), token);
+        if (removed) {
+            response.setStatus(HttpServletResponse.SC_NO_CONTENT);
+        } else {
+            response.setStatus(HttpServletResponse.SC_CONFLICT);
+            response.setContentType("text/plain; charset=UTF-8");
+            response.getWriter().write("no matching lock token");
+        }
+    }
+
+    /**
+     * 目标被「他人」独占锁且本请求未携带匹配 If token → 已写 423，返回 true（调用方应中止）。
+     * 本人持锁或共享锁不阻断，读路径不受影响。
+     */
+    private boolean rejectedByLock(HttpServletRequest request, HttpServletResponse response, FileInfo file) {
+        if (file == null) {
+            return false;
+        }
+        String owner = cn.dev33.satoken.stp.StpUtil.getLoginIdAsString();
+        if (lockManager.isLockedByOther(file.getId(), owner)
+                && !lockManager.matchesToken(file.getId(), request.getHeader("If"))) {
+            response.setStatus(423);
+            return true;
+        }
+        return false;
+    }
+
+    /** LOCK 请求体解析产物 */
+    private record LockBodyInfo(String scope, String owner) {
+    }
+
+    /** 解析 LOCK 请求体：识别 lockscope（exclusive/shared）与 owner（可选）。空体/解析失败退化为独占+登录者。 */
+    private LockBodyInfo parseLockBody(InputStream in) throws IOException {
+        String xml = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        String scope = xml.matches("(?is).*<lockscope>[\\s\\S]*<shared/>.*") ? "shared" : "exclusive";
+        String owner = "";
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("(?is)<(?:\"[^\"]*\"|'[^']*'|[^>\\\"']+)?owner(?:\"[^\"]*\"|'[^']*'|[^>])*>(.*?)</(?:\"[^\"]*\"|'[^']*'|[^>\\\"']+)?owner\\s*>")
+                .matcher(xml);
+        if (m.find()) {
+            owner = m.group(1).replaceAll("<[^>]+>", "").trim();
+        }
+        return new LockBodyInfo(scope, owner);
+    }
+
+    /** 解析 Timeout 头：Second-N → N；Infinite/缺省 → 默认（由锁管理器钳制）。 */
+    private long parseTimeout(String header) {
+        if (StrUtil.isBlank(header) || header.toLowerCase().contains("infinite")) {
+            return DavLockManager.DEFAULT_TIMEOUT_SECONDS;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("Second-(\\d+)").matcher(header);
+        if (m.find()) {
+            return Long.parseLong(m.group(1));
+        }
+        return DavLockManager.DEFAULT_TIMEOUT_SECONDS;
     }
 
     /** GET/HEAD：流式输出文件内容（支持 HTTP Range 分片/断点续传） */
@@ -253,6 +376,10 @@ public class DavController {
             response.setStatus(HttpServletResponse.SC_CONFLICT);
             return;
         }
+        // 覆盖已被他人独占锁的文件 → 423
+        if (rejectedByLock(request, response, resolved.file())) {
+            return;
+        }
         try {
             String parentId = resolved.parent() == null ? null : resolved.parent().getId();
             fileInfoService.writeFileContent(parentId, resolved.name(), request.getInputStream(),
@@ -302,13 +429,18 @@ public class DavController {
     }
 
     /** DELETE：进回收站（与 Web 端语义一致，可恢复） */
-    private void handleDelete(HttpServletResponse response, String relativePath) throws IOException {
+    private void handleDelete(HttpServletRequest request, HttpServletResponse response, String relativePath)
+            throws IOException {
         DavPathResolver.ResolvedPath resolved = resolveQuietly(response, relativePath);
         if (resolved == null) {
             return;
         }
         if (resolved.file() == null) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+        // 删除被他人独占锁的文件 → 423
+        if (rejectedByLock(request, response, resolved.file())) {
             return;
         }
         try {
@@ -322,7 +454,7 @@ public class DavController {
     }
 
     /** MOVE = rename/move；COPY = 复制（只加引用不复制物理对象） */
-    private void handleMove(HttpServletResponse response, String relativePath,
+    private void handleMove(HttpServletRequest request, HttpServletResponse response, String relativePath,
                             String destination, boolean copy) throws IOException {
         DavPathResolver.ResolvedPath resolved = resolveQuietly(response, relativePath);
         if (resolved == null) {
@@ -330,6 +462,10 @@ public class DavController {
         }
         if (resolved.file() == null) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+        // 源文件被他人独占锁 → 423
+        if (rejectedByLock(request, response, resolved.file())) {
             return;
         }
         if (StrUtil.isBlank(destination)) {
@@ -350,6 +486,10 @@ public class DavController {
         }
         DavPathResolver.ResolvedPath dest = pathResolver.resolve(destNorm);
         if (dest.existed()) {
+            // 覆盖目标被他人独占锁 → 423
+            if (rejectedByLock(request, response, dest.file())) {
+                return;
+            }
             // 覆盖已有目标：先移入回收站再执行（保持 MOVE over = 覆盖语义）
             fileInfoService.moveFilesToRecycleBin(List.of(dest.file().getId()));
         }
