@@ -22,7 +22,10 @@ import { createFolder } from '@/api/file'
 import { UPLOAD_LIMITS, formatFileSize, shouldFilterFile } from '@/config/upload-limits'
 import { progressCalculator } from '@/utils/progress-calculator'
 import { stateMachine } from '@/utils/transfer-state-machine'
-import { navigateToTransferIfEnabled } from '@/services/auto-navigate'
+import {
+  navigateToTransferIfEnabled,
+  navigateBackFromAutoTransferIfIdle,
+} from '@/services/auto-navigate'
 import i18n from '@/i18n'
 import type { FileItem } from '@/types/file'
 import { useUserStore } from './user'
@@ -37,6 +40,9 @@ interface TransferStore {
   uploadQueue: string[]
   completedActionsTriggered: Set<string>
   errorNotificationTriggered: Set<string>
+  /** 当前在传输页是否因「任务添加后自动跳转」进入（非手动切换），用于完成后自动跳回文件页 */
+  autoArrivedOnTransfer: boolean
+  setAutoArrivedOnTransfer: (value: boolean) => void
 
   // Getters
   getTaskList: () => TransferTask[]
@@ -143,6 +149,8 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
   uploadQueue: [],
   completedActionsTriggered: new Set(),
   errorNotificationTriggered: new Set(),
+  autoArrivedOnTransfer: false,
+  setAutoArrivedOnTransfer: (value) => set({ autoArrivedOnTransfer: value }),
 
   getTaskList: () => Array.from(get().tasks.values()),
 
@@ -237,6 +245,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
         i18n.t('transfer:page.toastDownloadComplete', { name: task.fileName })
       )
       progressCalculator.clear(task.taskId)
+      navigateBackFromAutoTransferIfIdle()
       return
     }
 
@@ -256,6 +265,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     if (uploadExecutor.getTaskContext(task.taskId)) {
       uploadExecutor.cancel(task.taskId)
     }
+    navigateBackFromAutoTransferIfIdle()
   },
 
   setTaskError: (taskId, errorMessage) => {
