@@ -58,6 +58,9 @@ export function RestartOverlay({ onClose, onRecovered }: RestartOverlayProps) {
     }, TICK_MS)
 
     const probe = async (): Promise<void> => {
+      // 必须先观察到后端下线一次，才能把后续探测成功判定为「新实例已就绪」；
+      // 否则点击瞬间后端尚未退出，第一轮探测会误判为重启完成
+      let sawDown = false
       while (!cancelled) {
         if (Date.now() - startedAt > PROBE_TIMEOUT_MS) {
           if (!cancelled) setPhase('timeout')
@@ -67,17 +70,22 @@ export function RestartOverlay({ onClose, onRecovered }: RestartOverlayProps) {
           // showErrorMessage=false：重启期间请求必然失败，网络层错误
           // 不弹全局 toast，只静默重试；401 也仅意味后端尚未就绪
           await getJvmMemoryWithProbe()
-          if (!cancelled) {
-            setProgress(100)
-            setPhase('success')
-            onRecovered?.()
-            if (timerRef.current !== null) {
-              window.clearInterval(timerRef.current)
-              timerRef.current = null
+          if (sawDown) {
+            // 已观察到下线且现在能通：新实例就绪
+            if (!cancelled) {
+              setProgress(100)
+              setPhase('success')
+              onRecovered?.()
+              if (timerRef.current !== null) {
+                window.clearInterval(timerRef.current)
+                timerRef.current = null
+              }
             }
+            return
           }
-          return
+          // 未观察到下线前成功：旧实例仍在响应，继续等它退出
         } catch {
+          sawDown = true
           // 后端仍在重启，等待下一轮
         }
         await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))

@@ -117,13 +117,19 @@ export function SettingsSystemManagement() {
   const restartMutation = useMutation({
     mutationFn: (mb: number | null) => restartBackend(mb),
     onSuccess: () => {
+      // 响应送达仅代表重启指令已受理；遮罩在确认时已打开，后续由存活探测接管
       setConfirmRestart(false)
-      setRestarting(true)
-      setRestartOverlayOpen(true)
     },
     onError: (err: any) => {
       setConfirmRestart(false)
-      if (!err?.handled) toast.error(t('systemManagement.restartFailed'))
+      if (err?.response) {
+        // 后端仍在线并明确返回了错误（如写重启标记失败），按普通失败处理
+        setRestartOverlayOpen(false)
+        setRestarting(false)
+        if (!err?.handled) toast.error(t('systemManagement.restartFailed'))
+      }
+      // 无 response = 连接被退出中的后端捶断，属重启预期：
+      // 遮罩保持打开，由存活探测判定恢复
     },
   })
 
@@ -305,7 +311,16 @@ export function SettingsSystemManagement() {
             <AlertDialogCancel disabled={restarting}>
               {t('systemManagement.cancel')}
             </AlertDialogCancel>
-            <AlertDialogAction onClick={() => restartMutation.mutate(parseValue() as number | null)} disabled={restarting}>
+            <AlertDialogAction
+              onClick={() => {
+                // 确认即开遮罩：不依赖重启接口的响应，
+                // 服务器网络延迟下后端可能先于响应退出
+                setRestarting(true)
+                setRestartOverlayOpen(true)
+                restartMutation.mutate(parseValue() as number | null)
+              }}
+              disabled={restarting}
+            >
               {t('systemManagement.restart')}
             </AlertDialogAction>
           </AlertDialogFooter>

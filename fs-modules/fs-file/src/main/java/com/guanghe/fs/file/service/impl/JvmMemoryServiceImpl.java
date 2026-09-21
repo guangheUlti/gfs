@@ -97,15 +97,17 @@ public class JvmMemoryServiceImpl implements JvmMemoryService {
         try {
             Files.createDirectories(restartFlagPath.getParent());
             Files.write(restartFlagPath, List.of("1"), StandardCharsets.UTF_8);
-            log.info("已写重启标记，将于 1 秒后退出并由看门狗按最新配置重新拉起: {}", restartFlagPath);
+            log.info("已写重启标记，将于 3 秒后退出并由看门狗按最新配置重新拉起: {}", restartFlagPath);
         } catch (Exception e) {
             throw new IllegalStateException("写入重启标记失败: " + e.getMessage(), e);
         }
-        // 留出时间让响应 flush 给浏览器，再由看门狗接管重启
+        // 留足时间让响应送达浏览器（公网服务器存在百毫秒级延迟，前端
+        // 确认弹窗关闭与遮罩打开均不依赖该响应，此处仅保证不误报失败），
+        // 再由看门狗接管重启
         scheduler.schedule(() -> {
             log.info("触发 JVM 退出，看门狗将自动重启");
             System.exit(0);
-        }, 1, TimeUnit.SECONDS);
+        }, 3, TimeUnit.SECONDS);
     }
 
     /** 读取配置文件中已保存的 MB 值；文件缺失/为空/非法返回 null（JVM 默认） */
