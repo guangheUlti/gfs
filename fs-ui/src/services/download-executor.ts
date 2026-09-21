@@ -1,5 +1,6 @@
 import { downloadChunk, getDownloadedChunks, initDownload, pauseUpload } from '@/api/transfer'
 import type { InitDownloadResultVO } from '@/types/transfer'
+import { getToken } from '@/utils/auth'
 
 export interface DownloadItemInput {
   fileId: string
@@ -9,6 +10,8 @@ export interface DownloadItemInput {
 
 export interface DownloadStartMeta {
   taskId: string
+  /** 可选：新任务由队列传入；恢复/重试场景依赖 OPFS，无需此字段 */
+  fileId?: string
   fileName: string
   fileSize: number
   chunkSize: number
@@ -19,6 +22,8 @@ export interface DownloadStartMeta {
 
 interface DownloadTaskContext {
   taskId: string
+  /** 后端文件 ID，OPFS 不可用时大文件走服务端流式直下需要 */
+  fileId: string
   fileName: string
   fileSize: number
   chunkSize: number
@@ -106,6 +111,8 @@ class DownloadExecutor {
   private readonly RETRY_BASE_DELAY = 1000
   /** 不限速时任务内并行拉取的分片数 */
   private readonly UNLIMITED_CHUNK_CONCURRENCY = 3
+  /** OPFS 不可用时允许内存降级的最大文件大小（512MB） */
+  private readonly MEMORY_FALLBACK_MAX_SIZE = 512 * 1024 * 1024
 
   private taskContexts = new Map<string, DownloadTaskContext>()
   /** 已通过 initDownload 占住后端并发名额的任务（含暂停中，终态才释放） */
@@ -255,6 +262,7 @@ class DownloadExecutor {
   private createContext(meta: DownloadStartMeta): DownloadTaskContext {
     return {
       taskId: meta.taskId,
+      fileId: meta.fileId ?? '',
       fileName: meta.fileName,
       fileSize: meta.fileSize,
       chunkSize: meta.chunkSize,
@@ -309,6 +317,7 @@ class DownloadExecutor {
 
       const context = this.createContext({
         taskId: vo.taskId,
+        fileId: item.fileId,
         fileName: vo.fileName,
         fileSize: vo.fileSize,
         chunkSize: vo.chunkSize,
@@ -334,9 +343,22 @@ class DownloadExecutor {
     const { taskId, totalChunks, downloadedChunks } = context
 
     if (!(await this.ensureStorage(context))) {
-      // OPFS 不可用且内存模式初始化失败，直接报错
-      this.notifyError(taskId, '无法创建本地下载缓存')
-      return
+      // OPFS 仅在安全上下文（HTTPS / localhost）可用：http 部署时
+      // navigator.storage.getDirectory 不存在。
+      // 小文件降级内存模式保可用；大文件改走后端流式直下接口，
+      // 由浏览器原生下载落盘，无前端内存上限。
+      if (context.fileSize <= this.MEMORY_FALLBACK_MAX_SIZE) {
+        context.memoryChunks = new Map()
+      } else if (context.fileId) {
+        this.triggerNativeDownload(context)
+        return
+      } else {
+        this.notifyError(
+          taskId,
+          '当前站点未启用 HTTPS，浏览器不支持本地下载缓存，且文件超出内存下载上限（512MB），请通过 HTTPS 访问后重试'
+        )
+        return
+      }
     }
 
     try {
@@ -409,7 +431,7 @@ class DownloadExecutor {
         context.retryCount.delete(chunkIndex)
         await this.writeChunk(context, chunkIndex, blob)
         return true
-      } catch (error) {
+      } catch {
         context.activeRequests.delete(chunkIndex)
 
         if (context.isCancelled || context.isPaused) return false
@@ -492,6 +514,43 @@ class DownloadExecutor {
     this.notifyTransition(taskId, 'completed')
   }
 
+  /**
+   * 大文件 + OPFS 不可用（http 部署）时的兜底：走后端流式下载接口
+   * GET /apis/transfer/download/{fileId}（attachment），浏览器原生下载落盘，
+   * 无前端内存上限。进度由浏览器接管，任务直接置为完成；token 经查询参数
+   * 传递（sa-token is-read-body 专为无法自定义请求头的下载/SSE 场景预留）。
+   */
+  private triggerNativeDownload(context: DownloadTaskContext): void {
+    const { taskId, fileId } = context
+    try {
+      const token = getToken()
+      const base =
+        (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
+      const params = new URLSearchParams()
+      if (token) params.set('Authorization', `Bearer ${token}`)
+      const query = params.size > 0 ? `?${params.toString()}` : ''
+      const url = `${base}/apis/transfer/download/${fileId}${query}`
+
+      const link = document.createElement('a')
+      link.href = url
+      link.rel = 'noopener'
+      link.style.display = 'none'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      this.notifyTransition(taskId, 'completed')
+    } catch {
+      this.notifyError(
+        taskId,
+        '无法创建本地下载缓存，且浏览器直连下载触发失败，请通过 HTTPS 访问后重试'
+      )
+    } finally {
+      this.taskContexts.delete(taskId)
+      this.releaseSlotAndPump(taskId)
+    }
+  }
+
   // ==================== 本地存储（OPFS 优先 / 内存降级） ====================
 
   private tempFileName(taskId: string): string {
@@ -564,7 +623,12 @@ class DownloadExecutor {
     if (!context.opfsFileHandle && !context.memoryChunks) {
       await this.ensureStorage(context)
     }
-    if (!context.opfsFileHandle) return
+    if (!context.opfsFileHandle) {
+      // 内存模式（OPFS 不可用）没有本地临时文件可校验/续传，
+      // 丢弃 Redis 记录的整体重下，避免拼出含空洞的文件
+      context.downloadedChunks = new Set()
+      return
+    }
 
     try {
       const file = await context.opfsFileHandle.getFile()
