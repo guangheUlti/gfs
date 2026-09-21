@@ -337,6 +337,6 @@ INSERT INTO "storage_platform" ("name", "identifier", "config_scheme", "icon", "
 
 -- 系统管理员（用户名与 security.super-admin.username 配置一致即拥有存储/日志管理权限）
 INSERT INTO "sys_user" ("id", "username", "password", "nickname", "avatar", "status", "created_at", "updated_at", "last_login_at")
-VALUES ('01jrvgs943q0f43h0aa5mjde0y', 'admin', '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918', 'Administrator', NULL, 0, '2026-07-23 14:38:36', '2026-07-23 14:38:36', NULL);
+VALUES ('01jrvgs943q0f43h0aa5mjde0y', 'admin', '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918', 'admin', NULL, 0, '2026-07-23 14:38:36', '2026-07-23 14:38:36', NULL);
 
 SET session_replication_role = 'origin';

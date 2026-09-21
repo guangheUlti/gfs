@@ -444,7 +444,7 @@ CREATE TABLE `sys_user` (
 
 LOCK TABLES `sys_user` WRITE;
 /*!40000 ALTER TABLE `sys_user` DISABLE KEYS */;
-INSERT INTO `sys_user` VALUES ('01jrvgs943q0f43h0aa5mjde0y','admin','$2a$12$gX2uOHIyWy78xH5Yd1GKeOyYfeyEwsyG2QSSrkXI8bVYHZZku0T0.','Administrator',NULL,0,'2026-07-23 14:38:36','2026-09-18 14:05:43','2026-09-18 14:05:43');
+INSERT INTO `sys_user` VALUES ('01jrvgs943q0f43h0aa5mjde0y','admin','$2a$12$gX2uOHIyWy78xH5Yd1GKeOyYfeyEwsyG2QSSrkXI8bVYHZZku0T0.','admin',NULL,0,'2026-07-23 14:38:36','2026-09-18 14:05:43','2026-09-18 14:05:43');
 /*!40000 ALTER TABLE `sys_user` ENABLE KEYS */;
 UNLOCK TABLES;
 DROP TABLE IF EXISTS `sys_user_transfer_setting`;
