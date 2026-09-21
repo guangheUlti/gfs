@@ -24,6 +24,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { formatCapacityBytes } from '@/utils/format'
+import { RestartOverlay } from './restart-overlay'
 
 const MIN_MB = 256
 const MAX_MB = 65536
@@ -70,6 +71,7 @@ export function SettingsSystemManagement() {
   const [value, setValue] = useState('')
   const [confirmRestart, setConfirmRestart] = useState(false)
   const [restarting, setRestarting] = useState(false)
+  const [restartOverlayOpen, setRestartOverlayOpen] = useState(false)
 
   const { data: sysInfo, isLoading: sysLoading } = useQuery({
     queryKey: ['systemInfo'],
@@ -117,7 +119,7 @@ export function SettingsSystemManagement() {
     onSuccess: () => {
       setConfirmRestart(false)
       setRestarting(true)
-      toast.success(t('systemManagement.restartTriggered'))
+      setRestartOverlayOpen(true)
     },
     onError: (err: any) => {
       setConfirmRestart(false)
@@ -255,6 +257,36 @@ export function SettingsSystemManagement() {
           </p>
         </div>
       </section>
+
+      {/* 重启等待遮罩：虚拟进度 + 存活探测，成功后刷新页面数据 */}
+      {restartOverlayOpen && (
+        <RestartOverlay
+          onClose={() => {
+            setRestartOverlayOpen(false)
+            setRestarting(false)
+          }}
+          onRecovered={() => {
+            queryClient.invalidateQueries({ queryKey: ['systemInfo'] })
+            queryClient.invalidateQueries({ queryKey: ['jvm-memory'] })
+            getJvmMemory()
+              .then((jvm) => {
+                const seed =
+                  jvm?.configuredMaxMemoryMb ??
+                  (jvm?.runtimeMaxBytes
+                    ? Math.round(jvm.runtimeMaxBytes / MB)
+                    : '')
+                setValue(
+                  seed !== null && seed !== undefined && seed !== ''
+                    ? String(seed)
+                    : ''
+                )
+              })
+              .catch(() => {
+                /* 保持当前输入值 */
+              })
+          }}
+        />
+      )}
 
       <AlertDialog
         open={confirmRestart}
