@@ -22,7 +22,7 @@ import type { SidebarNavIconPair } from '@/components/layout/types'
 import { SettingsProfile } from './profile'
 import { SettingsAppearance } from './appearance'
 import { SettingsTransfer } from './transfer'
-import { SettingsUserApproval } from './user-approval'
+import { SettingsUserManagement } from './user-management'
 import { SettingsLoginManagement } from './login-management'
 import { SettingsFeatureToggles } from './feature-toggles'
 import { SettingsSystemManagement } from './system-management'
@@ -33,7 +33,7 @@ export type SettingsTab =
   | 'profile'
   | 'appearance'
   | 'transfer'
-  | 'user-approval'
+  | 'user-management'
   | 'login-management'
   | 'feature-toggles'
   | 'system-management'
@@ -77,8 +77,8 @@ function buildNavConfig(
       label: t('nav.groupSystem'),
       items: [
         {
-          title: t('nav.userApproval'),
-          tab: 'user-approval',
+          title: t('nav.userManagement'),
+          tab: 'user-management',
           icon: { line: RiAdminLine, fill: RiAdminFill },
           superAdminOnly: true,
         },
@@ -133,9 +133,9 @@ function SettingsPanel({ tab }: { tab: SettingsTab }) {
       return <SettingsAppearance />
     case 'transfer':
       return <SettingsTransfer />
-    case 'user-approval':
+    case 'user-management':
       return user?.isSuperAdmin ? (
-        <SettingsUserApproval />
+        <SettingsUserManagement />
       ) : (
         <NoPermission />
       )

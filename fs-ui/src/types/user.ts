@@ -27,6 +27,15 @@ export interface PendingUser {
   createdAt: string
 }
 
+/** 管理员手动创建用户 POST `/apis/admin/users` */
+export interface AdminUserCreateParams {
+  username: string
+  password: string
+  confirmPassword: string
+  /** 可选，缺省回退用户名 */
+  nickname?: string
+}
+
 /** 在线登录终端（一个 token 即一个终端） */
 export interface OnlineTerminal {
   /** 同一账号内从 0 开始，用于定位要下线的会话 */

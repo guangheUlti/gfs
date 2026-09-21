@@ -9,7 +9,7 @@
     "profile": "个人资料",
     "preference": "偏好设置",
     "transfer": "传输设置",
-    "userApproval": "用户审核",
+    "userManagement": "用户管理",
     "loginManagement": "登录管理",
     "featureToggles": "功能开关",
     "systemManagement": "系统管理"
@@ -60,9 +60,24 @@
     "loadFailed": "加载功能开关失败",
     "saveFailed": "保存功能开关失败"
   },
-  "userApproval": {
-    "pageTitle": "用户审核",
-    "pageDescription": "审核新注册用户的注册申请，通过后即可登录系统",
+  "userManagement": {
+    "pageTitle": "用户管理",
+    "pageDescription": "手动创建用户，或审核新注册用户的申请，通过后即可登录系统",
+    "createUser": "创建用户",
+    "createTitle": "创建用户",
+    "createDescription": "手动创建的账号无需审核，创建后即可登录系统",
+    "colUsername": "用户名",
+    "colPassword": "密码",
+    "colConfirmPassword": "确认密码",
+    "colNickname": "昵称（可选）",
+    "nicknamePlaceholder": "留空时使用用户名",
+    "passwordMismatch": "两次输入的密码不一致",
+    "passwordTooShort": "密码至少需要 6 个字符",
+    "created": "已创建用户 {{name}}，该账号可直接登录",
+    "createFailed": "创建用户失败",
+    "cancel": "取消",
+    "creating": "创建中...",
+    "create": "创建",
     "refresh": "刷新",
     "colUser": "用户",
     "colRegisteredAt": "注册时间",
@@ -164,6 +179,8 @@
     "concurrentDownloadDesc": "同时进行下载的文件数量",
     "chunkSize": "分片大小",
     "chunkSizeDesc": "上传文件时的分片大小，推荐 5 MB",
+    "autoNavigate": "任务添加后跳转进度页",
+    "autoNavigateDesc": "开启后添加上传/下载任务自动前往传输页查看进度；关闭则留在当前页，之后从传输页返回会恢复原目录",
     "unitCount": "{{count}} 个"
   },
   "profile": {

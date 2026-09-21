@@ -1,10 +1,15 @@
 import { request } from './request'
-import type { OnlineUser, PendingUser } from '@/types/user'
+import type { AdminUserCreateParams, OnlineUser, PendingUser } from '@/types/user'
 
 /**
  * 系统级管理 API（全局操作，仅系统管理员可用）
  */
 export const adminApi = {
+  /** 手动创建用户（免审核，创建即可登录） */
+  createUser: (data: AdminUserCreateParams) => {
+    return request.post<void>('/apis/admin/users', data)
+  },
+
   /** 待审核用户列表（新注册需管理员审核） */
   listPendingUsers: () => {
     return request.get<PendingUser[]>('/apis/admin/users/pending')

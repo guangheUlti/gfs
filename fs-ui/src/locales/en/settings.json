@@ -9,7 +9,7 @@
     "profile": "Profile",
     "preference": "Preferences",
     "transfer": "Transfer",
-    "userApproval": "User Approval",
+    "userManagement": "User Management",
     "loginManagement": "Login Management",
     "featureToggles": "Feature Toggles",
     "systemManagement": "System Management"
@@ -60,9 +60,24 @@
     "loadFailed": "Failed to load feature toggles",
     "saveFailed": "Failed to save feature toggles"
   },
-  "userApproval": {
-    "pageTitle": "User Approval",
-    "pageDescription": "Review new user registrations. Approved users can sign in",
+  "userManagement": {
+    "pageTitle": "User Management",
+    "pageDescription": "Create users manually or review new registrations. Approved users can sign in",
+    "createUser": "Create User",
+    "createTitle": "Create User",
+    "createDescription": "Manually created accounts skip approval and can sign in immediately",
+    "colUsername": "Username",
+    "colPassword": "Password",
+    "colConfirmPassword": "Confirm Password",
+    "colNickname": "Nickname (optional)",
+    "nicknamePlaceholder": "Defaults to the username",
+    "passwordMismatch": "Passwords do not match",
+    "passwordTooShort": "Password must be at least 6 characters",
+    "created": "User {{name}} created and ready to sign in",
+    "createFailed": "Failed to create user",
+    "cancel": "Cancel",
+    "creating": "Creating...",
+    "create": "Create",
     "refresh": "Refresh",
     "colUser": "User",
     "colRegisteredAt": "Registered",
@@ -164,6 +179,8 @@
     "concurrentDownloadDesc": "How many files to download at the same time",
     "chunkSize": "Chunk size",
     "chunkSizeDesc": "Upload chunk size; 5 MB is recommended",
+    "autoNavigate": "Go to progress page after adding tasks",
+    "autoNavigateDesc": "When enabled, adding an upload/download task navigates to the transfer page; when disabled you stay on the current page, and returning from the transfer page restores your folder",
     "unitCount": "{{count}}"
   },
   "profile": {
