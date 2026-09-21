@@ -11,10 +11,13 @@ import TransferPage from '@/pages/transfer'
 import { SettingsPage } from '@/pages/settings'
 import {
   createBrowserRouter,
+  type LoaderFunctionArgs,
   Navigate,
   Outlet,
+  redirect,
   useLocation,
 } from 'react-router-dom'
+import { useFilesLocationStore } from '@/store/files-location'
 import { AppLayout } from '@/components/layout/app-layout'
 import { NoPermission } from '@/components/no-permission'
 
@@ -46,6 +49,26 @@ function ProtectedRoute({
   }
 
   return <>{children}</>
+}
+
+/**
+ * 裸 /files 重定向：用户从文件页切去其他页面（如传输页）再点侧边栏「文件」时，
+ * 恢复上次浏览的目录位置（URL 是位置的唯一权威，在路由挂载前完成跳转，
+ * 不会先白发一次根目录请求）。无记忆则按原样进入根目录。
+ */
+function filesLoader({ request }: LoaderFunctionArgs) {
+  const url = new URL(request.url)
+  // 仅拦截无查询参数的裸 /files（侧边栏/根重定向进入）；
+  // 目录内导航始终携带参数，不做记忆劫持
+  if (url.pathname !== '/files' || url.search) {
+    return null
+  }
+  const { locationSearch, clearLocation } = useFilesLocationStore.getState()
+  if (!locationSearch) {
+    return null
+  }
+  clearLocation()
+  return redirect(`/files?${locationSearch}`)
 }
 
 /** 登录后的应用外壳 */
@@ -102,6 +125,7 @@ export const router = createBrowserRouter([
       {
         path: 'files',
         element: <FileManagerPage />,
+        loader: filesLoader,
       },
       {
         path: 'storage',

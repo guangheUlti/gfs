@@ -173,6 +173,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     import('@/store/feature').then(({ useFeatureStore }) => {
       useFeatureStore.getState().reset()
     })
+    import('@/store/files-location').then(({ useFilesLocationStore }) => {
+      useFilesLocationStore.getState().clear()
+    })
   }, [])
 
   const updateUser = useCallback((patch: Partial<UserInfo>) => {

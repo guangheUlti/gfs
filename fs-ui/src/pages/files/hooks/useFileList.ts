@@ -13,6 +13,7 @@ import type {
 } from '@/types/file'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { getFileList, getFolderPath } from '@/api/file'
+import { useFilesLocationStore } from '@/store/files-location'
 import { useToolbarSearch } from '@/hooks/useToolbarSearch'
 
 /** 每页条数（与后端约定一致） */
@@ -44,6 +45,8 @@ export function useFileList() {
   const fileListRef = useRef<FileItem[]>([])
   const fetchGenerationRef = useRef(0)
   const loadMoreInFlightRef = useRef(false)
+  /** 快照恢复仅执行一次（StrictMode 双跑防护） */
+  const restoredRef = useRef(false)
 
   /** 已确定没有后续页（空页 / 不足一页 / 已凑满 total / 合并无增量），避免 total 不准时无限请求 */
   const [noMorePages, setNoMorePages] = useState(false)
@@ -109,56 +112,61 @@ export function useFileList() {
     ]
   )
 
-  const fetchInitial = useCallback(async () => {
-    const gen = ++fetchGenerationRef.current
-    setLoading(true)
-    setNoMorePages(false)
-    try {
-      const isFavoritesView = viewType === 'favorites'
-      const isRecentsView = viewType === 'recents'
+  const fetchInitial = useCallback(
+    async (options?: { silent?: boolean }) => {
+      const gen = ++fetchGenerationRef.current
+      if (!options?.silent) {
+        setLoading(true)
+      }
+      setNoMorePages(false)
+      try {
+        const isFavoritesView = viewType === 'favorites'
+        const isRecentsView = viewType === 'recents'
 
-      const response = await getFileList(buildQuery(1))
-      if (gen !== fetchGenerationRef.current) return
-
-      const records = response?.records ?? []
-      const t = response?.total ?? records.length
-
-      setFileList(records)
-      setTotal(t)
-      pageRef.current = 1
-
-      const firstPageDone =
-        records.length === 0 ||
-        records.length < FILE_LIST_PAGE_SIZE ||
-        (t > 0 && records.length >= t)
-      setNoMorePages(firstPageDone)
-
-      if (isFavoritesView || isRecentsView || fileType || isDirFilter) {
-        setBreadcrumbPath([])
-      } else {
-        await updateBreadcrumbPath(currentParentId)
+        const response = await getFileList(buildQuery(1))
         if (gen !== fetchGenerationRef.current) return
+
+        const records = response?.records ?? []
+        const t = response?.total ?? records.length
+
+        setFileList(records)
+        setTotal(t)
+        pageRef.current = 1
+
+        const firstPageDone =
+          records.length === 0 ||
+          records.length < FILE_LIST_PAGE_SIZE ||
+          (t > 0 && records.length >= t)
+        setNoMorePages(firstPageDone)
+
+        if (isFavoritesView || isRecentsView || fileType || isDirFilter) {
+          setBreadcrumbPath([])
+        } else {
+          await updateBreadcrumbPath(currentParentId)
+          if (gen !== fetchGenerationRef.current) return
+        }
+      } catch (error) {
+        console.error('Failed to fetch file list:', error)
+        if (gen !== fetchGenerationRef.current) return
+        setFileList([])
+        setTotal(0)
+        pageRef.current = 1
+        setNoMorePages(true)
+      } finally {
+        if (gen === fetchGenerationRef.current) {
+          setLoading(false)
+        }
       }
-    } catch (error) {
-      console.error('Failed to fetch file list:', error)
-      if (gen !== fetchGenerationRef.current) return
-      setFileList([])
-      setTotal(0)
-      pageRef.current = 1
-      setNoMorePages(true)
-    } finally {
-      if (gen === fetchGenerationRef.current) {
-        setLoading(false)
-      }
-    }
-  }, [
-    buildQuery,
-    viewType,
-    fileType,
-    isDirFilter,
-    currentParentId,
-    updateBreadcrumbPath,
-  ])
+    },
+    [
+      buildQuery,
+      viewType,
+      fileType,
+      isDirFilter,
+      currentParentId,
+      updateBreadcrumbPath,
+    ]
+  )
 
   useLayoutEffect(() => {
     totalRef.current = total
@@ -208,6 +216,51 @@ export function useFileList() {
   const refresh = useCallback(() => {
     fetchInitial()
   }, [fetchInitial])
+
+  /**
+   * 持续记录当前位置与列表快照（全部文件视图）。
+   * 用 ref 同步而非卸载闭包：卸载时 effect 闭包里的 fileList 是过期值。
+   * 离开页面时 store 里就是最新位置，回到裸 /files 由 router loader 恢复。
+   */
+  useEffect(() => {
+    if (viewType || fileType || isDirFilter) return
+    const search = window.location.search.replace(/^\?/, '')
+    if (loading || fileList.length === 0) {
+      // 列表尚未加载：只更新位置，不覆盖可能存在的旧快照
+      useFilesLocationStore.getState().saveLocationOnly(search)
+      return
+    }
+    useFilesLocationStore.getState().saveLocation({
+      search,
+      files: fileList,
+      total,
+    })
+  }, [viewType, fileType, isDirFilter, loading, fileList, total])
+
+  /**
+   * 首次挂载且命中快照（位置一致）时：先用快照渲染避免 loading 闪烁，
+   * 再静默拉第一页校准（可能其他端改动了文件）。守卫防 StrictMode 双跑。
+   */
+  useEffect(() => {
+    if (restoredRef.current) return
+    restoredRef.current = true
+    if (viewType || fileType || isDirFilter) return
+    const snapshot = useFilesLocationStore.getState().takeSnapshot(
+      window.location.search.replace(/^\?/, '')
+    )
+    if (!snapshot) return
+    setFileList(snapshot.files)
+    setTotal(snapshot.total)
+    pageRef.current = 1
+    const firstPageDone =
+      snapshot.files.length === 0 ||
+      snapshot.files.length < FILE_LIST_PAGE_SIZE ||
+      (snapshot.total > 0 && snapshot.files.length >= snapshot.total)
+    setNoMorePages(firstPageDone)
+    fetchInitial({ silent: true })
+    // 仅在首次挂载时尝试恢复，依赖数组保持最小
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   /** 本地更新部分文件字段，避免不必要的列表刷新 */
   const updateFileItems = useCallback(
