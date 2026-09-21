@@ -72,6 +72,13 @@ public interface SysUserService extends IService<SysUser> {
     void setPassword(PasswordAddCmd cmd);
 
     /**
+     * 管理员手动创建用户（免审核，创建即可登录）
+     *
+     * @param cmd 创建参数
+     */
+    void createUserByAdmin(AdminUserCreateCmd cmd);
+
+    /**
      * 查询待审核用户列表（新注册需管理员审核）
      *
      * @return 待审核用户列表

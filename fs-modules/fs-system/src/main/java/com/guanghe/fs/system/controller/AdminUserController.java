@@ -3,6 +3,7 @@ package com.guanghe.fs.system.controller;
 import com.guanghe.fs.framework.common.domain.Result;
 import com.guanghe.fs.log.constant.OperationType;
 import com.guanghe.fs.log.service.SysOperationLogService;
+import com.guanghe.fs.system.domain.dto.AdminUserCreateCmd;
 import com.guanghe.fs.system.domain.vo.PendingUserVO;
 import com.guanghe.fs.system.service.SysUserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,6 +30,21 @@ public class AdminUserController {
     private final SysUserService userService;
 
     private final SysOperationLogService operationLogService;
+
+    @Operation(summary = "手动创建用户（免审核，创建即可登录）")
+    @PostMapping
+    public Result<?> create(@Validated @RequestBody AdminUserCreateCmd cmd) {
+        userService.createUserByAdmin(cmd);
+        operationLogService.recordSuccess(
+                OperationType.CREATE_USER,
+                "管理员创建用户",
+                "USER",
+                cmd.getUsername(),
+                null,
+                null
+        );
+        return Result.ok();
+    }
 
     @Operation(summary = "待审核用户列表")
     @GetMapping("/pending")

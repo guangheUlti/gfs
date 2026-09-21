@@ -203,6 +203,35 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         this.updateById(user);
     }
 
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public void createUserByAdmin(AdminUserCreateCmd cmd) {
+        // 管理员创建入口同样受防暴力约束（复用注册失败计数，防脚本滥用）
+        loginGuardService.checkRegisterAllowed();
+        try {
+            if (this.getByUsername(cmd.getUsername()) != null) {
+                throw new BusinessException(I18nUtils.getMessage("user.username.exists"));
+            }
+            SysUser user = new SysUser();
+            user.setUsername(cmd.getUsername());
+            user.setPassword(passwordHashService.encode(cmd.getPassword()));
+            // 昵称可选，缺省回退用户名
+            user.setNickname(cmd.getNickname() == null || cmd.getNickname().isBlank()
+                    ? cmd.getUsername()
+                    : cmd.getNickname());
+            // 管理员创建即审定，无需再走注册审核
+            user.setStatus(UserStatus.NORMAL);
+            this.save(user);
+
+            // 初始化用户传输配置
+            userTransferSettingService.initUserTransferSetting(user.getId());
+        } catch (BusinessException e) {
+            loginGuardService.recordRegisterFailure();
+            throw e;
+        }
+        loginGuardService.clearRegisterFailures();
+    }
+
     @Override
     public List<PendingUserVO> listPendingUsers() {
         assertSuperAdmin();

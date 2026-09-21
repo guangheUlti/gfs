@@ -18,10 +18,10 @@ public class PasswordEditCmd{
     private String oldPassword;
 
     @NotBlank(message = "newPassword不能为空")
-    @Size(min = 8, max = 128, message = "newPassword长度必须在8到128个字符之间")
+    @Size(min = 6, max = 128, message = "newPassword长度必须在6到128个字符之间")
     private String newPassword;
 
     @NotBlank(message = "confirmPassword不能为空")
-    @Size(min = 8, max = 128, message = "confirmPassword长度必须在8到128个字符之间")
+    @Size(min = 6, max = 128, message = "confirmPassword长度必须在6到128个字符之间")
     private String confirmPassword;
 }
