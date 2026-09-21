@@ -53,13 +53,11 @@ public class SysUserTransferSettingServiceImpl extends ServiceImpl<SysUserTransf
         );
         if (transferSetting == null) {
             SysUserTransferSetting newTransferSetting = SysUserTransferSetting.init(userId);
+            applyEdit(newTransferSetting, cmd);
             this.save(newTransferSetting);
         } else {
             transferSetting.setUserId(userId);
-            transferSetting.setConcurrentDownloadQuantity(cmd.getConcurrentDownloadQuantity());
-            transferSetting.setConcurrentUploadQuantity(cmd.getConcurrentUploadQuantity());
-            transferSetting.setDownloadSpeedLimit(cmd.getDownloadSpeedLimit());
-            transferSetting.setChunkSize(cmd.getChunkSize());
+            applyEdit(transferSetting, cmd);
             this.updateById(transferSetting);
         }
     }
@@ -68,6 +66,17 @@ public class SysUserTransferSettingServiceImpl extends ServiceImpl<SysUserTransf
     @CacheEvict(value = "userTransferSetting", key = "#userId")
     public void deleteUserTransferSetting(String userId) {
         this.remove(new QueryWrapper().where(SYS_USER_TRANSFER_SETTING.USER_ID.eq(userId)));
+    }
+
+    /** 命令 -> 实体映射：autoNavigateTransfer 可选，未传时保留原值 */
+    private void applyEdit(SysUserTransferSetting setting, UserTransferSettingEditCmd cmd) {
+        setting.setConcurrentDownloadQuantity(cmd.getConcurrentDownloadQuantity());
+        setting.setConcurrentUploadQuantity(cmd.getConcurrentUploadQuantity());
+        setting.setDownloadSpeedLimit(cmd.getDownloadSpeedLimit());
+        setting.setChunkSize(cmd.getChunkSize());
+        if (cmd.getAutoNavigateTransfer() != null) {
+            setting.setAutoNavigateTransfer(cmd.getAutoNavigateTransfer());
+        }
     }
 
     @Override

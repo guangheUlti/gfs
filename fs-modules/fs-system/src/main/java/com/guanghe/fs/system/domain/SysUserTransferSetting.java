@@ -54,6 +54,12 @@ public class SysUserTransferSetting extends BaseEntity {
      */
     private Long chunkSize;
 
+    /**
+     * 添加上传/下载任务后是否自动跳转到传输进度页；
+     * false 时留在当前页（文件页目录记忆负责跨页往返恢复）
+     */
+    private Boolean autoNavigateTransfer;
+
 
     public static SysUserTransferSetting init(String userId) {
         SysUserTransferSetting sysUserTransferSetting = new SysUserTransferSetting();
@@ -62,6 +68,12 @@ public class SysUserTransferSetting extends BaseEntity {
         sysUserTransferSetting.setConcurrentUploadQuantity(3);
         sysUserTransferSetting.setConcurrentDownloadQuantity(3);
         sysUserTransferSetting.setChunkSize(5L * 1024 * 1024); // 默认 5MB
+        sysUserTransferSetting.setAutoNavigateTransfer(true); // 默认任务添加后跳转传输页
         return sysUserTransferSetting;
+    }
+
+    /** null 安全读取：老数据未落库时按默认开启处理 */
+    public boolean isAutoNavigateTransferOrDefault() {
+        return autoNavigateTransfer == null || autoNavigateTransfer;
     }
 }

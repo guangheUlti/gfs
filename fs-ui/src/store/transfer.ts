@@ -22,6 +22,7 @@ import { createFolder } from '@/api/file'
 import { UPLOAD_LIMITS, formatFileSize, shouldFilterFile } from '@/config/upload-limits'
 import { progressCalculator } from '@/utils/progress-calculator'
 import { stateMachine } from '@/utils/transfer-state-machine'
+import { navigateToTransferIfEnabled } from '@/services/auto-navigate'
 import i18n from '@/i18n'
 import type { FileItem } from '@/types/file'
 import { useUserStore } from './user'
@@ -899,6 +900,9 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
         count: downloadable.length,
       })
     )
+
+    // 传输设置开了「自动跳转」时前往传输页；否则留在文件页
+    navigateToTransferIfEnabled()
   },
 
   replaceDownloadTempTask: (tempId, realTaskId, meta) => {

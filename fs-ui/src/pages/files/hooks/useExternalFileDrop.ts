@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useTransferStore } from '@/store/transfer'
+import { navigateToTransferIfEnabled } from '@/services/auto-navigate'
 import {
   hasExternalFiles,
   readDataTransferFiles,
@@ -100,6 +101,8 @@ export function useExternalFileDrop({
       toast.success(t('operations.uploadFileAdded'), {
         description: t('operations.uploadCheckProgress'),
       })
+      // 传输设置开了「自动跳转」时前往传输页；否则留在文件页
+      navigateToTransferIfEnabled()
     },
     [
       enabled,

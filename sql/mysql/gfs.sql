@@ -457,6 +457,7 @@ CREATE TABLE `sys_user_transfer_setting` (
   `concurrent_upload_quantity` int NOT NULL DEFAULT '1' COMMENT '并发上传数量',
   `concurrent_download_quantity` int NOT NULL DEFAULT '1' COMMENT '并发下载数量',
   `chunk_size` bigint NOT NULL COMMENT '分片大小',
+  `auto_navigate_transfer` tinyint NOT NULL DEFAULT '1' COMMENT '任务添加后自动跳转传输页 1开 0关',
   `created_at` datetime NOT NULL COMMENT '创建时间',
   `updated_at` datetime NOT NULL COMMENT '修改时间',
   PRIMARY KEY (`id`) USING BTREE,

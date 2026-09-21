@@ -24,6 +24,9 @@ export interface TransferSetting {
   /** 分片大小 单位：字节 */
   chunkSize: number
 
+  /** 添加上传/下载任务后是否自动跳转传输进度页（老数据可能缺省，默认开） */
+  autoNavigateTransfer?: boolean
+
   /** 创建时间 */
   createdAt?: string
 
@@ -46,6 +49,9 @@ export interface UpdateTransferSettingCmd {
 
   /** 分片大小（必填，单位：字节） */
   chunkSize: number
+
+  /** 任务添加后自动跳转传输页（可选；老客户端未传时后端保留原值） */
+  autoNavigateTransfer?: boolean
 }
 
 /**

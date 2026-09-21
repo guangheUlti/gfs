@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useUserStore } from '@/store/user'
 import { useTransferStore } from '@/store/transfer'
+import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
 import { userApi } from '@/api/user'
 import {
@@ -31,6 +32,7 @@ type TransferFormValues = {
   concurrentUploadQuantity: number
   concurrentDownloadQuantity: number
   chunkSize: number
+  autoNavigateTransfer: boolean
 }
 
 export function TransferForm() {
@@ -43,6 +45,7 @@ export function TransferForm() {
         concurrentUploadQuantity: z.number().min(1).max(3),
         concurrentDownloadQuantity: z.number().min(1).max(3),
         chunkSize: z.number(),
+        autoNavigateTransfer: z.boolean(),
       }),
     [t]
   )
@@ -61,6 +64,8 @@ export function TransferForm() {
       concurrentUploadQuantity: 3,
       concurrentDownloadQuantity: 3,
       chunkSize: 5 * 1024 * 1024,
+      // 老数据缺省时按默认开启处理
+      autoNavigateTransfer: true,
     },
   })
 
@@ -83,6 +88,7 @@ export function TransferForm() {
         concurrentUploadQuantity: settings.concurrentUploadQuantity || 3,
         concurrentDownloadQuantity: settings.concurrentDownloadQuantity || 3,
         chunkSize: settings.chunkSize || 5 * 1024 * 1024,
+        autoNavigateTransfer: settings.autoNavigateTransfer !== false,
       })
       settingsReadyRef.current = true
     } catch {
@@ -111,6 +117,7 @@ export function TransferForm() {
         concurrentUploadQuantity: data.concurrentUploadQuantity,
         concurrentDownloadQuantity: data.concurrentDownloadQuantity,
         chunkSize: data.chunkSize,
+        autoNavigateTransfer: data.autoNavigateTransfer,
       })
       toast.success(t('transfer.saved'))
       await loadTransferSetting()
@@ -354,6 +361,27 @@ export function TransferForm() {
                   </Select>
                 </SettingsRow>
                 <FormMessage className='pt-2 pb-1' />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='autoNavigateTransfer'
+            render={({ field }) => (
+              <FormItem className='space-y-0'>
+                <SettingsRow
+                  label={t('transfer.autoNavigate')}
+                  description={t('transfer.autoNavigateDesc')}
+                >
+                  <Switch
+                    checked={field.value}
+                    disabled={loading}
+                    onCheckedChange={(value) => {
+                      handleImmediateChange(() => field.onChange(value))
+                    }}
+                  />
+                </SettingsRow>
               </FormItem>
             )}
           />

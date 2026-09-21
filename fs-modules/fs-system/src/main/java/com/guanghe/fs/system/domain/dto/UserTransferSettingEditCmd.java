@@ -21,4 +21,7 @@ public class UserTransferSettingEditCmd {
 
     @NotNull(message = "分片大小不能为空")
     private Long chunkSize;
+
+    /** 可选；兼容老客户端未传时不改动原值 */
+    private Boolean autoNavigateTransfer;
 }
