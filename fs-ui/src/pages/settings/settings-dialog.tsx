@@ -92,6 +92,8 @@ function buildNavConfig(
           title: t('nav.featureToggles'),
           tab: 'feature-toggles',
           icon: { line: RiEqualizer2Line, fill: RiEqualizer2Fill },
+          // 功能开关是全局配置（影响所有用户），仅系统管理员可见/可改
+          superAdminOnly: true,
         },
         {
           title: t('nav.systemManagement'),

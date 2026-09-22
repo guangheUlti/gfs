@@ -155,6 +155,7 @@ export function PasswordChangeForm({
                       type='button'
                       variant='ghost'
                       size='sm'
+                      tabIndex={-1}
                       className='absolute top-0 right-0 h-full px-3 py-2 hover:bg-transparent'
                       onClick={() => setShowOldPassword(!showOldPassword)}
                     >
@@ -191,6 +192,7 @@ export function PasswordChangeForm({
                     type='button'
                     variant='ghost'
                     size='sm'
+                    tabIndex={-1}
                     className='absolute top-0 right-0 h-full px-3 py-2 hover:bg-transparent'
                     onClick={() => setShowNewPassword(!showNewPassword)}
                   >
@@ -222,16 +224,16 @@ export function PasswordChangeForm({
                     type={showConfirmPassword ? 'text' : 'password'}
                     placeholder={t('account.confirmPasswordPh')}
                     {...field}
-                  />
-                  <Button
-                    type='button'
-                    variant='ghost'
-                    size='sm'
-                    className='absolute top-0 right-0 h-full px-3 py-2 hover:bg-transparent'
-                    onClick={() =>
-                      setShowConfirmPassword(!showConfirmPassword)
-                    }
-                  >
+                  />                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='sm'
+                      tabIndex={-1}
+                      className='absolute top-0 right-0 h-full px-3 py-2 hover:bg-transparent'
+                      onClick={() =>
+                        setShowConfirmPassword(!showConfirmPassword)
+                      }
+                    >
                     {showConfirmPassword ? (
                       <EyeOff className='h-4 w-4' />
                     ) : (

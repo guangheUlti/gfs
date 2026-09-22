@@ -29,6 +29,8 @@ import static com.guanghe.fs.system.domain.table.SysFeatureToggleTableDef.SYS_FE
 @RequiredArgsConstructor
 public class SysFeatureToggleServiceImpl extends ServiceImpl<SysFeatureToggleMapper, SysFeatureToggle> implements SysFeatureToggleService {
 
+    private final SysUserService sysUserService;
+
     @Override
     @Cacheable(value = "featureToggles", key = "'all'")
     public Map<String, Boolean> listToggles() {
@@ -44,12 +46,13 @@ public class SysFeatureToggleServiceImpl extends ServiceImpl<SysFeatureToggleMap
     }
 
     /**
-     * 功能开关对所有登录用户开放修改：开关影响的是普通用户的日常功能
-     * （回收站/分享/收藏等），管理员与普通用户需求一致，无需限制
+     * 功能开关为全局配置（影响所有用户），仅系统管理员可修改；
+     * 查询接口对所有登录用户开放（前端需按开关显隐入口）
      */
     @Override
     @CacheEvict(value = "featureToggles", key = "'all'")
     public void updateToggles(FeatureToggleEditCmd cmd) {
+        sysUserService.assertSuperAdmin();
 
         for (String featureKey : cmd.getToggles().keySet()) {
             if (!FeatureKeys.ALL.contains(featureKey)) {
