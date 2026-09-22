@@ -161,6 +161,12 @@ class UploadExecutor {
         return
       }
 
+      // 取消/暂停竞态防护：checkUpload 期间任务可能已被取消（后端记录已删除），
+      // 继续查询分片会拿到「任务不存在」误报
+      if (context.isCancelled || context.isPaused) {
+        return
+      }
+
       const uploadedChunks = await getUploadedChunks(taskId)
       const uploadedChunksList = uploadedChunks || []
       uploadedChunksList.forEach((index) => context.uploadedChunks.add(index))
@@ -183,6 +189,11 @@ class UploadExecutor {
         this.notifyTransition(taskId, 'merging')
       }
     } catch (error) {
+      // 已取消/已暂停的任务不再上报错误：取消竞态下后端可能返回「任务不存在」，
+      // 上报会把任务从「已取消」错误翻转为「失败」并弹无意义 toast
+      if (context.isCancelled || context.isPaused) {
+        return
+      }
       if (isNetworkError(error)) {
         this.notifyTransition(taskId, 'paused')
       } else {
@@ -205,6 +216,10 @@ class UploadExecutor {
     context.isPaused = false
 
     try {
+      if (context.isCancelled) {
+        return
+      }
+
       const backendUploadedChunks = await getUploadedChunks(taskId)
       const uploadedChunksList = backendUploadedChunks || []
 
@@ -227,6 +242,9 @@ class UploadExecutor {
         )
       }
     } catch (error) {
+      if (context.isCancelled) {
+        return
+      }
       if (isNetworkError(error)) {
         this.notifyTransition(taskId, 'paused')
       } else {

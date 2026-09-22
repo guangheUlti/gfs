@@ -1126,6 +1126,12 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       newFileCache.delete(taskId)
       set({ fileCache: newFileCache })
     } catch (error) {
+      // 后端已无此任务（重复取消/记录已被删）：目标已达成，不回滚不报错
+      const message = `${error?.message ?? ''}${error?.response?.data?.message ?? ''}`
+      if (message.includes('任务不存在')) {
+        progressCalculator.clear(taskId)
+        return
+      }
       get().transitionTo(taskId, task.status)
       throw error
     }

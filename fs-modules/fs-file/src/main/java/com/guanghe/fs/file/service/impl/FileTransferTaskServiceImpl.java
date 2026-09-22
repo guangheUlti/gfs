@@ -796,6 +796,14 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     public void cancelTransfer(String taskId) {
         FileTransferTask task = null;
         try {
+            // 幂等取消：任务不存在（已被取消删除/竞态重复取消）视为目标已达成，直接返回。
+            // 注意权限：仅在任务确实不存在时跳过；存在但属于他人仍走 getAuthorizedTask 抛无权限
+            FileTransferTask existing = getByTaskId(taskId);
+            if (existing == null
+                    && cacheManager.getTaskFromCache(taskId) == null) {
+                log.info("取消任务时任务已不存在，视为已取消: taskId={}", taskId);
+                return;
+            }
             task = getAuthorizedTask(taskId);
             TransferTaskStatus currentStatus = task.getStatus();
 
