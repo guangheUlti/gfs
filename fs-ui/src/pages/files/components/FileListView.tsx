@@ -128,7 +128,9 @@ export function FileListView({
   const { hasPermission } = usePermission()
   const canRead = hasPermission('file:read')
   const canWrite = hasPermission('file:write')
-  const canShare = hasPermission('file:share')
+  // 分享功能开关关闭（或缺省）时隐藏分享入口
+  const shareEnabled = useFeatureStore((s) => !!s.toggles.share)
+  const canShare = shareEnabled && hasPermission('file:share')
 
   // 拖拽功能
   const {

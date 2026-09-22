@@ -92,7 +92,6 @@ function buildNavConfig(
           title: t('nav.featureToggles'),
           tab: 'feature-toggles',
           icon: { line: RiEqualizer2Line, fill: RiEqualizer2Fill },
-          superAdminOnly: true,
         },
         {
           title: t('nav.systemManagement'),

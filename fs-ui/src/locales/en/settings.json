@@ -52,13 +52,15 @@
   },
   "featureToggles": {
     "pageTitle": "Feature Toggles",
-    "pageDescription": "Control whether feature entries are shown. Disabled features disappear from the sidebar",
+    "pageDescription": "Turn system features on or off. Changes apply to all users",
     "favorite": "Favorites",
     "favoriteDesc": "When enabled, the Favorites entry appears in the sidebar",
     "history": "Recents",
     "historyDesc": "When enabled, the Recents entry appears in the sidebar",
     "recycleBin": "Recycle Bin",
     "recycleBinDesc": "When enabled, deleted files move to the Recycle Bin and can be restored. When disabled, deletion permanently removes files",
+    "share": "Share",
+    "shareDesc": "When enabled, the Share entry appears on the files page for creating share links. When disabled, the entry is hidden while existing share links remain accessible",
     "loadFailed": "Failed to load feature toggles",
     "saveFailed": "Failed to save feature toggles"
   },

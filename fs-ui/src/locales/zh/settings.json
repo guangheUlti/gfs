@@ -52,13 +52,15 @@
   },
   "featureToggles": {
     "pageTitle": "功能开关",
-    "pageDescription": "控制系统功能入口是否展示，关闭后侧边栏不再出现对应菜单",
+    "pageDescription": "控制系统功能的开启与关闭，对所有用户生效",
     "favorite": "收藏",
     "favoriteDesc": "开启后侧边栏显示「收藏」菜单",
     "history": "历史",
     "historyDesc": "开启后侧边栏显示「历史」菜单",
     "recycleBin": "回收站",
     "recycleBinDesc": "开启后删除文件移入回收站，可还原；关闭后删除直接永久删除，不可恢复",
+    "share": "分享",
+    "shareDesc": "开启后文件页出现「分享」入口，可生成分享链接；关闭后不显示分享入口，已生成的分享链接访问不受影响",
     "loadFailed": "加载功能开关失败",
     "saveFailed": "保存功能开关失败"
   },

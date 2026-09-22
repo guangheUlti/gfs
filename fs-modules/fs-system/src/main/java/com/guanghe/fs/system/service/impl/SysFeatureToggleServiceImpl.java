@@ -29,15 +29,12 @@ import static com.guanghe.fs.system.domain.table.SysFeatureToggleTableDef.SYS_FE
 @RequiredArgsConstructor
 public class SysFeatureToggleServiceImpl extends ServiceImpl<SysFeatureToggleMapper, SysFeatureToggle> implements SysFeatureToggleService {
 
-    private final SysUserService sysUserService;
-
     @Override
     @Cacheable(value = "featureToggles", key = "'all'")
     public Map<String, Boolean> listToggles() {
         Map<String, Boolean> result = new HashMap<>();
+        // 全部开关缺省关闭（含回收站、分享）：按需在「设置-功能开关」中开启
         FeatureKeys.ALL.forEach(key -> result.put(key, false));
-        // 回收站缺省开启：未配置时保持历史行为（删除进回收站）
-        result.put(FeatureKeys.RECYCLE_BIN, Boolean.TRUE);
         this.list().forEach(toggle -> {
             if (FeatureKeys.ALL.contains(toggle.getFeatureKey())) {
                 result.put(toggle.getFeatureKey(), Boolean.TRUE.equals(toggle.getEnabled()));
@@ -46,10 +43,13 @@ public class SysFeatureToggleServiceImpl extends ServiceImpl<SysFeatureToggleMap
         return result;
     }
 
+    /**
+     * 功能开关对所有登录用户开放修改：开关影响的是普通用户的日常功能
+     * （回收站/分享/收藏等），管理员与普通用户需求一致，无需限制
+     */
     @Override
     @CacheEvict(value = "featureToggles", key = "'all'")
     public void updateToggles(FeatureToggleEditCmd cmd) {
-        sysUserService.assertSuperAdmin();
 
         for (String featureKey : cmd.getToggles().keySet()) {
             if (!FeatureKeys.ALL.contains(featureKey)) {

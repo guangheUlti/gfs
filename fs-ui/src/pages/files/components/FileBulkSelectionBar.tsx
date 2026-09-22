@@ -40,6 +40,8 @@ export function FileBulkSelectionBar({
   const { t } = useTranslation('files')
   // 收藏功能未开启时，隐藏收藏按钮（与侧边栏「收藏」菜单同开关）
   const favoriteEnabled = useFeatureStore((s) => !!s.toggles.favorite)
+  // 分享功能未开启（或缺省）时，隐藏分享按钮
+  const shareEnabled = useFeatureStore((s) => !!s.toggles.share)
   // 单选不出批量工具条：单文件操作都在右键/卡片菜单里
   if (selectedCount <= 1) return null
   return (
@@ -69,25 +71,27 @@ export function FileBulkSelectionBar({
         </Tooltip>
       </RequirePermission>
 
-      <RequirePermission code='file:share'>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type='button'
-              variant='outline'
-              size='icon'
-              className='size-8 shrink-0'
-              onClick={onShare}
-              aria-label={t('bulk.ariaShare')}
-            >
-              <Share2 />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{t('rowMenu.share')}</p>
-          </TooltipContent>
-        </Tooltip>
-      </RequirePermission>
+      {shareEnabled && (
+        <RequirePermission code='file:share'>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type='button'
+                variant='outline'
+                size='icon'
+                className='size-8 shrink-0'
+                onClick={onShare}
+                aria-label={t('bulk.ariaShare')}
+              >
+                <Share2 />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{t('rowMenu.share')}</p>
+            </TooltipContent>
+          </Tooltip>
+        </RequirePermission>
+      )}
 
       {favoriteEnabled && (
         <RequirePermission code='file:write'>

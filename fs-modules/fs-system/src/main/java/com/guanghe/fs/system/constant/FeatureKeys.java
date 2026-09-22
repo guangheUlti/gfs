@@ -22,6 +22,9 @@ public final class FeatureKeys {
     /** 回收站：关闭后删除文件直接物理删除（不可恢复），且不产生回收站记录 */
     public static final String RECYCLE_BIN = "recycleBin";
 
+    /** 分享：关闭后文件页不出现分享入口，分享链接访问不受影响 */
+    public static final String SHARE = "share";
+
     /** 全部合法的功能标识 */
-    public static final Set<String> ALL = Set.of(FAVORITE, HISTORY, RECYCLE_BIN);
+    public static final Set<String> ALL = Set.of(FAVORITE, HISTORY, RECYCLE_BIN, SHARE);
 }

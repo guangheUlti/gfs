@@ -208,11 +208,11 @@ export function useFileOperations(
     [t]
   )
 
-  /** 回收站开关是否开启（未加载到时按开启处理，与后端缺省一致） */
-  const isRecycleEnabled = useCallback(() => {
-    const enabled = useFeatureStore.getState().toggles.recycleBin
-    return enabled !== false
-  }, [])
+  /** 回收站开关是否开启（缺省关闭，与后端缺省一致） */
+  const isRecycleEnabled = useCallback(
+    () => !!useFeatureStore.getState().toggles.recycleBin,
+    []
+  )
 
   /**
    * 删除文件：回收站开启→移入回收站；关闭→直接永久删除

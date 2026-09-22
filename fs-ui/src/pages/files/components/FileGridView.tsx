@@ -109,7 +109,9 @@ export function FileGridView({
   const { hasPermission } = usePermission()
   const canRead = hasPermission('file:read')
   const canWrite = hasPermission('file:write')
-  const canShare = hasPermission('file:share')
+  // 分享功能开关关闭（或缺省）时隐藏分享入口
+  const shareEnabled = useFeatureStore((s) => !!s.toggles.share)
+  const canShare = shareEnabled && hasPermission('file:share')
 
   // 提到 map 外部，避免每个 item 重复计算
   const selectedSet = new Set(selectedKeys)
