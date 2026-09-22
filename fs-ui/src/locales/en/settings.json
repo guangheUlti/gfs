@@ -57,6 +57,8 @@
     "favoriteDesc": "When enabled, the Favorites entry appears in the sidebar",
     "history": "Recents",
     "historyDesc": "When enabled, the Recents entry appears in the sidebar",
+    "recycleBin": "Recycle Bin",
+    "recycleBinDesc": "When enabled, deleted files move to the Recycle Bin and can be restored. When disabled, deletion permanently removes files",
     "loadFailed": "Failed to load feature toggles",
     "saveFailed": "Failed to save feature toggles"
   },

@@ -15,6 +15,7 @@ import {
 import { createDirectLink } from '@/api/share'
 import { usePreviewStore } from '@/store/preview'
 import { useTransferStore } from '@/store/transfer'
+import { useFeatureStore } from '@/store/feature'
 
 export function useFileOperations(
   refreshCallback: () => void,
@@ -207,42 +208,73 @@ export function useFileOperations(
     [t]
   )
 
+  /** 回收站开关是否开启（未加载到时按开启处理，与后端缺省一致） */
+  const isRecycleEnabled = useCallback(() => {
+    const enabled = useFeatureStore.getState().toggles.recycleBin
+    return enabled !== false
+  }, [])
+
   /**
-   * 删除文件
+   * 删除文件：回收站开启→移入回收站；关闭→直接永久删除
    */
   const handleDelete = useCallback(async () => {
     const fileIds = deletingFiles.map((f) => f.id)
+    const recycleEnabled = isRecycleEnabled()
     try {
-      await deleteFiles(fileIds)
-      const successMsg =
-        fileIds.length === 1
+      if (recycleEnabled) {
+        await deleteFiles(fileIds)
+      } else {
+        await permanentlyDeleteFiles(fileIds)
+      }
+      const successMsg = recycleEnabled
+        ? fileIds.length === 1
           ? t('operations.trashOne')
           : t('operations.trashMany', { count: fileIds.length })
+        : fileIds.length === 1
+          ? t('operations.deleteForeverOne')
+          : t('operations.deleteForeverMany', { count: fileIds.length })
       toast.success(successMsg)
       setDeleteDialogVisible(false)
       setDeletingFiles([])
       clearSelectionCallback?.()
       refreshCallback()
     } catch (error) {
-      toast.error(t('operations.trashFail'))
+      toast.error(recycleEnabled ? t('operations.trashFail') : t('operations.deleteForeverFail'))
     }
-  }, [deletingFiles, refreshCallback, clearSelectionCallback, t])
+  }, [deletingFiles, refreshCallback, clearSelectionCallback, t, isRecycleEnabled])
 
   /**
    * 打开删除确认对话框
+   * 回收站关闭时改开「永久删除」确认框（不可恢复警告），行为与后端分流一致
    */
-  const openDeleteConfirm = useCallback((file: FileItem) => {
-    setDeletingFiles([file])
-    setDeleteDialogVisible(true)
-  }, [])
+  const openDeleteConfirm = useCallback(
+    (file: FileItem) => {
+      if (isRecycleEnabled()) {
+        setDeletingFiles([file])
+        setDeleteDialogVisible(true)
+      } else {
+        setPermanentlyDeletingFiles([file])
+        setPermanentDeleteDialogVisible(true)
+      }
+    },
+    [isRecycleEnabled]
+  )
 
   /**
    * 打开批量删除确认对话框
    */
-  const openBatchDeleteConfirm = useCallback((files: FileItem[]) => {
-    setDeletingFiles(files)
-    setDeleteDialogVisible(true)
-  }, [])
+  const openBatchDeleteConfirm = useCallback(
+    (files: FileItem[]) => {
+      if (isRecycleEnabled()) {
+        setDeletingFiles(files)
+        setDeleteDialogVisible(true)
+      } else {
+        setPermanentlyDeletingFiles(files)
+        setPermanentDeleteDialogVisible(true)
+      }
+    },
+    [isRecycleEnabled]
+  )
 
   /**
    * 永久删除文件（不经回收站，不可恢复）

@@ -19,6 +19,8 @@ import com.guanghe.fs.framework.common.domain.PageResult;
 import com.guanghe.fs.framework.common.domain.Result;
 import com.guanghe.fs.log.constant.OperationType;
 import com.guanghe.fs.log.service.SysOperationLogService;
+import com.guanghe.fs.system.constant.FeatureKeys;
+import com.guanghe.fs.system.service.SysFeatureToggleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
@@ -56,6 +58,9 @@ public class FileController {
     @Autowired
     private SysOperationLogService operationLogService;
 
+    @Autowired
+    private SysFeatureToggleService featureToggleService;
+
     @GetMapping("/list")
     @Operation(summary = "查询所有文件列表", description = "支持关键词搜索和文件类型筛选的列表查询")
     public PageResult<FileVO> getList(FileQry qry) {
@@ -86,19 +91,34 @@ public class FileController {
     }
 
     @DeleteMapping()
-    @Operation(summary = "移到回收站", description = "将文件移动到回收站")
+    @Operation(summary = "删除文件", description = "回收站开启时移入回收站；关闭时直接物理删除（不可恢复）")
     @SaCheckPermission("file:write")
     public Result<?> deleteFiles(@RequestBody List<String> fileIds) {
         List<FileInfo> targets = getAuthorizedFiles(fileIds);
-        fileInfoService.moveFilesToRecycleBin(fileIds);
-        operationLogService.recordSuccess(
-                OperationType.DELETE,
-                "放入回收站",
-                targetType(targets),
-                String.join(",", fileIds),
-                summarizeNames(targets),
-                "共 " + targets.size() + " 项"
-        );
+        boolean recycleEnabled = featureToggleService.listToggles()
+                .getOrDefault(FeatureKeys.RECYCLE_BIN, Boolean.TRUE);
+        if (recycleEnabled) {
+            fileInfoService.moveFilesToRecycleBin(fileIds);
+            operationLogService.recordSuccess(
+                    OperationType.DELETE,
+                    "放入回收站",
+                    targetType(targets),
+                    String.join(",", fileIds),
+                    summarizeNames(targets),
+                    "共 " + targets.size() + " 项"
+            );
+        } else {
+            // 回收站关闭：删除即永久删除，不产生回收站记录
+            fileRecycleService.permanentlyDeleteActiveFiles(fileIds);
+            operationLogService.recordSuccess(
+                    OperationType.PERMANENT_DELETE,
+                    "删除（回收站已关闭，直接物理删除）",
+                    targetType(targets),
+                    String.join(",", fileIds),
+                    summarizeNames(targets),
+                    "共 " + targets.size() + " 项"
+            );
+        }
         return Result.ok();
     }
 

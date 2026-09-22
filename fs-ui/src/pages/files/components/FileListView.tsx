@@ -72,7 +72,6 @@ interface FileListViewProps {
   onShare: (file: FileItem) => void
   onCopyDirectLink: (file: FileItem) => void
   onDelete: (file: FileItem) => void
-  onPermanentDelete: (file: FileItem) => void
   onRename: (file: FileItem) => void
   onMove: (file: FileItem) => void
   onMoveFiles: (fileIds: string[], targetDirId: string) => Promise<void>
@@ -87,7 +86,6 @@ interface FileListViewProps {
   onBatchShare?: (files: FileItem[]) => void
   onBatchMove?: (files: FileItem[]) => void
   onBatchDelete?: (files: FileItem[]) => void
-  onBatchPermanentDelete?: (files: FileItem[]) => void
   /** 触屏多选模式：点击即切换选中，无需 Ctrl 键 */
   selectMode?: boolean
   hasMore?: boolean
@@ -106,7 +104,6 @@ export function FileListView({
   onShare,
   onCopyDirectLink,
   onDelete,
-  onPermanentDelete,
   onRename,
   onMove,
   onMoveFiles,
@@ -118,7 +115,6 @@ export function FileListView({
   onBatchShare,
   onBatchMove,
   onBatchDelete,
-  onBatchPermanentDelete,
   selectMode = false,
   hasMore = false,
   loadingMore = false,
@@ -494,16 +490,6 @@ export function FileListView({
                                 <Trash2 className='size-4' />
                                 {t('rowMenu.delete')}
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  onPermanentDelete(file)
-                                }}
-                                className='text-destructive focus:text-destructive'
-                              >
-                                <Trash2 className='size-4' />
-                                {t('rowMenu.deleteForever')}
-                              </DropdownMenuItem>
                             </>
                           )}
                         </DropdownMenuContent>
@@ -576,18 +562,6 @@ export function FileListView({
                         >
                           <Trash2 className='mr-2 h-4 w-4' />
                           {t('rowMenu.delete')}
-                        </ContextMenuItem>
-                      )}
-                      {canWrite && onBatchPermanentDelete && (
-                        <ContextMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onBatchPermanentDelete(selectedFiles)
-                          }}
-                          className='text-destructive focus:text-destructive'
-                        >
-                          <Trash2 className='mr-2 h-4 w-4' />
-                          {t('rowMenu.deleteForever')}
                         </ContextMenuItem>
                       )}
                     </>

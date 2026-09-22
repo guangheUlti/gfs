@@ -10,7 +10,7 @@ import {
 } from '../components/settings-page-header'
 import { SettingsRow } from '../components/settings-row'
 
-const TOGGLE_KEYS = ['favorite', 'history'] as const
+const TOGGLE_KEYS = ['favorite', 'history', 'recycleBin'] as const
 
 export function SettingsFeatureToggles() {
   const { t } = useTranslation('settings')

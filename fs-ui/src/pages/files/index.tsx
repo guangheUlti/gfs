@@ -616,7 +616,6 @@ export default function FilesPage() {
                       onShare={operations.openShareModal}
                       onCopyDirectLink={operations.copyDirectLink}
                       onDelete={operations.openDeleteConfirm}
-                      onPermanentDelete={operations.openPermanentDeleteConfirm}
                       onRename={operations.openRenameModal}
                       onMove={operations.openMoveModal}
                       onMoveFiles={handleMoveFiles}
@@ -630,9 +629,6 @@ export default function FilesPage() {
                       onBatchShare={handleBatchShare}
                       onBatchMove={handleBatchMove}
                       onBatchDelete={handleBatchDelete}
-                      onBatchPermanentDelete={
-                        operations.openBatchPermanentDeleteConfirm
-                      }
                       selectMode={selectMode}
                       hasMore={fileList.hasMore}
                       loadingMore={fileList.loadingMore}
@@ -651,7 +647,6 @@ export default function FilesPage() {
                       onShare={operations.openShareModal}
                       onCopyDirectLink={operations.copyDirectLink}
                       onDelete={operations.openDeleteConfirm}
-                      onPermanentDelete={operations.openPermanentDeleteConfirm}
                       onRename={operations.openRenameModal}
                       onMove={operations.openMoveModal}
                       onMoveFiles={handleMoveFiles}
@@ -665,9 +660,6 @@ export default function FilesPage() {
                       onBatchShare={handleBatchShare}
                       onBatchMove={handleBatchMove}
                       onBatchDelete={handleBatchDelete}
-                      onBatchPermanentDelete={
-                        operations.openBatchPermanentDeleteConfirm
-                      }
                       selectMode={selectMode}
                       hasMore={fileList.hasMore}
                       loadingMore={fileList.loadingMore}

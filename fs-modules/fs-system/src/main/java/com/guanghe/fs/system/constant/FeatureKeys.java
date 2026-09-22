@@ -19,6 +19,9 @@ public final class FeatureKeys {
     /** 历史 */
     public static final String HISTORY = "history";
 
+    /** 回收站：关闭后删除文件直接物理删除（不可恢复），且不产生回收站记录 */
+    public static final String RECYCLE_BIN = "recycleBin";
+
     /** 全部合法的功能标识 */
-    public static final Set<String> ALL = Set.of(FAVORITE, HISTORY);
+    public static final Set<String> ALL = Set.of(FAVORITE, HISTORY, RECYCLE_BIN);
 }

@@ -36,6 +36,8 @@ public class SysFeatureToggleServiceImpl extends ServiceImpl<SysFeatureToggleMap
     public Map<String, Boolean> listToggles() {
         Map<String, Boolean> result = new HashMap<>();
         FeatureKeys.ALL.forEach(key -> result.put(key, false));
+        // 回收站缺省开启：未配置时保持历史行为（删除进回收站）
+        result.put(FeatureKeys.RECYCLE_BIN, Boolean.TRUE);
         this.list().forEach(toggle -> {
             if (FeatureKeys.ALL.contains(toggle.getFeatureKey())) {
                 result.put(toggle.getFeatureKey(), Boolean.TRUE.equals(toggle.getEnabled()));
