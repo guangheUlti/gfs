@@ -180,6 +180,15 @@ class DownloadExecutor {
     }
   }
 
+  /**
+   * 该文件是否会走流式直下（http 无 OPFS 且超出内存模式上限）：
+   * 浏览器原生落盘，页面内无进度可看，调用方可据此决定是否跳转传输页
+   */
+  public willUseNativeDownload(fileSize: number): boolean {
+    if (navigator.storage?.getDirectory) return false
+    return fileSize > this.MEMORY_FALLBACK_MAX_SIZE
+  }
+
   /** 恢复上次会话遗留的下载任务（本地 OPFS 有临时文件时由 store 调用） */
   public async adoptResumed(meta: DownloadStartMeta): Promise<void> {
     const context = this.createContext(meta)

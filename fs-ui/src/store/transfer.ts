@@ -929,8 +929,15 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       })
     )
 
-    // 传输设置开了「自动跳转」时前往传输页（下载任务直达「下载中」tab）；否则留在文件页
-    navigateToTransferIfEnabled('downloading')
+    // 传输设置开了「自动跳转」时前往传输页（下载任务直达「下载中」tab）；否则留在文件页。
+    // 例外：本次添加的任务全部走流式直下（浏览器原生落盘、页面内无进度可看）时，
+    // 跳过去只会看到瞬间完成的假状态再被弹回，不如留在文件页
+    const hasTrackableDownload = downloadable.some(
+      (file) => !downloadExecutor.willUseNativeDownload(file.size)
+    )
+    if (hasTrackableDownload) {
+      navigateToTransferIfEnabled('downloading')
+    }
   },
 
   replaceDownloadTempTask: (tempId, realTaskId, meta) => {
