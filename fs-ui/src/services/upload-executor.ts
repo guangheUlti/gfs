@@ -63,6 +63,35 @@ class UploadExecutor {
   private concurrency = this.DEFAULT_CONCURRENCY
   private callbacks: UploadExecutorCallbacks | null = null
 
+  /**
+   * 跨任务全局分片并发上限：浏览器对同域名并发连接有限（HTTP/1.1 约 6 个），
+   * 多文件同时上传时把连接池留给分片会让页面其它请求（列表/合并/查询）
+   * 排队超时，故全局限制在途分片数，留出余量给控制面请求
+   */
+  private readonly GLOBAL_MAX_INFLIGHT_CHUNKS = 5
+  private inflightChunks = 0
+  private chunkSlotQueue: Array<() => void> = []
+
+  private async acquireChunkSlot(): Promise<void> {
+    if (this.inflightChunks < this.GLOBAL_MAX_INFLIGHT_CHUNKS) {
+      this.inflightChunks += 1
+      return
+    }
+    // 排队等待：releaseChunkSlot 会把槽位直接转移给先到者，计数保持不变
+    await new Promise<void>((resolve) => {
+      this.chunkSlotQueue.push(resolve)
+    })
+  }
+
+  private releaseChunkSlot(): void {
+    const next = this.chunkSlotQueue.shift()
+    if (next) {
+      next()
+      return
+    }
+    this.inflightChunks -= 1
+  }
+
   public static getInstance(): UploadExecutor {
     if (!UploadExecutor.instance) {
       UploadExecutor.instance = new UploadExecutor()
@@ -346,7 +375,16 @@ class UploadExecutor {
           return { chunkIndex, success: false, error: '任务已取消' }
         }
 
-        await uploadChunk(chunkBlob, taskId, chunkIndex, chunkMd5)
+        // 全局信号量限流：拿到空位后二次确认任务状态，避免暂停/取消后仍发出请求
+        await this.acquireChunkSlot()
+        try {
+          if (context.isCancelled || context.isPaused) {
+            return { chunkIndex, success: false, error: '任务已暂停或取消' }
+          }
+          await uploadChunk(chunkBlob, taskId, chunkIndex, chunkMd5)
+        } finally {
+          this.releaseChunkSlot()
+        }
 
         context.activeUploads.delete(chunkIndex)
         context.retryCount.delete(chunkIndex)

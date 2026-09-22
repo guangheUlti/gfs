@@ -12,16 +12,19 @@ import service from './request'
 
 /**
  * 初始化上传
+ * 并发上传带宽饱和时，init 需等服务端建任务记录，留足超时避免误报
  */
 export function initUpload(params: InitUploadCmd) {
-  return request.post<string>('/apis/transfer/init', params)
+  return request.post<string>('/apis/transfer/init', params, { timeout: 30000 })
 }
 
 /**
- * 校验文件
+ * 校验文件（秒传 MD5 比对服务端需查缓存/库）
  */
 export function checkUpload(params: CheckUploadCmd) {
-  return request.post<CheckUploadResultVO>('/apis/transfer/check', params)
+  return request.post<CheckUploadResultVO>('/apis/transfer/check', params, {
+    timeout: 30000,
+  })
 }
 
 /**
@@ -51,14 +54,18 @@ export function uploadChunk(
  * 查询已上传的分片
  */
 export function getUploadedChunks(taskId: string) {
-  return request.get<number[]>(`/apis/transfer/chunks/${taskId}`)
+  return request.get<number[]>(`/apis/transfer/chunks/${taskId}`, {
+    timeout: 30000,
+  })
 }
 
 /**
- * 合并分片
+ * 合并分片（服务端按序落盘合并大文件，可能远超普通接口耗时）
  */
 export function mergeChunks(taskId: string) {
-  return request.post<string>(`/apis/transfer/merge/${taskId}`)
+  return request.post<string>(`/apis/transfer/merge/${taskId}`, undefined, {
+    timeout: 300000,
+  })
 }
 
 /**

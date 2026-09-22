@@ -53,8 +53,22 @@ export function redirectToLoginDueToUnauthorized() {
 
 const service = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
-  timeout: 10000,
+  // 大文件并发上传/下载会占满上行带宽与浏览器连接池，普通接口排队 10s 极易误报超时，放宽到 30s
+  timeout: 30000,
 })
+
+/** 超时/网络错误 toast 去重：带宽饱和时多个排队请求会同时超时，避免弹窗刷屏 */
+let lastNetworkToastMessage = ''
+let lastNetworkToastAt = 0
+function shouldShowNetworkToast(message: string): boolean {
+  const now = Date.now()
+  if (message === lastNetworkToastMessage && now - lastNetworkToastAt < 3000) {
+    return false
+  }
+  lastNetworkToastMessage = message
+  lastNetworkToastAt = now
+  return true
+}
 
 const getCurrentStoragePlatformId = (): string | null => {
   const storageInfo = localStorage.getItem('current-storage-platform')
@@ -174,6 +188,14 @@ service.interceptors.response.use(
         errorMessage = i18n.t('common:api.timeout')
       } else if (error.message.includes('Network Error')) {
         errorMessage = i18n.t('common:api.networkError')
+      }
+
+      if (
+        !skipToast &&
+        (errorMessage === i18n.t('common:api.timeout') ||
+          errorMessage === i18n.t('common:api.networkError'))
+      ) {
+        skipToast = !shouldShowNetworkToast(errorMessage)
       }
 
       if (!skipToast) {
