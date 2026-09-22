@@ -614,7 +614,6 @@ export default function FilesPage() {
                       onFileClick={handleFileClick}
                       onDownload={operations.handleDownload}
                       onShare={operations.openShareModal}
-                      onCopyDirectLink={operations.copyDirectLink}
                       onDelete={operations.openDeleteConfirm}
                       onRename={operations.openRenameModal}
                       onMove={operations.openMoveModal}
@@ -645,7 +644,6 @@ export default function FilesPage() {
                       onSortChange={fileList.handleSortChange}
                       onDownload={operations.handleDownload}
                       onShare={operations.openShareModal}
-                      onCopyDirectLink={operations.copyDirectLink}
                       onDelete={operations.openDeleteConfirm}
                       onRename={operations.openRenameModal}
                       onMove={operations.openMoveModal}

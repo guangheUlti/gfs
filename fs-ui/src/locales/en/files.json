@@ -172,6 +172,7 @@
     "alertGenerated": "Share link created",
     "codeInline": "Code: ",
     "btnCopyLink": "Copy link",
+    "btnCopySharePage": "Share page link",
     "btnCopied": "Copied",
     "rawLinkTip": "Direct link: opens the file itself, skipping the share page (images / video / PDF open inline, other types download)",
     "btnCopyRaw": "Copy direct link"

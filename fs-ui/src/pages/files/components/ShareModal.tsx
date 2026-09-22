@@ -479,15 +479,33 @@ export function ShareModal({
               </Alert>
 
               <div className='space-y-3 rounded-lg bg-muted/100 p-4'>
-                {/* 分享链接和提取码 */}
-                <div className='space-y-1'>
-                  <div className='text-sm break-all'>{shareLink}</div>
-                  {shareCode && (
-                    <div className='text-sm'>
-                      <span>{t('shareModal.codeInline')}</span>
-                      <span>{shareCode}</span>
-                    </div>
-                  )}
+                {/* 分享页链接和提取码：链接长度自适应（截断+title 悬停看全），右侧「分享页链接」按钮复制 */}
+                <div className='flex items-center gap-2'>
+                  <div
+                    className='min-w-0 flex-1 truncate text-sm'
+                    title={shareCode ? `${shareLink} ${t('shareModal.codeInline')}${shareCode}` : shareLink}
+                  >
+                    {shareLink}
+                    {shareCode && (
+                      <span className='ml-2 text-muted-foreground'>
+                        {t('shareModal.codeInline')}
+                        {shareCode}
+                      </span>
+                    )}
+                  </div>
+                  <Button variant='outline' size='sm' onClick={handleCopyLink}>
+                    {copiedLink ? (
+                      <>
+                        <Check className='mr-2 h-4 w-4' />
+                        {t('shareModal.btnCopied')}
+                      </>
+                    ) : (
+                      <>
+                        <Copy className='mr-2 h-4 w-4' />
+                        {t('shareModal.btnCopySharePage')}
+                      </>
+                    )}
+                  </Button>
                 </div>
               </div>
 
@@ -526,41 +544,21 @@ export function ShareModal({
           )}
         </div>
 
-        <DialogFooter>
-          {!shareLink ? (
-            <>
-              <DialogClose asChild>
-                <Button variant='outline' disabled={isSubmitting}>
-                  {t('common.cancel')}
-                </Button>
-              </DialogClose>
-              <Button onClick={handleOk} disabled={isSubmitting}>
-                {isSubmitting
-                  ? t('shareModal.generating')
-                  : t('shareModal.generate')}
+        {/* 生成结果状态下不渲染底部按钮：复制操作已内联到两条链接行，关闭走右上角 X */}
+        {!shareLink && (
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant='outline' disabled={isSubmitting}>
+                {t('common.cancel')}
               </Button>
-            </>
-          ) : (
-            <>
-              <DialogClose asChild>
-                <Button variant='outline'>{t('common.cancel')}</Button>
-              </DialogClose>
-              <Button onClick={handleCopyLink}>
-                {copiedLink ? (
-                  <>
-                    <Check className='mr-2 h-4 w-4' />
-                    {t('shareModal.btnCopied')}
-                  </>
-                ) : (
-                  <>
-                    <Copy className='mr-2 h-4 w-4' />
-                    {t('shareModal.btnCopyLink')}
-                  </>
-                )}
-              </Button>
-            </>
-          )}
-        </DialogFooter>
+            </DialogClose>
+            <Button onClick={handleOk} disabled={isSubmitting}>
+              {isSubmitting
+                ? t('shareModal.generating')
+                : t('shareModal.generate')}
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   )

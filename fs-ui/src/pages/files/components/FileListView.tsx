@@ -5,7 +5,6 @@ import { Highlight } from '@/components/Highlight'
 import {
   Download,
   Share2,
-  Link as LinkIcon,
   Heart,
   Move,
   Trash2,
@@ -70,7 +69,6 @@ interface FileListViewProps {
   onSortChange: (field: string, direction: SortOrder) => void
   onDownload: (file: FileItem | FileItem[]) => void
   onShare: (file: FileItem) => void
-  onCopyDirectLink: (file: FileItem) => void
   onDelete: (file: FileItem) => void
   onRename: (file: FileItem) => void
   onMove: (file: FileItem) => void
@@ -102,7 +100,6 @@ export function FileListView({
   onFileClick,
   onDownload,
   onShare,
-  onCopyDirectLink,
   onDelete,
   onRename,
   onMove,
@@ -407,17 +404,6 @@ export function FileListView({
                               {t('rowMenu.share')}
                             </DropdownMenuItem>
                           )}
-                          {!file.isDir && canShare && (
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                onCopyDirectLink(file)
-                              }}
-                            >
-                              <LinkIcon className='size-4' />
-                              {t('rowMenu.copyDirectLink')}
-                            </DropdownMenuItem>
-                          )}
                           {!file.isDir && canRead && (
                             <DropdownMenuItem
                               onClick={(e) => {
@@ -601,17 +587,6 @@ export function FileListView({
                         >
                           <Share2 className='mr-2 h-4 w-4' />
                           {t('rowMenu.share')}
-                        </ContextMenuItem>
-                      )}
-                      {!file.isDir && canShare && (
-                        <ContextMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onCopyDirectLink(file)
-                          }}
-                        >
-                          <LinkIcon className='mr-2 h-4 w-4' />
-                          {t('rowMenu.copyDirectLink')}
                         </ContextMenuItem>
                       )}
                       {favoriteEnabled && canWrite && (
