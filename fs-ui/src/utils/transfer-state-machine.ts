@@ -4,7 +4,7 @@ import type { TaskStatus, TransferTask } from '@/types/transfer'
  * 状态转换规则映射表
  */
 export const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
-  idle: ['initialized'],
+  idle: ['initialized', 'cancelled'],
   initialized: ['checking', 'downloading', 'failed', 'cancelled'],
   checking: ['uploading', 'completed', 'failed', 'cancelled'],
   uploading: ['paused', 'merging', 'failed', 'cancelled'],
