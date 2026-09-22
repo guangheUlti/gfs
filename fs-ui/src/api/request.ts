@@ -235,3 +235,4 @@ export const request = {
 }
 
 export default service
+export { service }

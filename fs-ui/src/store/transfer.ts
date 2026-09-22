@@ -331,6 +331,12 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
   handleSSEMessage: (message) => {
     const { type, taskId, data } = message
 
+    // 已取消任务的迟到事件一律忽略：后端取消即删记录，但取消竞态下
+    // SSE 可能仍推送 complete/error（如合并竞态完成、分片报错），
+    // 采信会把任务从「已取消」错误翻转成「已完成/失败」并弹误导 toast
+    const sseTask = get().tasks.get(taskId)
+    if (sseTask?.status === 'cancelled') return
+
     switch (type) {
       case 'progress': {
         const progressData = data as any
@@ -364,7 +370,10 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
 
       case 'error': {
         const errorData = data as any
-        get().setTaskError(taskId, errorData.message || '上传失败')
+        const errorMessage = errorData.message || '上传失败'
+        // 取消竞态下后端记录已删，报「任务不存在」属预期，不弹错误
+        if (errorMessage.includes('任务不存在')) break
+        get().setTaskError(taskId, errorMessage)
         break
       }
 
@@ -550,6 +559,10 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
         const existingTask = newTasks.get(vo.taskId)
         const newTask = convertVOToTask(vo)
 
+        // 本地已取消的任务不被后端状态覆盖：后端记录删除前推送的
+        // 竞态状态（如 completed）不应推翻用户的取消操作
+        if (existingTask?.status === 'cancelled') return
+
         if (!existingTask) {
           newTasks.set(vo.taskId, newTask)
         } else {
@@ -593,6 +606,22 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
           // 排队占位任务后端尚不存在，保留
           if (task.taskType === 'download' && downloadExecutor.isQueued(taskId)) {
             return
+          }
+          // 已取消任务后端记录已删属预期，静默移除即可
+          if (task.status === 'cancelled') {
+            newTasks.delete(taskId)
+            progressCalculator.clear(taskId)
+            return
+          }
+          // 活跃任务从后端列表消失，说明被外部删除（如另一端操作），
+          // 置为取消而非继续显示假进度
+          if (
+            task.taskType === 'upload' &&
+            ['checking', 'uploading', 'merging', 'initialized'].includes(
+              task.status
+            )
+          ) {
+            get().transitionTo(taskId, 'cancelled')
           }
           newTasks.delete(taskId)
           progressCalculator.clear(taskId)
@@ -1138,6 +1167,12 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     }
 
     uploadExecutor.cancel(taskId)
+
+    // 任务已被竞态事件（后端合并完成等）置为 completed 时无需再取消
+    if (task.status === 'completed') {
+      progressCalculator.clear(taskId)
+      return
+    }
 
     if (!get().transitionTo(taskId, 'cancelled')) {
       throw new Error(`Cannot cancel task in status: ${task.status}`)

@@ -7,15 +7,19 @@ import type {
   InitDownloadResultVO,
   FolderDownloadTaskVO,
 } from '@/types/transfer'
-import { request } from './request'
-import service from './request'
+import { request, service } from './request'
 
 /**
  * 初始化上传
  * 并发上传带宽饱和时，init 需等服务端建任务记录，留足超时避免误报
  */
 export function initUpload(params: InitUploadCmd) {
-  return request.post<string>('/apis/transfer/init', params, { timeout: 30000 })
+  return request.post<string>('/apis/transfer/init', params, {
+    timeout: 30000,
+    // 传输分片/控制请求的错误由执行器统一上报（含取消竞态过滤），
+    // 拦截器层静默，避免取消瞬间每个在途分片都弹一个「任务不存在」
+    showErrorMessage: false,
+  })
 }
 
 /**
@@ -24,6 +28,7 @@ export function initUpload(params: InitUploadCmd) {
 export function checkUpload(params: CheckUploadCmd) {
   return request.post<CheckUploadResultVO>('/apis/transfer/check', params, {
     timeout: 30000,
+    showErrorMessage: false,
   })
 }
 
@@ -47,6 +52,7 @@ export function uploadChunk(
       'Content-Type': 'multipart/form-data',
     },
     timeout: 60000,
+    showErrorMessage: false,
   })
 }
 
@@ -56,6 +62,7 @@ export function uploadChunk(
 export function getUploadedChunks(taskId: string) {
   return request.get<number[]>(`/apis/transfer/chunks/${taskId}`, {
     timeout: 30000,
+    showErrorMessage: false,
   })
 }
 
@@ -65,6 +72,7 @@ export function getUploadedChunks(taskId: string) {
 export function mergeChunks(taskId: string) {
   return request.post<string>(`/apis/transfer/merge/${taskId}`, undefined, {
     timeout: 300000,
+    showErrorMessage: false,
   })
 }
 
@@ -72,7 +80,10 @@ export function mergeChunks(taskId: string) {
  * 取消上传任务
  */
 export function cancelUpload(taskId: string) {
-  return request.delete(`/apis/transfer/cancel/${taskId}`)
+  return request.delete(`/apis/transfer/cancel/${taskId}`, {
+    // 「任务不存在」由 store 判定为取消成功（竞态容忍），无需拦截器弹窗
+    showErrorMessage: false,
+  })
 }
 
 /**
@@ -107,7 +118,9 @@ export function clearCompletedTasks() {
  * 初始化下载任务
  */
 export function initDownload(params: InitDownloadCmd) {
-  return request.post<InitDownloadResultVO>('/apis/transfer/init-download', params)
+  return request.post<InitDownloadResultVO>('/apis/transfer/init-download', params, {
+    showErrorMessage: false,
+  })
 }
 
 /**
@@ -123,7 +136,9 @@ export function downloadChunk(
     responseType: 'blob',
     signal,
     timeout: 120000,
-  })
+    // axios 原生调用，拦截器 toast 不生效，但保持配置一致
+    showErrorMessage: false,
+  } as any)
 }
 
 /**
