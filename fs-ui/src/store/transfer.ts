@@ -911,8 +911,8 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       })
     )
 
-    // 传输设置开了「自动跳转」时前往传输页；否则留在文件页
-    navigateToTransferIfEnabled()
+    // 传输设置开了「自动跳转」时前往传输页（下载任务直达「下载中」tab）；否则留在文件页
+    navigateToTransferIfEnabled('downloading')
   },
 
   replaceDownloadTempTask: (tempId, realTaskId, meta) => {

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useTransferStore } from '@/store/transfer'
 import { RefreshCw, Upload, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -17,7 +18,12 @@ import TransferTable from './components/TransferTable'
 export default function TransferPage() {
   const { t } = useTranslation('transfer')
   const { t: tc } = useTranslation('common')
-  const [activeTab, setActiveTab] = useState('uploading')
+  // 自动跳转带 ?tab= 参数时定位到对应 tab（上传中/下载中），无参数保持默认「上传中」
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialTab = searchParams.get('tab')
+  const [activeTab, setActiveTab] = useState(
+    initialTab === 'downloading' || initialTab === 'uploading' ? initialTab : 'uploading'
+  )
   const [loading, setLoading] = useState(false)
 
   const {
@@ -171,10 +177,13 @@ export default function TransferPage() {
       </div>
 
       {/* 标签页和操作按钮 */}
-      <div className='flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 pt-2 pb-1.5 sm:px-6 sm:pt-2.5'>
-        <Tabs
+      <div className='flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 pt-2 pb-1.5 sm:px-6 sm:pt-2.5'>          <Tabs
           value={activeTab}
-          onValueChange={setActiveTab}
+          onValueChange={(tab) => {
+            setActiveTab(tab)
+            // tab 状态同步进 URL：刷新/分享链接后停留在同一 tab
+            setSearchParams(tab === 'uploading' ? {} : { tab })
+          }}
           className='min-w-0'
         >
           <TabsList>

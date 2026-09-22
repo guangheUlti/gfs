@@ -11,12 +11,17 @@ import { useTransferStore } from '@/store/transfer'
  * 因此使用 createBrowserRouter 返回的 router 实例导航
  * （仅在事件回调运行时调用，不存在模块初始化顺序问题）。
  */
-export function navigateToTransferIfEnabled(): void {
+export type TransferTargetTab = 'uploading' | 'downloading'
+
+export function navigateToTransferIfEnabled(
+  target: TransferTargetTab = 'uploading'
+): void {
   const enabled = isAutoNavigateEnabled()
   if (!enabled) return
   // 标记本次跳转由自动导航发起：全部任务完成后自动跳回文件页
   useTransferStore.getState().setAutoArrivedOnTransfer(true)
-  router.navigate('/transfer')
+  // 目标 tab 跟随任务类型：下载任务直达「下载中」，上传直达「上传中」
+  router.navigate(`/transfer?tab=${target}`)
 }
 
 /** 传输设置是否开启「任务添加后自动跳转进度页」（老数据缺省按开启） */
