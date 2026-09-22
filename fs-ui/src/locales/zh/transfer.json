@@ -14,6 +14,7 @@
     "toastPause": "已暂停",
     "toastResume": "已恢复",
     "toastCancel": "已取消",
+    "toastCancelWithName": "已取消：{{name}}",
     "toastRetry": "已重试",
     "toastClearWarn": "没有可清空的任务",
     "toastClearOk": "已清空所有已完成任务",

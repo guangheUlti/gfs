@@ -65,8 +65,8 @@ export const useUserStore = create<UserState>()(
             transferSetting: {
               userId: '',
               downloadSpeedLimit: 0,
-              concurrentUploadQuantity: 3,
-              concurrentDownloadQuantity: 3,
+              concurrentUploadQuantity: 1,
+              concurrentDownloadQuantity: 1,
               chunkSize: 5 * 1024 * 1024,
             },
           })

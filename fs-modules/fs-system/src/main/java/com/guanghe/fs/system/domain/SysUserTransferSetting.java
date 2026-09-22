@@ -65,8 +65,8 @@ public class SysUserTransferSetting extends BaseEntity {
         SysUserTransferSetting sysUserTransferSetting = new SysUserTransferSetting();
         sysUserTransferSetting.setUserId(userId);
         sysUserTransferSetting.setDownloadSpeedLimit(-1);
-        sysUserTransferSetting.setConcurrentUploadQuantity(3);
-        sysUserTransferSetting.setConcurrentDownloadQuantity(3);
+        sysUserTransferSetting.setConcurrentUploadQuantity(1);
+        sysUserTransferSetting.setConcurrentDownloadQuantity(1);
         sysUserTransferSetting.setChunkSize(5L * 1024 * 1024); // 默认 5MB
         sysUserTransferSetting.setAutoNavigateTransfer(true); // 默认任务添加后跳转传输页
         return sysUserTransferSetting;

@@ -111,12 +111,19 @@ class DownloadExecutor {
   private readonly RETRY_BASE_DELAY = 1000
   /** 不限速时任务内并行拉取的分片数 */
   private readonly UNLIMITED_CHUNK_CONCURRENCY = 3
-  /** OPFS 不可用时允许内存降级的最大文件大小（512MB） */
-  private readonly MEMORY_FALLBACK_MAX_SIZE = 512 * 1024 * 1024
+  /** OPFS 不可用时允许内存降级的最大文件大小（200MB）。
+   * 内存模式下分片 Blob 全部驻留 JS 堆，组装保存阶段还要翻倍，
+   * 上限过高极易把标签页内存打爆（表现为卡死、保存框不弹出），
+   * 超出部分改走后端流式直下由浏览器原生落盘 */
+  private readonly MEMORY_FALLBACK_MAX_SIZE = 200 * 1024 * 1024
 
   private taskContexts = new Map<string, DownloadTaskContext>()
   /** 已通过 initDownload 占住后端并发名额的任务（含暂停中，终态才释放） */
   private active = new Set<string>()
+  /** 内存降级模式全局单槽：http 部署下分片 Blob 全驻 JS 堆，
+   * 同时只允许一个内存任务，避免双大文件并发把标签页内存打爆 */
+  private memorySlotHolder: string | null = null
+  private memorySlotWaiters: Array<() => void> = []
   private queue: QueueItem[] = []
   /** initDownload 因后端并发上限被拒后暂停出队，待名额释放再继续 */
   private queueBlocked = false
@@ -229,7 +236,10 @@ class DownloadExecutor {
     if (this.removeFromQueue(taskId)) return
 
     const context = this.taskContexts.get(taskId)
-    if (!context) return
+    if (!context) {
+      this.releaseMemorySlot(taskId)
+      return
+    }
 
     context.isCancelled = true
     context.activeRequests.forEach((controller) => controller.abort())
@@ -239,6 +249,7 @@ class DownloadExecutor {
       .catch(() => undefined)
       .finally(() => {
         this.taskContexts.delete(taskId)
+        this.releaseMemorySlot(taskId)
         this.releaseSlotAndPump(taskId)
       })
   }
@@ -255,6 +266,9 @@ class DownloadExecutor {
     this.taskContexts.clear()
     this.active.clear()
     this.queue = []
+    this.memorySlotHolder = null
+    this.memorySlotWaiters.forEach((wake) => wake())
+    this.memorySlotWaiters = []
   }
 
   // ==================== 内部流程 ====================
@@ -348,6 +362,8 @@ class DownloadExecutor {
       // 小文件降级内存模式保可用；大文件改走后端流式直下接口，
       // 由浏览器原生下载落盘，无前端内存上限。
       if (context.fileSize <= this.MEMORY_FALLBACK_MAX_SIZE) {
+        // 内存模式全局互斥：等已有内存任务释放槽位后再继续
+        if (!(await this.acquireMemorySlot(context))) return
         context.memoryChunks = new Map()
       } else if (context.fileId) {
         this.triggerNativeDownload(context)
@@ -355,7 +371,7 @@ class DownloadExecutor {
       } else {
         this.notifyError(
           taskId,
-          '当前站点未启用 HTTPS，浏览器不支持本地下载缓存，且文件超出内存下载上限（512MB），请通过 HTTPS 访问后重试'
+          '当前站点未启用 HTTPS，浏览器不支持本地下载缓存，且文件超出内存下载上限（200MB），请通过 HTTPS 访问后重试'
         )
         return
       }
@@ -454,20 +470,50 @@ class DownloadExecutor {
     context: DownloadTaskContext,
     error: unknown
   ): void {
-    if (context.isCancelled) return
+    if (context.isCancelled) {
+      this.releaseMemorySlot(taskId)
+      return
+    }
 
     if (isNetworkError(error) || context.isPaused) {
       // 网络中断自动转暂停；同步后端状态，保证后续 resume 接口可用
+      // 暂停任务保留内存槽位（分片 Blob 仍驻留堆中），resume 时直接复用
       context.isPaused = true
       void pauseUpload(taskId).catch(() => undefined)
       this.notifyTransition(taskId, 'paused')
       return
     }
 
+    this.releaseMemorySlot(taskId)
     this.notifyError(
       taskId,
       error instanceof Error ? error.message : '下载失败'
     )
+  }
+
+  /** 内存模式任务进入前获取全局唯一槽位；取消/暂停时返回 false */
+  private async acquireMemorySlot(
+    context: DownloadTaskContext
+  ): Promise<boolean> {
+    for (;;) {
+      if (context.isCancelled || context.isPaused) return false
+      if (
+        this.memorySlotHolder === null ||
+        this.memorySlotHolder === context.taskId
+      ) {
+        this.memorySlotHolder = context.taskId
+        return true
+      }
+      await new Promise<void>((resolve) => {
+        this.memorySlotWaiters.push(resolve)
+      })
+    }
+  }
+
+  private releaseMemorySlot(taskId: string): void {
+    if (this.memorySlotHolder !== taskId) return
+    this.memorySlotHolder = null
+    this.memorySlotWaiters.shift()?.()
   }
 
   private async finishDownload(context: DownloadTaskContext): Promise<void> {
@@ -506,11 +552,22 @@ class DownloadExecutor {
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
 
       await this.removeOpfsTemp(context)
+    } catch (error) {
+      // 组装/保存失败必须暴露出来，否则任务永远停在 merging 假死
+      this.releaseMemorySlot(taskId)
+      this.notifyError(
+        taskId,
+        error instanceof Error
+          ? `文件组装或保存失败：${error.message}`
+          : '文件组装或保存失败'
+      )
+      return
     } finally {
       this.taskContexts.delete(taskId)
       this.releaseSlotAndPump(taskId)
     }
 
+    this.releaseMemorySlot(taskId)
     this.notifyTransition(taskId, 'completed')
   }
 

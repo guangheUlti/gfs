@@ -61,8 +61,8 @@ export function TransferForm() {
     defaultValues: {
       enableDownloadSpeedLimit: false,
       downloadSpeedLimit: 5,
-      concurrentUploadQuantity: 3,
-      concurrentDownloadQuantity: 3,
+      concurrentUploadQuantity: 1,
+      concurrentDownloadQuantity: 1,
       chunkSize: 5 * 1024 * 1024,
       // 老数据缺省时按默认开启处理
       autoNavigateTransfer: true,
@@ -85,8 +85,8 @@ export function TransferForm() {
         enableDownloadSpeedLimit: settings.downloadSpeedLimit > 0,
         downloadSpeedLimit:
           settings.downloadSpeedLimit > 0 ? settings.downloadSpeedLimit : 5,
-        concurrentUploadQuantity: settings.concurrentUploadQuantity || 3,
-        concurrentDownloadQuantity: settings.concurrentDownloadQuantity || 3,
+        concurrentUploadQuantity: settings.concurrentUploadQuantity || 1,
+        concurrentDownloadQuantity: settings.concurrentDownloadQuantity || 1,
         chunkSize: settings.chunkSize || 5 * 1024 * 1024,
         autoNavigateTransfer: settings.autoNavigateTransfer !== false,
       })

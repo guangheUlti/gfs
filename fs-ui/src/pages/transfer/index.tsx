@@ -113,8 +113,13 @@ export default function TransferPage() {
 
   const handleCancel = async (taskId: string) => {
     try {
+      const task = useTransferStore.getState().tasks.get(taskId)
       await cancelTask(taskId)
-      toast.success(t('page.toastCancel'))
+      toast.success(
+        t('page.toastCancelWithName', {
+          name: task?.fileName ?? '',
+        })
+      )
     } finally {
       // 无需处理
     }

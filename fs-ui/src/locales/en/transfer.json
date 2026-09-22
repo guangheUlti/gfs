@@ -14,6 +14,7 @@
     "toastPause": "Paused",
     "toastResume": "Resumed",
     "toastCancel": "Cancelled",
+    "toastCancelWithName": "Cancelled: {{name}}",
     "toastRetry": "Retried",
     "toastClearWarn": "Nothing to clear",
     "toastClearOk": "Cleared completed tasks",

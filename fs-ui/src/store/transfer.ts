@@ -477,12 +477,12 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
               })
               get().transitionTo(task.taskId, 'cancelled')
               return { success: true, taskId: task.taskId, resumed: false }
-            }
+          }
 
-            await cancelUpload(task.taskId)
-            get().transitionTo(task.taskId, 'cancelled')
-            return { success: true, taskId: task.taskId, resumed: false }
-          } catch (error: any) {
+          await cancelUpload(task.taskId)
+          get().transitionTo(task.taskId, 'cancelled')
+          return { success: true, taskId: task.taskId, resumed: false }
+        } catch (error: any) {
           // 如果任务不存在，也算成功（因为目标已达成）
           if (
             error?.message?.includes('任务不存在') ||
@@ -501,19 +501,37 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       (r) => r.status === 'fulfilled' && r.value.success
     )
     const resumedCount = settled.filter((r) => r.value.resumed).length
-    const successCount = settled.length - resumedCount
     const failCount = results.length - settled.length
+
+    // 按任务类型分别统计被取消的任务数，提示文案区分上传/下载
+    const settledTaskIds = new Set(
+      settled
+        .filter((r) => !r.value.resumed)
+        .map((r) => r.value.taskId)
+    )
+    const cancelledUploads = unfinishedTasks.filter(
+      (task) =>
+        task.taskType === 'upload' && settledTaskIds.has(task.taskId)
+    ).length
+    const cancelledDownloads =
+      settled.length - resumedCount - cancelledUploads
 
     if (resumedCount > 0) {
       toast.info(`已恢复 ${resumedCount} 个未完成的下载任务`)
     }
 
-    if (successCount > 0) {
-      toast.info(`已自动取消 ${successCount} 个未完成的任务`, {
-        description:
-          failCount > 0
-            ? `${failCount} 个任务取消失败`
-            : '页面刷新会中断上传，建议等待上传完成后再刷新',
+    const cancelledParts: string[] = []
+    if (cancelledUploads > 0) cancelledParts.push(`${cancelledUploads} 个上传`)
+    if (cancelledDownloads > 0)
+      cancelledParts.push(`${cancelledDownloads} 个下载`)
+
+    if (cancelledParts.length > 0) {
+      const description =
+        failCount > 0
+          ? `${failCount} 个任务取消失败`
+          : '刷新页面会中断进行中的传输任务，建议等待传输完成后再刷新'
+      toast.info(`已自动取消 ${cancelledParts.join('、')}任务`, {
+        description,
       })
     }
   },
@@ -951,7 +969,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
   syncDownloadExecutorConfig: () => {
     const settings = useUserStore.getState().transferSetting
     downloadExecutor.configure(
-      settings?.concurrentDownloadQuantity || 3,
+      settings?.concurrentDownloadQuantity || 1,
       (settings?.downloadSpeedLimit ?? -1) > 0
     )
   },
@@ -979,7 +997,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
   pumpUploadQueue: () => {
     const limit = Math.max(
       1,
-      useUserStore.getState().transferSetting?.concurrentUploadQuantity || 3
+      useUserStore.getState().transferSetting?.concurrentUploadQuantity || 1
     )
 
     for (;;) {
