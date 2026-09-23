@@ -352,7 +352,27 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       case 'status': {
         const statusData = data as any
         if (statusData.status) {
-          get().transitionTo(taskId, statusData.status)
+          const incoming = statusData.status as TaskStatus
+          const task = get().tasks.get(taskId)
+          // SSE 状态事件只允许前进不允许回退：并发场景下后端可能在
+          // 分片请求处理中推送滞后的 initialized/checking，采信会把
+          // 已在 uploading 的任务拉回「准备中」且再无分片事件驱动，
+          // 表现为任务永久卡死在准备中
+          const forwardRank: Partial<Record<TaskStatus, number>> = {
+            initialized: 1,
+            checking: 2,
+            uploading: 3,
+            downloading: 3,
+            merging: 4,
+            completed: 5,
+            failed: 5,
+            cancelled: 5,
+          }
+          const currentRank = task ? (forwardRank[task.status] ?? 0) : 0
+          const incomingRank = forwardRank[incoming] ?? 0
+          if (incomingRank >= currentRank) {
+            get().transitionTo(taskId, incoming)
+          }
         }
         break
       }
@@ -1351,8 +1371,11 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
 
   checkAndStartPolling: () => {
     const { tasks } = get()
+    // initialized（准备中）也算活跃：SSE 断线时后端在 init/check 阶段推送的状态
+    // 更新前端收不到，若不轮询兑底任务会永远停留在「准备中」
     const hasActiveTasks = Array.from(tasks.values()).some(
       (task) =>
+        task.status === 'initialized' ||
         task.status === 'uploading' ||
         task.status === 'downloading' ||
         task.status === 'checking' ||
@@ -1371,6 +1394,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       const { tasks } = get()
       const activeTasks = Array.from(tasks.values()).filter(
         (task) =>
+          task.status === 'initialized' ||
           task.status === 'uploading' ||
           task.status === 'downloading' ||
           task.status === 'checking' ||
