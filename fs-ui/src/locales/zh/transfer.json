@@ -20,6 +20,7 @@
     "toastClearOk": "已清空所有已完成任务",
     "toastDownloadComplete": "{{name}} 下载完成",
     "toastDownloadQueued": "已添加 {{count}} 个下载任务",
+    "toastNativeDownloadStarted": "已交由浏览器下载 {{count}} 个大文件，进度请在浏览器下载管理器中查看",
     "folderSkipHint": "{{count}} 个文件夹暂不支持下载，已跳过",
     "noMore": "没有更多了"
   },

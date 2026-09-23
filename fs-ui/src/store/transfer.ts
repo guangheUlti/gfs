@@ -937,12 +937,35 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     get().syncDownloadExecutorConfig()
     get().ensureDownloadExecutorCallbacks()
 
+    // 流式直下分流：http 部署且文件超出内存模式上限时，走浏览器原生下载
+    // （页面内无法监控进度），不建任务、不占执行器名额——否则传输列表会
+    // 出现一个永远 0 B/s 的僵尸条目
+    const nativeFiles = downloadable.filter((file) =>
+      downloadExecutor.willUseNativeDownload(file.size)
+    )
+    const trackableFiles = downloadable.filter(
+      (file) => !downloadExecutor.willUseNativeDownload(file.size)
+    )
+
+    nativeFiles.forEach((file) => {
+      downloadExecutor.openNativeDownload(file.id)
+    })
+    if (nativeFiles.length > 0) {
+      toast.info(
+        i18n.t('transfer:page.toastNativeDownloadStarted', {
+          count: nativeFiles.length,
+        })
+      )
+    }
+
+    if (trackableFiles.length === 0) return
+
     const { tasks, sessionTasks, currentSessionId } = get()
     const newTasks = new Map(tasks)
     const newSessionTasks = new Map(sessionTasks)
     const now = Date.now()
 
-    downloadable.forEach((file) => {
+    trackableFiles.forEach((file) => {
       const tempId = downloadExecutor.enqueue({
         fileId: file.id,
         fileName: file.displayName,
@@ -974,19 +997,12 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
 
     toast.success(
       i18n.t('transfer:page.toastDownloadQueued', {
-        count: downloadable.length,
+        count: trackableFiles.length,
       })
     )
 
-    // 传输设置开了「自动跳转」时前往传输页（下载任务直达「下载中」tab）；否则留在文件页。
-    // 例外：本次添加的任务全部走流式直下（浏览器原生落盘、页面内无进度可看）时，
-    // 跳过去只会看到瞬间完成的假状态再被弹回，不如留在文件页
-    const hasTrackableDownload = downloadable.some(
-      (file) => !downloadExecutor.willUseNativeDownload(file.size)
-    )
-    if (hasTrackableDownload) {
-      navigateToTransferIfEnabled('downloading')
-    }
+    // 传输设置开了「自动跳转」时前往传输页（下载任务直达「下载中」tab）
+    navigateToTransferIfEnabled('downloading')
   },
 
   replaceDownloadTempTask: (tempId, realTaskId, meta) => {

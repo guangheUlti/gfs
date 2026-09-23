@@ -189,6 +189,15 @@ class DownloadExecutor {
     return fileSize > this.MEMORY_FALLBACK_MAX_SIZE
   }
 
+  /**
+   * 直接触发浏览器原生下载（不建后端任务、不进执行器队列）：
+   * 供 store 在添加任务阶段对流式直下文件分流使用——此类下载
+   * 进度由浏览器接管，页面内无法监控，不应出现在传输列表里
+   */
+  public openNativeDownload(fileId: string): void {
+    this.openNativeDownloadUrl(fileId)
+  }
+
   /** 恢复上次会话遗留的下载任务（本地 OPFS 有临时文件时由 store 调用） */
   public async adoptResumed(meta: DownloadStartMeta): Promise<void> {
     const context = this.createContext(meta)
@@ -589,22 +598,7 @@ class DownloadExecutor {
   private triggerNativeDownload(context: DownloadTaskContext): void {
     const { taskId, fileId } = context
     try {
-      const token = getToken()
-      const base =
-        (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
-      const params = new URLSearchParams()
-      if (token) params.set('Authorization', `Bearer ${token}`)
-      const query = params.size > 0 ? `?${params.toString()}` : ''
-      const url = `${base}/apis/transfer/download/${fileId}${query}`
-
-      const link = document.createElement('a')
-      link.href = url
-      link.rel = 'noopener'
-      link.style.display = 'none'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-
+      this.openNativeDownloadUrl(fileId)
       this.notifyTransition(taskId, 'completed')
     } catch {
       this.notifyError(
@@ -615,6 +609,25 @@ class DownloadExecutor {
       this.taskContexts.delete(taskId)
       this.releaseSlotAndPump(taskId)
     }
+  }
+
+  /** 构造直下下载 URL 并用隐藏 a 标签触发浏览器原生下载 */
+  private openNativeDownloadUrl(fileId: string): void {
+    const token = getToken()
+    const base =
+      (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
+    const params = new URLSearchParams()
+    if (token) params.set('Authorization', `Bearer ${token}`)
+    const query = params.size > 0 ? `?${params.toString()}` : ''
+    const url = `${base}/apis/transfer/download/${fileId}${query}`
+
+    const link = document.createElement('a')
+    link.href = url
+    link.rel = 'noopener'
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   // ==================== 本地存储（OPFS 优先 / 内存降级） ====================

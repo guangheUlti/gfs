@@ -20,6 +20,7 @@
     "toastClearOk": "Cleared completed tasks",
     "toastDownloadComplete": "Downloaded {{name}}",
     "toastDownloadQueued": "Added {{count}} download tasks",
+    "toastNativeDownloadStarted": "{{count}} large file(s) handed to the browser for download; check the browser's download manager for progress",
     "folderSkipHint": "{{count}} folders are not downloadable and were skipped",
     "noMore": "No more items"
   },
