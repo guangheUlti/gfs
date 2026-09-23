@@ -298,22 +298,6 @@ export function useFileOperations(
   }, [permanentlyDeletingFiles, refreshCallback, clearSelectionCallback, t])
 
   /**
-   * 打开永久删除确认对话框
-   */
-  const openPermanentDeleteConfirm = useCallback((file: FileItem) => {
-    setPermanentlyDeletingFiles([file])
-    setPermanentDeleteDialogVisible(true)
-  }, [])
-
-  /**
-   * 打开批量永久删除确认对话框
-   */
-  const openBatchPermanentDeleteConfirm = useCallback((files: FileItem[]) => {
-    setPermanentlyDeletingFiles(files)
-    setPermanentDeleteDialogVisible(true)
-  }, [])
-
-  /**
    * 下载文件：走任务式分片下载，进度在「传输列表-下载中」展示
    */
   const handleDownload = useCallback((files: FileItem | FileItem[]) => {
@@ -416,8 +400,6 @@ export function useFileOperations(
     openDeleteConfirm,
     openBatchDeleteConfirm,
     handleDelete,
-    openPermanentDeleteConfirm,
-    openBatchPermanentDeleteConfirm,
     handlePermanentDelete,
     handleDownload,
     handleFavorite,

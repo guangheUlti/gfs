@@ -580,6 +580,17 @@ export function FileListView({
                           {t('rowMenu.edit')}
                         </ContextMenuItem>
                       )}
+                      {!file.isDir && canRead && (
+                        <ContextMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onDownload(file)
+                          }}
+                        >
+                          <Download className='mr-2 h-4 w-4' />
+                          {t('rowMenu.download')}
+                        </ContextMenuItem>
+                      )}
                       {canShare && (
                         <ContextMenuItem
                           onClick={(e) => {
@@ -607,17 +618,6 @@ export function FileListView({
                           {file.isFavorite
                             ? t('rowMenu.unfavorite')
                             : t('rowMenu.favorite')}
-                        </ContextMenuItem>
-                      )}
-                      {!file.isDir && canRead && (
-                        <ContextMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onDownload(file)
-                          }}
-                        >
-                          <Download className='mr-2 h-4 w-4' />
-                          {t('rowMenu.download')}
                         </ContextMenuItem>
                       )}
                       {canWrite && <ContextMenuSeparator />}
@@ -663,16 +663,6 @@ export function FileListView({
                           >
                             <Trash2 className='mr-2 h-4 w-4' />
                             {t('rowMenu.delete')}
-                          </ContextMenuItem>
-                          <ContextMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onPermanentDelete(file)
-                            }}
-                            className='text-destructive focus:text-destructive'
-                          >
-                            <Trash2 className='mr-2 h-4 w-4' />
-                            {t('rowMenu.deleteForever')}
                           </ContextMenuItem>
                         </>
                       )}
