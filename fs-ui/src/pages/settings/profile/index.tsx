@@ -10,6 +10,7 @@ import {
 } from '../components/settings-page-header'
 import { ProfileForm } from './profile-form'
 import { AccountSecuritySection } from './account-security-section'
+import { copyToClipboard } from '@/utils/clipboard'
 
 export function SettingsProfile() {
   const { t } = useTranslation('settings')
@@ -18,12 +19,12 @@ export function SettingsProfile() {
 
   const handleCopyUserId = async () => {
     if (!user?.id) return
-    try {
-      await navigator.clipboard.writeText(user.id.toString())
+    const ok = await copyToClipboard(user.id.toString())
+    if (ok) {
       setCopiedUserId(true)
       setTimeout(() => setCopiedUserId(false), 2000)
       toast.success(t('profile.copied'))
-    } catch (error) {
+    } else {
       toast.error(t('profile.copyFailed'))
     }
   }

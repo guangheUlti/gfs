@@ -13,6 +13,7 @@ import {
   unfavoriteFile,
 } from '@/api/file'
 import { createDirectLink } from '@/api/share'
+import { copyToClipboard } from '@/utils/clipboard'
 import { usePreviewStore } from '@/store/preview'
 import { useTransferStore } from '@/store/transfer'
 import { useFeatureStore } from '@/store/feature'
@@ -199,8 +200,12 @@ export function useFileOperations(
       try {
         const res = await createDirectLink({ fileId: file.id, expireType: 4 })
         const fullUrl = `${window.location.origin}${res.directUrl}`
-        await navigator.clipboard.writeText(fullUrl)
-        toast.success(t('operations.copyDirectLinkOk'))
+        const ok = await copyToClipboard(fullUrl)
+        if (ok) {
+          toast.success(t('operations.copyDirectLinkOk'))
+        } else {
+          toast.error(t('operations.copyDirectLinkFail'))
+        }
       } catch (error) {
         toast.error(t('operations.copyDirectLinkFail'))
       }

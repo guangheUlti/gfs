@@ -5,6 +5,7 @@ import type { FileItem } from '@/types/file'
 import { Copy, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatFileSize } from '@/utils/format'
+import { copyToClipboard } from '@/utils/clipboard'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -184,32 +185,32 @@ export function ShareModal({
 
   // 复制链接
   const handleCopyLink = async () => {
-    try {
-      const textToCopy = shareCode
-        ? t('shareModal.copyWithCode', { link: shareLink, code: shareCode })
-        : shareLink
+    const textToCopy = shareCode
+      ? t('shareModal.copyWithCode', { link: shareLink, code: shareCode })
+      : shareLink
 
-      await navigator.clipboard.writeText(textToCopy)
+    const ok = await copyToClipboard(textToCopy)
+    if (ok) {
       setCopiedLink(true)
       setTimeout(() => {
         setCopiedLink(false)
       }, 2000)
       toast.success(t('common.copied'))
-    } catch (error) {
+    } else {
       toast.error(t('common.copyFailed'))
     }
   }
 
   // 复制直链
   const handleCopyRawLink = async () => {
-    try {
-      await navigator.clipboard.writeText(rawLink)
+    const ok = await copyToClipboard(rawLink)
+    if (ok) {
       setCopiedRawLink(true)
       setTimeout(() => {
         setCopiedRawLink(false)
       }, 2000)
       toast.success(t('common.copied'))
-    } catch (error) {
+    } else {
       toast.error(t('common.copyFailed'))
     }
   }

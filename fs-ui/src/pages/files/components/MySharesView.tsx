@@ -96,6 +96,7 @@ import {
 import { FileBreadcrumb } from './FileBreadcrumb'
 import { FileListRowActionIcon } from './FileListView'
 import { Toolbar } from './Toolbar'
+import { copyToClipboard } from '@/utils/clipboard'
 
 const SHARE_TABLE_HEAD: Record<string, string> = {
   shareName: '',
@@ -245,34 +246,34 @@ export function MySharesView() {
       content.push(t('myShares.copyLineCode', { code: share.shareCode }))
     }
 
-    try {
-      await navigator.clipboard.writeText(content.join('\n'))
+    const ok = await copyToClipboard(content.join('\n'))
+    if (ok) {
       toast.success(t('common.copied'))
-    } catch (error) {
+    } else {
       toast.error(t('common.copyFailed'))
     }
   }
 
   // 复制链接
   const handleCopyLink = async (link: string) => {
-    try {
-      await navigator.clipboard.writeText(link)
+    const ok = await copyToClipboard(link)
+    if (ok) {
       setCopiedDetailLink(true)
       setTimeout(() => setCopiedDetailLink(false), 2000)
       toast.success(t('common.copied'))
-    } catch (error) {
+    } else {
       toast.error(t('common.copyFailed'))
     }
   }
 
   // 复制提取码
   const handleCopyCode = async (code: string) => {
-    try {
-      await navigator.clipboard.writeText(code)
+    const ok = await copyToClipboard(code)
+    if (ok) {
       setCopiedDetailCode(true)
       setTimeout(() => setCopiedDetailCode(false), 2000)
       toast.success(t('common.copied'))
-    } catch (error) {
+    } else {
       toast.error(t('common.copyFailed'))
     }
   }
@@ -297,12 +298,12 @@ export function MySharesView() {
       )
     }
 
-    try {
-      await navigator.clipboard.writeText(detailText.join('\n'))
+    const ok = await copyToClipboard(detailText.join('\n'))
+    if (ok) {
       setCopiedShareDetail(true)
       setTimeout(() => setCopiedShareDetail(false), 2000)
       toast.success(t('common.copied'))
-    } catch (error) {
+    } else {
       toast.error(t('common.copyFailed'))
     }
   }

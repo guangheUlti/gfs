@@ -54,6 +54,7 @@ import {
   isFieldVisible,
   normalizeConfigValue,
 } from '../utils'
+import { copyToClipboard } from '@/utils/clipboard'
 
 interface StorageSettingCardProps {
   setting: StorageSetting
@@ -123,24 +124,24 @@ export function StorageSettingCard({
       })
     )
 
-    try {
-      await navigator.clipboard.writeText(configText.join('\n'))
+    const ok = await copyToClipboard(configText.join('\n'))
+    if (ok) {
       setCopiedConfig(true)
       setTimeout(() => setCopiedConfig(false), 2000)
       toast.success(t('card.copied'))
-    } catch (error) {
+    } else {
       toast.error(t('card.copyFailed'))
     }
   }
 
   // 复制单个字段
   const handleCopyField = async (identifier: string, value: string) => {
-    try {
-      await navigator.clipboard.writeText(value)
+    const ok = await copyToClipboard(value)
+    if (ok) {
       setCopiedField(identifier)
       setTimeout(() => setCopiedField(null), 2000)
       toast.success(t('card.copied'))
-    } catch (error) {
+    } else {
       toast.error(t('card.copyFailed'))
     }
   }
