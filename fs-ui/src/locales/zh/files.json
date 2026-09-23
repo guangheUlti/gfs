@@ -175,7 +175,11 @@
     "btnCopySharePage": "分享页链接",
     "btnCopied": "已复制",
     "rawLinkTip": "直链：跳过分享页直接访问该文件（图片 / 视频 / PDF 等直接打开，其他类型转为下载）",
-    "btnCopyRaw": "复制直链"
+    "btnCopyRaw": "复制直链",
+    "copyManualTitle": "未能自动复制，请手动复制",
+    "copyManualHint": "浏览器环境限制无法自动写入剪贴板，请点击下方输入框自动全选，再按 Ctrl+C 复制（Mac 使用 Command+C）",
+    "copyLabelShare": "分享页链接",
+    "copyLabelRaw": "分享直链"
   },
   "upload": {
     "dropZoneHint": "松开鼠标，上传到当前文件夹",

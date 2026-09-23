@@ -175,7 +175,11 @@
     "btnCopySharePage": "Share page link",
     "btnCopied": "Copied",
     "rawLinkTip": "Direct link: opens the file itself, skipping the share page (images / video / PDF open inline, other types download)",
-    "btnCopyRaw": "Copy direct link"
+    "btnCopyRaw": "Copy direct link",
+    "copyManualTitle": "Auto-copy failed, please copy manually",
+    "copyManualHint": "The browser prevents automatic clipboard access. Click a box below to select all, then press Ctrl+C to copy (Cmd+C on Mac).",
+    "copyLabelShare": "Share page link",
+    "copyLabelRaw": "Direct link"
   },
   "upload": {
     "dropZoneHint": "Drop to upload to the current folder",

@@ -66,6 +66,16 @@ export function ShareModal({
   const [rawLink, setRawLink] = useState('')
   const [copiedRawLink, setCopiedRawLink] = useState(false)
 
+  // 浏览器是否暴露了可用的剪贴板 API。
+  // http 内网（非安全上下文）下 navigator.clipboard 为 undefined，
+  // 且 execCommand('copy') 可能假阳性（返回 true 却未写入），
+  // 因此非安全上下文一律走「手动复制」兜底，保证可复制。
+  const clipboardAvailable =
+    typeof window !== 'undefined' &&
+    typeof navigator !== 'undefined' &&
+    !!navigator.clipboard &&
+    window.isSecureContext
+
   const sharingFiles = file ? [file] : files
   const isBatchShare = sharingFiles.length > 1
   const displayFiles = sharingFiles.slice(0, 3)
@@ -188,31 +198,22 @@ export function ShareModal({
     const textToCopy = shareCode
       ? t('shareModal.copyWithCode', { link: shareLink, code: shareCode })
       : shareLink
-
     const ok = await copyToClipboard(textToCopy)
-    if (ok) {
-      setCopiedLink(true)
-      setTimeout(() => {
-        setCopiedLink(false)
-      }, 2000)
-      toast.success(t('common.copied'))
-    } else {
-      toast.error(t('common.copyFailed'))
-    }
+    setCopiedLink(true)
+    setTimeout(() => {
+      setCopiedLink(false)
+    }, 2000)
+    if (ok) toast.success(t('common.copied'))
   }
 
   // 复制直链
   const handleCopyRawLink = async () => {
     const ok = await copyToClipboard(rawLink)
-    if (ok) {
-      setCopiedRawLink(true)
-      setTimeout(() => {
-        setCopiedRawLink(false)
-      }, 2000)
-      toast.success(t('common.copied'))
-    } else {
-      toast.error(t('common.copyFailed'))
-    }
+    setCopiedRawLink(true)
+    setTimeout(() => {
+      setCopiedRawLink(false)
+    }, 2000)
+    if (ok) toast.success(t('common.copied'))
   }
 
   // 处理确认按钮点击
@@ -479,60 +480,117 @@ export function ShareModal({
                 </AlertDescription>
               </Alert>
 
-              <div className='space-y-3 rounded-lg bg-muted/100 p-4'>
-                {/* 分享页链接和提取码：链接长度自适应（截断+title 悬停看全），右侧「分享页链接」按钮复制 */}
-                <div className='flex items-center gap-2'>
-                  <div
-                    className='min-w-0 flex-1 truncate text-sm'
-                    title={shareCode ? `${shareLink} ${t('shareModal.codeInline')}${shareCode}` : shareLink}
-                  >
-                    {shareLink}
-                    {shareCode && (
-                      <span className='ml-2 text-muted-foreground'>
-                        {t('shareModal.codeInline')}
-                        {shareCode}
-                      </span>
-                    )}
-                  </div>
-                  <Button variant='outline' size='sm' onClick={handleCopyLink}>
-                    {copiedLink ? (
-                      <>
-                        <Check className='mr-2 h-4 w-4' />
-                        {t('shareModal.btnCopied')}
-                      </>
-                    ) : (
-                      <>
-                        <Copy className='mr-2 h-4 w-4' />
-                        {t('shareModal.btnCopySharePage')}
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              {rawLink && (
-                <div className='space-y-2 rounded-lg border p-4'>
-                  <div className='text-xs text-muted-foreground'>
-                    {t('shareModal.rawLinkTip')}
-                  </div>
-                  <div className='flex items-center gap-2'>
-                    <div className='min-w-0 flex-1 truncate text-sm' title={rawLink}>
-                      {rawLink}
+              {clipboardAvailable ? (
+                <>
+                  <div className='space-y-3 rounded-lg bg-muted/100 p-4'>
+                    {/* 分享页链接和提取码：链接长度自适应（截断+title 悬停看全），右侧「分享页链接」按钮复制 */}
+                    <div className='flex items-center gap-2'>
+                      <div
+                        className='min-w-0 flex-1 truncate text-sm'
+                        title={shareCode ? `${shareLink} ${t('shareModal.codeInline')}${shareCode}` : shareLink}
+                      >
+                        {shareLink}
+                        {shareCode && (
+                          <span className='ml-2 text-muted-foreground'>
+                            {t('shareModal.codeInline')}
+                            {shareCode}
+                          </span>
+                        )}
+                      </div>
+                      <Button variant='outline' size='sm' onClick={handleCopyLink}>
+                        {copiedLink ? (
+                          <>
+                            <Check className='mr-2 h-4 w-4' />
+                            {t('shareModal.btnCopied')}
+                          </>
+                        ) : (
+                          <>
+                            <Copy className='mr-2 h-4 w-4' />
+                            {t('shareModal.btnCopySharePage')}
+                          </>
+                        )}
+                      </Button>
                     </div>
-                    <Button variant='outline' size='sm' onClick={handleCopyRawLink}>
-                      {copiedRawLink ? (
-                        <>
-                          <Check className='mr-2 h-4 w-4' />
-                          {t('shareModal.btnCopied')}
-                        </>
-                      ) : (
-                        <>
-                          <Copy className='mr-2 h-4 w-4' />
-                          {t('shareModal.btnCopyRaw')}
-                        </>
-                      )}
-                    </Button>
                   </div>
+
+                  {rawLink && (
+                    <div className='space-y-2 rounded-lg border p-4'>
+                      <div className='text-xs text-muted-foreground'>
+                        {t('shareModal.rawLinkTip')}
+                      </div>
+                      <div className='flex items-center gap-2'>
+                        <div className='min-w-0 flex-1 truncate text-sm' title={rawLink}>
+                          {rawLink}
+                        </div>
+                        <Button variant='outline' size='sm' onClick={handleCopyRawLink}>
+                          {copiedRawLink ? (
+                            <>
+                              <Check className='mr-2 h-4 w-4' />
+                              {t('shareModal.btnCopied')}
+                            </>
+                          ) : (
+                            <>
+                              <Copy className='mr-2 h-4 w-4' />
+                              {t('shareModal.btnCopyRaw')}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* 非安全上下文：浏览器无法自动写入剪贴板，
+                   不显示无用的「一键复制」按钮，改为两个带标签的手动复制框 */
+                <div className='space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950'>
+                  <div className='space-y-0.5'>
+                    <p className='text-sm font-medium text-amber-700 dark:text-amber-400'>
+                      {t('shareModal.copyManualTitle')}
+                    </p>
+                    <p className='text-xs text-amber-600 dark:text-amber-500'>
+                      {t('shareModal.copyManualHint')}
+                    </p>
+                  </div>
+
+                  <div className='space-y-1.5'>
+                    <div className='text-xs font-medium text-amber-700 dark:text-amber-400'>
+                      {t('shareModal.copyLabelShare')}
+                    </div>
+                    <textarea
+                      readOnly
+                      value={
+                        shareCode
+                          ? t('shareModal.copyWithCode', {
+                              link: shareLink,
+                              code: shareCode,
+                            })
+                          : shareLink
+                      }
+                      // 点击自动全选，用户可直接 Ctrl/Cmd+C
+                      onFocus={(e) => e.target.select()}
+                      onClick={(e) =>
+                        (e.target as HTMLTextAreaElement).select()
+                      }
+                      className='min-h-12 w-full resize-none break-all rounded border bg-background p-2 font-mono text-xs text-foreground'
+                    />
+                  </div>
+
+                  {rawLink && (
+                    <div className='space-y-1.5'>
+                      <div className='text-xs font-medium text-amber-700 dark:text-amber-400'>
+                        {t('shareModal.copyLabelRaw')}
+                      </div>
+                      <textarea
+                        readOnly
+                        value={rawLink}
+                        onFocus={(e) => e.target.select()}
+                        onClick={(e) =>
+                          (e.target as HTMLTextAreaElement).select()
+                        }
+                        className='min-h-12 w-full resize-none break-all rounded border bg-background p-2 font-mono text-xs text-foreground'
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
