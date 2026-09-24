@@ -6,11 +6,14 @@
 #  runtime data, no logs).
 #
 #  Usage:
-#      powershell -ExecutionPolicy Bypass -File script\package-release.ps1
-#      powershell -ExecutionPolicy Bypass -File script\package-release.ps1 -SkipBuild
-#      powershell -ExecutionPolicy Bypass -File script\package-release.ps1 -Version 2.3.2
+#      powershell -ExecutionPolicy Bypass -File script\package-release.ps1 -Version 5.0.1
+#      powershell -ExecutionPolicy Bypass -File script\package-release.ps1 -Version 5.0.1 -SkipBuild
 #
 #  Notes:
+#   - pom.xml <revision> is the STABLE code/dependency version (e.g. 5.0) and is
+#     NOT meant to change per release. The distributable zip version is decoupled
+#     from it and must be passed explicitly via -Version (e.g. 5.0.1, 5.0.2, ...);
+#     if -Version is omitted the zip falls back to the pom <revision>.
 #   - release\deploy-package\lib\{jdk,mysql,redis} are third-party runtimes that
 #     are NOT tracked by git (see .gitignore). They must already exist locally for
 #     the zip to be self-contained; the script only warns when one is missing.
