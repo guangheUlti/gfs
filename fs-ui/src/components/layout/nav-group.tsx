@@ -21,14 +21,6 @@ import {
 } from '@/components/ui/sidebar'
 import { Badge } from '../ui/badge'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '../ui/dropdown-menu'
-import {
   type NavCollapsible,
   type NavItem,
   type NavLink,
@@ -51,7 +43,6 @@ function NavItemIcon({
 
 export function NavGroup({ titleKey, items }: NavGroupProps) {
   const { t } = useTranslation('layout')
-  const { state, isMobile } = useSidebar()
   const location = useLocation()
   const href = location.pathname + location.search
 
@@ -64,11 +55,6 @@ export function NavGroup({ titleKey, items }: NavGroupProps) {
 
           if (!item.items)
             return <SidebarMenuLink key={key} item={item} href={href} />
-
-          if (state === 'collapsed' && !isMobile)
-            return (
-              <SidebarMenuCollapsedDropdown key={key} item={item} href={href} />
-            )
 
           return <SidebarMenuCollapsible key={key} item={item} href={href} />
         })}
@@ -189,62 +175,6 @@ function SidebarMenuCollapsible({
         </CollapsibleContent>
       </SidebarMenuItem>
     </Collapsible>
-  )
-}
-
-function SidebarMenuCollapsedDropdown({
-  item,
-  href,
-}: {
-  item: NavCollapsible
-  href: string
-}) {
-  const { t } = useTranslation('layout')
-  const parentActive = checkIsActive(href, item)
-  const label = t(item.titleKey)
-  return (
-    <SidebarMenuItem>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <SidebarMenuButton
-            tooltip={label}
-            isActive={parentActive}
-          >
-            {item.icon && (
-              <NavItemIcon icon={item.icon} active={parentActive} />
-            )}
-            <span className='sidebar-nav-label'>{label}</span>
-            {item.badge && <NavBadge>{item.badge}</NavBadge>}
-            <RiArrowRightSLine className='ms-auto size-4 shrink-0 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90' />
-          </SidebarMenuButton>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side='right' align='start' sideOffset={4}>
-          <DropdownMenuLabel>
-            {label} {item.badge ? `(${item.badge})` : ''}
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          {item.items.map((sub) => (
-            <DropdownMenuItem key={`${sub.titleKey}-${sub.url}`} asChild>
-              <Link
-                to={sub.url}
-                className={`${checkIsActive(href, sub) ? 'bg-secondary' : ''}`}
-              >
-                {sub.icon && (
-                  <NavItemIcon
-                    icon={sub.icon}
-                    active={checkIsActive(href, sub)}
-                  />
-                )}
-                <span className='max-w-52 text-wrap'>{t(sub.titleKey)}</span>
-                {sub.badge && (
-                  <span className='ms-auto text-xs'>{sub.badge}</span>
-                )}
-              </Link>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </SidebarMenuItem>
   )
 }
 

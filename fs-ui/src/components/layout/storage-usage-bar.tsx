@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, HardDrive } from 'lucide-react'
+import { HardDrive } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   getStorageCapacity,
@@ -89,7 +89,6 @@ export function StorageUsageBar({ className }: { className?: string }) {
             {formatPercent(percent)}
           </span>
         )}
-        <ChevronRight className='size-3.5 shrink-0 text-muted-foreground/70' />
       </div>
 
       {isLoading ? (

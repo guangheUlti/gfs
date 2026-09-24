@@ -1,6 +1,7 @@
 {
   "sidebar": {
     "userPlaceholder": "User",
+    "openMenu": "Open menu",
     "groups": {
       "files": "Files",
       "system": "System"

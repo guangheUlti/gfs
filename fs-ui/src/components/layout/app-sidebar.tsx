@@ -1,4 +1,3 @@
-import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RiSettings3Fill, RiSettings3Line } from '@remixicon/react'
 import { useAuth } from '@/contexts/auth-context'
@@ -9,9 +8,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarRail,
-  SidebarSeparator,
-  SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { sidebarData } from './data/sidebar-data'
 import { NavGroup } from './nav-group'
@@ -60,28 +56,23 @@ export function AppSidebar() {
     .filter((group) => group.items.length > 0)
 
   return (
-    <Sidebar variant='sidebar' collapsible='icon'>
-      {/* 折叠/展开开关融入侧栏自身：展开时贴用户行右缘，折叠后隐藏（入口移至页脚最底部） */}
-      <SidebarHeader className='relative'>
+    <Sidebar variant='sidebar' collapsible='none'>
+      {/* 桌面端侧边栏固定展开，不再支持折叠；移动端由汉堡按钮打开抽屉 */}
+      <SidebarHeader>
         <NavUser user={user} />
-        <SidebarTrigger className='absolute end-2 top-1/2 -translate-y-1/2 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:hidden' />
       </SidebarHeader>
       <SidebarContent>
-        {navGroups.map((group, index) => (
-          <Fragment key={group.titleKey}>
-            {index > 0 && (
-              <SidebarSeparator className='mx-4 hidden group-data-[collapsible=icon]:block' />
-            )}
-            <NavGroup titleKey={group.titleKey} items={group.items} />
-          </Fragment>
+        {navGroups.map((group) => (
+          <NavGroup
+            key={group.titleKey}
+            titleKey={group.titleKey}
+            items={group.items}
+          />
         ))}
       </SidebarContent>
       <SidebarFooter>
         <StorageUsageBar />
-        {/* 折叠后展开按钮固定在菜单栏最底部（折叠时存储用量条不渲染，页脚即空） */}
-        <SidebarTrigger className='hidden self-center text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:flex' />
       </SidebarFooter>
-      <SidebarRail />
     </Sidebar>
   )
 }

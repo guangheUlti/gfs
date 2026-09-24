@@ -1,13 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import {
-  Cpu,
-  Clock3,
-  FolderTree,
-  HardDrive,
-  Info,
-  MemoryStick,
-  Server,
-} from 'lucide-react'
+import { HardDrive, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   getStorageCapacity,
@@ -42,34 +34,6 @@ function formatPercent(percent: number): string {
   if (percent <= 0) return '0%'
   if (percent < 1) return '<1%'
   return `${percent.toFixed(1)}%`
-}
-
-function Row({
-  icon: Icon,
-  label,
-  value,
-  mono = false,
-}: {
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  value: React.ReactNode
-  mono?: boolean
-}) {
-  return (
-    <div className='flex items-center gap-2 text-sm'>
-      <Icon className='size-4 shrink-0 text-muted-foreground' strokeWidth={1.75} />
-      <span className='shrink-0 text-muted-foreground'>{label}</span>
-      <span
-        className={cn(
-          'ms-auto min-w-0 truncate text-right font-medium',
-          mono && 'font-mono text-xs'
-        )}
-        title={typeof value === 'string' ? value : undefined}
-      >
-        {value}
-      </span>
-    </div>
-  )
 }
 
 function Panel({
@@ -253,75 +217,6 @@ function StorageDetailBody({ open }: { open: boolean }) {
           <span>{t('storageDialog.capacityUnknown')}</span>
         </div>
       )}
-
-      <div className='grid gap-4 lg:grid-cols-2'>
-        {/* 系统信息 */}
-        <Panel title={t('storageDialog.systemInfo')} icon={Server}>
-          {sysLoading || !sysInfo ? (
-            <div className='space-y-2.5'>
-              {[0, 1, 2, 3].map((i) => (
-                <Skeleton key={i} className='h-5 w-full' />
-              ))}
-            </div>
-          ) : (
-            <>
-              <Row icon={Server} label={t('storageDialog.os')} value={sysInfo.osName ?? '—'} />
-              <Row icon={Cpu} label={t('storageDialog.cpu')} value={
-                sysInfo.cpuCores != null
-                  ? t('storageDialog.cpuCores', { cores: sysInfo.cpuCores })
-                  : '—'
-              } />
-              <Row
-                icon={MemoryStick}
-                label={t('storageDialog.osMemory')}
-                value={
-                  sysInfo.osTotalMemoryBytes != null
-                    ? `${formatCapacityBytes(sysInfo.osUsedMemoryBytes ?? 0)} / ${formatCapacityBytes(sysInfo.osTotalMemoryBytes)}`
-                    : '—'
-                }
-              />
-              <Row
-                icon={Cpu}
-                label={t('storageDialog.cpuLoad')}
-                value={formatPercent(sysInfo.systemCpuLoad ?? NaN)}
-              />
-              <Row icon={Info} label={t('storageDialog.java')} value={sysInfo.javaVersion ?? '—'} mono />
-            </>
-          )}
-        </Panel>
-
-        {/* 运行信息 */}
-        <Panel title={t('storageDialog.runtimeInfo')} icon={Clock3}>
-          {sysLoading || !sysInfo ? (
-            <div className='space-y-2.5'>
-              {[0, 1, 2, 3].map((i) => (
-                <Skeleton key={i} className='h-5 w-full' />
-              ))}
-            </div>
-          ) : (
-            <>
-              <Row
-                icon={MemoryStick}
-                label={t('storageDialog.jvmMemory')}
-                value={
-                  sysInfo.jvmMaxBytes != null
-                    ? `${formatCapacityBytes(sysInfo.jvmUsedBytes)} / ${formatCapacityBytes(sysInfo.jvmMaxBytes)}`
-                    : '—'
-                }
-              />
-              <Row icon={Clock3} label={t('storageDialog.startTime')} value={sysInfo.startTime ?? '—'} mono />
-              <Row icon={Clock3} label={t('storageDialog.uptime')} value={sysInfo.uptimeText ?? '—'} />
-              <Row icon={FolderTree} label={t('storageDialog.storageType')} value={sysInfo.storageType ?? '—'} />
-              <Row
-                icon={FolderTree}
-                label={t('storageDialog.storagePath')}
-                value={storagePath ?? '—'}
-                mono
-              />
-            </>
-          )}
-        </Panel>
-      </div>
 
       {/* 磁盘分区 */}
       {sysInfo?.disks && sysInfo.disks.length > 0 && (

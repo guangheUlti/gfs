@@ -1,6 +1,7 @@
 {
   "sidebar": {
     "userPlaceholder": "用户",
+    "openMenu": "打开菜单",
     "groups": {
       "files": "文件",
       "system": "系统"

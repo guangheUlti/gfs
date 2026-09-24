@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Clock3, Cpu, Info, MemoryStick, RefreshCw, Server } from 'lucide-react'
+import { Clock3, Cpu, FolderTree, Info, MemoryStick, RefreshCw, Server } from 'lucide-react'
 import {
   getJvmMemory,
   getSystemInfo,
@@ -163,49 +163,80 @@ export function SettingsSystemManagement() {
       </SettingsPageDescription>
 
       {/* 运行环境 */}
-      <section className='mt-6 rounded-md border'>
-        <div className='border-b px-4 py-3'>
-          <div className='flex items-center gap-2'>
-            <Server className='size-4 text-muted-foreground' strokeWidth={1.75} />
-            <span className='text-sm font-medium'>
-              {t('systemManagement.runtime')}
-            </span>
+      <section className='mt-6 grid gap-4 lg:grid-cols-2'>
+        {/* 系统信息 */}
+        <div className='rounded-md border'>
+          <div className='border-b px-4 py-3'>
+            <div className='flex items-center gap-2'>
+              <Server className='size-4 text-muted-foreground' strokeWidth={1.75} />
+              <span className='text-sm font-medium'>
+                {t('systemManagement.systemInfo')}
+              </span>
+            </div>
+          </div>
+          <div className='space-y-3 py-4'>
+            <InfoRow icon={Server} label={t('systemManagement.os')} loading={sysLoading} value={sysInfo?.osName ?? '—'} />
+            <InfoRow
+              icon={Cpu}
+              label={t('systemManagement.cpu')}
+              loading={sysLoading}
+              value={sysInfo?.cpuCores != null ? t('systemManagement.cpuCores', { cores: sysInfo.cpuCores }) : '—'}
+            />
+            <InfoRow icon={MemoryStick} label={t('systemManagement.osMemory')} loading={sysLoading} value={osMem ?? '—'} />
+            <InfoRow
+              icon={Cpu}
+              label={t('systemManagement.cpuLoad')}
+              loading={sysLoading}
+              value={
+                sysInfo?.systemCpuLoad != null
+                  ? sysInfo.systemCpuLoad <= 0
+                    ? '0%'
+                    : `${sysInfo.systemCpuLoad.toFixed(1)}%`
+                  : '—'
+              }
+            />
+            <InfoRow icon={Info} label={t('systemManagement.java')} loading={sysLoading} value={sysInfo?.javaVersion ?? '—'} mono />
           </div>
         </div>
-        <div className='space-y-3 py-4'>
-          <InfoRow icon={Server} label={t('systemManagement.os')} loading={sysLoading} value={sysInfo?.osName ?? '—'} />
-          <InfoRow
-            icon={Cpu}
-            label={t('systemManagement.cpu')}
-            loading={sysLoading}
-            value={sysInfo?.cpuCores != null ? t('systemManagement.cpuCores', { cores: sysInfo.cpuCores }) : '—'}
-          />
-          <InfoRow icon={MemoryStick} label={t('systemManagement.osMemory')} loading={sysLoading} value={osMem ?? '—'} />
-          <InfoRow
-            icon={Cpu}
-            label={t('systemManagement.cpuLoad')}
-            loading={sysLoading}
-            value={
-              sysInfo?.systemCpuLoad != null
-                ? sysInfo.systemCpuLoad <= 0
-                  ? '0%'
-                  : `${sysInfo.systemCpuLoad.toFixed(1)}%`
-                : '—'
-            }
-          />
-          <InfoRow
-            icon={MemoryStick}
-            label={t('systemManagement.jvmMemory')}
-            loading={sysLoading}
-            value={
-              sysInfo?.jvmMaxBytes != null
-                ? `${formatCapacityBytes(sysInfo.jvmUsedBytes)} / ${formatCapacityBytes(sysInfo.jvmMaxBytes)}`
-                : '—'
-            }
-          />
-          <InfoRow icon={Info} label={t('systemManagement.java')} loading={sysLoading} value={sysInfo?.javaVersion ?? '—'} mono />
-          <InfoRow icon={Clock3} label={t('systemManagement.uptime')} loading={sysLoading} value={sysInfo?.uptimeText ?? '—'} />
-          <InfoRow icon={Clock3} label={t('systemManagement.startTime')} loading={sysLoading} value={sysInfo?.startTime ?? '—'} mono />
+
+        {/* 运行信息 */}
+        <div className='rounded-md border'>
+          <div className='border-b px-4 py-3'>
+            <div className='flex items-center gap-2'>
+              <Clock3 className='size-4 text-muted-foreground' strokeWidth={1.75} />
+              <span className='text-sm font-medium'>
+                {t('systemManagement.runtimeInfo')}
+              </span>
+            </div>
+          </div>
+          <div className='space-y-3 py-4'>
+            <InfoRow
+              icon={MemoryStick}
+              label={t('systemManagement.jvmMemory')}
+              loading={sysLoading}
+              value={
+                sysInfo?.jvmMaxBytes != null
+                  ? `${formatCapacityBytes(sysInfo.jvmUsedBytes)} / ${formatCapacityBytes(sysInfo.jvmMaxBytes)}`
+                  : '—'
+              }
+            />
+            <InfoRow
+              icon={Clock3}
+              label={t('systemManagement.startTime')}
+              loading={sysLoading}
+              value={sysInfo?.startTime ?? '—'}
+              mono
+            />
+            <InfoRow icon={Clock3} label={t('systemManagement.uptime')} loading={sysLoading} value={sysInfo?.uptimeText ?? '—'} />
+            <InfoRow icon={FolderTree} label={t('systemManagement.storageType')} loading={sysLoading} value={sysInfo?.storageType ?? '—'} />
+            <InfoRow
+              icon={FolderTree}
+              label={t('systemManagement.storagePath')}
+              loading={sysLoading}
+              value={sysInfo?.storagePath ?? '—'}
+              mono
+            />
+          </div>
         </div>
       </section>
 
