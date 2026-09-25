@@ -13,7 +13,8 @@
     <description>基础 bom 文件，管理整个项目的依赖版本</description>
 
     <properties>
-        <revision>5.0.0</revision>
+        <!-- 与根 pom revision 保持一致（BOM 用它钉内部模块版本，漂移会导致 reactor 内解析到仓库旧 jar） -->
+        <revision>5.0</revision>
         <flatten-maven-plugin.version>1.6.0</flatten-maven-plugin.version>
 
         <spring-boot.version>4.0.3</spring-boot.version>
