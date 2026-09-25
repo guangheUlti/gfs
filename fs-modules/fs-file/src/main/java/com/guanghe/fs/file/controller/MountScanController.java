@@ -1,6 +1,7 @@
 package com.guanghe.fs.file.mount;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.dev33.satoken.stp.StpUtil;
 import com.guanghe.fs.framework.common.domain.Result;
 import com.guanghe.fs.framework.common.exception.BusinessException;
 import com.guanghe.fs.framework.common.utils.I18nUtils;
@@ -40,8 +41,9 @@ public class MountScanController {
         if (setting == null) {
             throw new BusinessException(I18nUtils.getMessage("storage.config.not.exist"));
         }
-        // 异步触发会丢失错误反馈，这里同步执行但限制在挂载锁内（扫描与写穿透互斥）
-        mountScanService.scanSetting(setting);
+        // 异步执行：大目录扫描耗时不可控，同步会占住 HTTP 线程直到前端超时；
+        // 完成后挂载点与索引均已可见，稍后刷新文件页即可
+        mountScanService.scanSettingAsync(settingId, StpUtil.getLoginIdAsString());
         return Result.ok();
     }
 }

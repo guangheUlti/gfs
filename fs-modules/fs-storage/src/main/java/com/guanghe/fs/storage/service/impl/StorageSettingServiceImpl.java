@@ -72,6 +72,16 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     }
 
     /**
+     * 挂载启用回调（由 fs-file 在启动时注入）：启用挂载式配置后触发一次异步扫描，
+     * 使真实目录内容立即可见；非挂载平台不回调。
+     */
+    private volatile java.util.function.Consumer<String> mountEnabledConsumer;
+
+    public void setMountEnabledConsumer(java.util.function.Consumer<String> consumer) {
+        this.mountEnabledConsumer = consumer;
+    }
+
+    /**
      * 存储占用检查（由 fs-file 在启动时注入，避免 fs-storage 反向依赖 fs-file）。
      * 返回 true 表示该配置下仍有文件索引，禁止删除。
      */
@@ -272,6 +282,15 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
             storageServiceFacade.removeInstance(settingId);
         } else {
             storageServiceFacade.refreshInstance(settingId);
+            // 启用挂载式配置后自动扫描一次（异步，回调内自行判断平台能力位）
+            java.util.function.Consumer<String> enabledConsumer = this.mountEnabledConsumer;
+            if (enabledConsumer != null) {
+                try {
+                    enabledConsumer.accept(settingId);
+                } catch (Exception e) {
+                    log.warn("启用后触发挂载扫描失败: settingId={}", settingId, e);
+                }
+            }
         }
     }
 

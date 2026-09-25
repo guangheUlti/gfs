@@ -29,6 +29,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 import static com.guanghe.fs.file.domain.table.FileInfoTableDef.FILE_INFO;
@@ -53,11 +55,19 @@ public class MountScanService {
 
     private static final int MAX_DEPTH = 32;
 
+    /** 手动/启用触发扫描的异步执行线程池：单线程串行化所有扫描，避免 HTTP 线程被大目录扫描长时间占用导致请求超时 */
+    private final ExecutorService scanExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "mount-scan-async");
+        t.setDaemon(true);
+        return t;
+    });
+
     private final StorageSettingService storageSettingService;
     private final StorageServiceFacade storageServiceFacade;
     private final FileInfoService fileInfoService;
     private final MountManager mountManager;
     private final MountPathResolver mountPathResolver;
+    private final MountPointService mountPointService;
 
     @Value("${fs.file.mount.scan-enabled:true}")
     private boolean scanEnabled;
@@ -70,24 +80,26 @@ public class MountScanService {
                             StorageServiceFacade storageServiceFacade,
                             FileInfoService fileInfoService,
                             MountManager mountManager,
-                            MountPathResolver mountPathResolver) {
+                            MountPathResolver mountPathResolver,
+                            MountPointService mountPointService) {
         this.storageSettingService = storageSettingService;
         this.storageServiceFacade = storageServiceFacade;
         this.fileInfoService = fileInfoService;
         this.mountManager = mountManager;
         this.mountPathResolver = mountPathResolver;
+        this.mountPointService = mountPointService;
     }
 
-    /** 定时扫描（默认 5 分钟，可被 fs.file.mount.scan-interval 覆盖） */
+    /** 定时扫描（默认 5 分钟，可被 fs.file.mount.scan-interval 覆盖）；与手动触发共用同一串行线程池 */
     @Scheduled(fixedDelayString = "${fs.file.mount.scan-interval:300000}", initialDelay = 60000)
     public void scheduledScan() {
-        scanAll();
+        scanExecutor.execute(this::scanAll);
     }
 
-    /** 启动后先跑一次（对齐 cleanupFolderDownloadTasksOnStartup 模式） */
+    /** 启动后先跑一次（对齐 cleanupFolderDownloadTasksOnStartup 模式），异步避免阻塞就绪流程 */
     @EventListener(ApplicationReadyEvent.class)
     public void scanOnStartup() {
-        scanAll();
+        scanExecutor.execute(this::scanAll);
     }
 
     /** 扫描所有启用的挂载式设置（能力位驱动，覆盖 LocalMount/SMB 等一切 isMountMode 平台） */
@@ -107,12 +119,36 @@ public class MountScanService {
                 log.error("挂载扫描失败: settingId={}", setting.getId(), e);
             }
         }
+    }    /**
+     * 异步触发单个挂载设置扫描（手动接口/启用配置入口）：立即返回，避免大目录扫描占住 HTTP 线程导致请求超时；
+     * 完成后挂载点与索引均已可见。userId 为触发时的登录用户（用于挂载点懒创建），可空。
+     */
+    public void scanSettingAsync(String settingId, String userId) {
+        scanExecutor.execute(() -> {
+            try {
+                StorageSetting setting = storageSettingService.getById(settingId);
+                if (setting == null) {
+                    log.warn("挂载设置不存在，跳过扫描: settingId={}", settingId);
+                    return;
+                }
+                scanSetting(setting, userId);
+            } catch (Exception e) {
+                log.error("异步扫描失败: settingId={}", settingId, e);
+            }
+        });
     }
 
     /**
-     * 扫描单个挂载设置（手动接口入口）
+     * 扫描单个挂载设置（定时扫描入口；挂载点缺失时跳过本轮，等待文件页浏览时懒创建）
      */
     public void scanSetting(StorageSetting setting) {
+        scanSetting(setting, null);
+    }
+
+    /**
+     * 扫描单个挂载设置；userId 非空时先懒创建挂载点（手动/启用触发时允许尚未浏览过文件页）
+     */
+    private void scanSetting(StorageSetting setting, String userId) {
         mountManager.locks().callWithLock(setting.getId(), () -> {
             IStorageOperationService instance;
             try {
@@ -123,6 +159,16 @@ public class MountScanService {
             }
             if (!instance.isMountMode()) {
                 return;
+            }
+            if (userId != null) {
+                try {
+                    Map<String, Object> settingMap = new HashMap<>();
+                    settingMap.put("id", setting.getId());
+                    settingMap.put("configData", setting.getConfigData());
+                    mountPointService.ensureMountPoint(userId, settingMap);
+                } catch (Exception e) {
+                    log.warn("扫描前懒创建挂载点失败，继续尝试扫描: settingId={}", setting.getId(), e);
+                }
             }
             // 1. 根目录列举失败 → 本轮放弃（不删任何 DB 数据）
             List<StorageObjectEntry> rootEntries;
