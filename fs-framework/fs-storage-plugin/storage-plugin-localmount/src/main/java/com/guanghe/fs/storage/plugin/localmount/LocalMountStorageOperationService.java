@@ -69,12 +69,9 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
     @Override
     protected void validateConfig(StorageConfig config) {
         LocalMountConfig cfg = readConfig(config);
-        if (cfg.getRootPath() == null || cfg.getRootPath().trim().isEmpty()) {
+        String normalized = cfg.normalizedRootPath();
+        if (normalized == null || normalized.isEmpty()) {
             throw new StorageConfigException("本地目录挂载配置错误：挂载根路径不能为空");
-        }
-        // Windows 反斜杠路径直接拒绝（根路径应写成正斜杠形式，如 D:/mnt-test）
-        if (cfg.getRootPath().trim().contains("\\")) {
-            throw new StorageConfigException("本地目录挂载配置错误：根路径请使用正斜杠（如 D:/mnt-test）");
         }
         // 开启加密时口令必填（与 Local 插件同规则）
         if (cfg.isEncryptionEnabled()) {
@@ -88,10 +85,11 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
     @Override
     protected void initialize(StorageConfig config) {
         LocalMountConfig cfg = readConfig(config);
-        // 真实探测挂载根（P3 连接测试的落点）：必须存在且为目录，否则拒绝保存
-        Path raw = Paths.get(cfg.getRootPath().trim());
+        // 归一化后真实探测挂载根（P3 连接测试的落点）：必须存在且为目录，否则拒绝保存
+        String normalized = cfg.normalizedRootPath();
+        Path raw = Paths.get(normalized);
         if (!Files.isDirectory(raw, LinkOption.NOFOLLOW_LINKS)) {
-            throw new StorageConfigException("本地目录挂载配置错误：根路径不存在或不是目录: " + cfg.getRootPath().trim());
+            throw new StorageConfigException("本地目录挂载配置错误：根路径不存在或不是目录: " + normalized);
         }
         try {
             // 统一使用真实路径（解析大小写/符号链接差异），便于后续逃逸校验
@@ -99,7 +97,7 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
         } catch (IOException e) {
             throw new StorageConfigException("本地目录挂载配置错误：根路径无法解析: " + e.getMessage());
         }
-        this.followSymlinks = "true".equalsIgnoreCase(cfg.getFollowSymlinks());
+        this.followSymlinks = cfg.isFollowSymlinks();
         this.encryptionSecret = cfg.isEncryptionEnabled() ? cfg.getEncryptionSecret().trim() : null;
         log.info("{} 本地目录挂载初始化完成: rootPath={}, followSymlinks={}, encryption={}",
                 getLogPrefix(), rootPath, followSymlinks, encryptionSecret != null ? "AES-CTR 开启" : "关闭");
