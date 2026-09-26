@@ -4,6 +4,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.guanghe.fs.framework.common.domain.Result;
 import com.guanghe.fs.log.constant.OperationType;
 import com.guanghe.fs.log.service.SysOperationLogService;
+import com.guanghe.fs.storage.plugin.boot.StoragePluginManager;
 import com.guanghe.fs.storage.domain.StoragePlatform;
 import com.guanghe.fs.storage.domain.StorageSetting;
 import com.guanghe.fs.storage.domain.cmd.StorageSettingAddCmd;
@@ -34,11 +35,24 @@ public class StorageController {
 
     private final SysOperationLogService operationLogService;
 
+    private final StoragePluginManager storagePluginManager;
+
     @Operation(summary = "获取存储平台列表")
     @GetMapping("/platforms")
     public Result<List<StoragePlatformVO>> getPlatforms() {
         List<StoragePlatformVO> result = storagePlatformService.getList();
         return Result.ok(result);
+    }
+
+    @Operation(summary = "查询平台当前还可申请的最大配置容量", description = "供添加存储表单实时提示；平台无容量概念时返回 null")
+    @GetMapping("/platforms/{identifier}/capacity")
+    public Result<Long> getMaxConfigurableCapacity(@PathVariable("identifier") String identifier) {
+        try {
+            return Result.ok(storagePluginManager.getPrototype(identifier).getMaxConfigurableCapacity());
+        } catch (Exception e) {
+            // 平台未注册/不支持容量查询：不阻断表单，前端不展示
+            return Result.ok(null);
+        }
     }
 
     @Operation(summary = "获取用户存储平台配置列表")

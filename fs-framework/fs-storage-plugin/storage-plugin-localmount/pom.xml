@@ -10,7 +10,7 @@
     <artifactId>storage-plugin-localmount</artifactId>
 
     <description>
-        storage-plugin-localmount - 存储插件-本地目录挂载（读写）
+        storage-plugin-localmount - 存储插件-本地挂载（读写）
     </description>
 
     <dependencies>

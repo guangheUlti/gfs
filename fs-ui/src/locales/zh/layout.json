@@ -30,7 +30,7 @@
   },
   "storageDialog": {
     "title": "存储空间",
-    "description": "云盘空间、系统信息与运行状态一览",
+    "description": "云盘空间使用情况一览",
     "usedPercent": "已使用",
     "used": "已用空间",
     "free": "剩余空间",

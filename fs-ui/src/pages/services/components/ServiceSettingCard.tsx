@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Globe, HardDrive, SquareTerminal } from 'lucide-react'
+import { Cloud, Globe, HardDrive, SquareTerminal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { useServiceSettings } from '../hooks/useServiceSettings'
+import { OssKeyManager } from './OssKeyManager'
 import { ServiceStatusBadge } from './ServiceStatusBadge'
 
 interface ServiceSettingCardProps {
@@ -121,6 +122,8 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
               <SquareTerminal className='h-5 w-5 text-muted-foreground' />
             ) : setting.serviceType === 'ftp' ? (
               <HardDrive className='h-5 w-5 text-muted-foreground' />
+            ) : setting.serviceType === 'oss' ? (
+              <Cloud className='h-5 w-5 text-muted-foreground' />
             ) : (
               <Globe className='h-5 w-5 text-muted-foreground' />
             )}
@@ -192,7 +195,7 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
         )}
       </div>
 
-      {children}
+      {setting.serviceType === 'oss' ? <OssKeyManager serviceEnabled={setting.enabled} /> : children}
 
       {/* 操作区 */}
       <div className='flex items-center gap-2 border-t px-5 py-3'>

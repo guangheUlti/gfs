@@ -10,6 +10,7 @@ import com.guanghe.fs.file.domain.FileInfo;
 import com.guanghe.fs.file.domain.qry.FileRecycleQry;
 import com.guanghe.fs.file.domain.table.FileInfoTableDef;
 import com.guanghe.fs.file.domain.vo.FileRecycleVO;
+import com.guanghe.fs.file.mount.MountPathResolver;
 import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.file.service.FileObjectReferenceService;
 import com.guanghe.fs.file.service.FileRecycleService;
@@ -55,6 +56,8 @@ public class FileRecycleServiceImpl implements FileRecycleService {
     private final FileObjectReferenceService objectReferenceService;
 
     private final StorageServiceFacade storageServiceFacade;
+
+    private final MountPathResolver mountPathResolver;
 
     @Override
     public PageResult<FileRecycleVO> getRecyclePages(FileRecycleQry qry) {
@@ -209,12 +212,26 @@ public class FileRecycleServiceImpl implements FileRecycleService {
                 ))
                 .values().stream().toList();
 
-        // 挂载式：目录记录不走秒传引用链路，afterCommit 直接 deleteDirectory 清真实目录（8.4：真实目录随永久删除清理）
-        Map<String, List<FileInfo>> mountDirDeletes = allFiles.stream()
-                .filter(file -> Boolean.TRUE.equals(file.getIsDir())
-                        && StrUtil.isNotBlank(file.getObjectKey())
-                        && isMountStorage(file.getStoragePlatformSettingId()))
-                .collect(Collectors.groupingBy(FileInfo::getStoragePlatformSettingId));
+        // 挂载式：目录记录不走秒传引用链路，afterCommit 直接 deleteDirectory 清真实目录（8.4：真实目录随永久删除清理）。
+        // 目录行的 object_key 恒为 NULL（真实键由显示名链推导），必须在删除前的事务内先解析好相对键，
+        // 否则 afterCommit 时行已删、无从解析，目录在真实存储/内存树中残留并被对账导回。
+        Map<String, List<FileInfo>> mountDirDeletes = new LinkedHashMap<>();
+        for (FileInfo file : allFiles) {
+            if (!Boolean.TRUE.equals(file.getIsDir())
+                    || !isMountStorage(file.getStoragePlatformSettingId())) {
+                continue;
+            }
+            try {
+                String dirKey = mountPathResolver.resolveRelativeKey(file, file.getStoragePlatformSettingId());
+                if (StrUtil.isBlank(dirKey)) {
+                    continue; // 挂载点自身：无真实目录
+                }
+                file.setObjectKey(dirKey);
+                mountDirDeletes.computeIfAbsent(file.getStoragePlatformSettingId(), k -> new ArrayList<>()).add(file);
+            } catch (Exception e) {
+                log.warn("挂载目录相对键解析失败，跳过真实目录清理: id={}, error={}", file.getId(), e.getMessage());
+            }
+        }
         physicalObjects = physicalObjects.stream()
                 .filter(file -> !(Boolean.TRUE.equals(file.getIsDir())
                         && mountDirDeletes.containsKey(String.valueOf(file.getStoragePlatformSettingId()))

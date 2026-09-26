@@ -13,6 +13,7 @@ import com.guanghe.fs.storage.service.StorageSettingService;
 import com.mybatisflex.core.query.QueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -29,6 +30,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
@@ -69,11 +71,34 @@ public class MountScanService {
     private final MountPathResolver mountPathResolver;
     private final MountPointService mountPointService;
 
+    /** 实时监听服务：扫描完成后对齐监听状态； setter 注入避免与监听服务的回调形成构造期环 */
+    private volatile MountWatchService watchService;
+
+    @Autowired(required = false)
+    public void setWatchService(MountWatchService watchService) {
+        this.watchService = watchService;
+    }
+
     @Value("${fs.file.mount.scan-enabled:true}")
     private boolean scanEnabled;
 
     @Value("${fs.file.mount.scan-max-entries:50000}")
     private int scanMaxEntries;
+
+    /** 全局兑底扫描间隔毫秒（fs.file.mount.scan-interval，默认 30 分钟）：挂载未配置间隔时使用 */
+    @Value("${fs.file.mount.scan-interval:1800000}")
+    private long globalScanIntervalMillis;
+
+    /** 上次定时/手动扫描完成时间：settingId → epochMillis，避免「刚扫完 → tick 又到点」重复全扫 */
+    private final Map<String, Long> lastScanFinishedAt = new ConcurrentHashMap<>();
+
+    /**
+     * 查询上次扫描完成时间（供存储卡片展示）。
+     * 仅内存态：重启后由启动兑底全扫重新建立；尚未扫过返回 null。
+     */
+    public Long getLastScanFinishedAt(String settingId) {
+        return lastScanFinishedAt.get(settingId);
+    }
 
     @Autowired
     public MountScanService(StorageSettingService storageSettingService,
@@ -90,13 +115,58 @@ public class MountScanService {
         this.mountPointService = mountPointService;
     }
 
-    /** 定时扫描（默认 5 分钟，可被 fs.file.mount.scan-interval 覆盖）；与手动触发共用同一串行线程池 */
-    @Scheduled(fixedDelayString = "${fs.file.mount.scan-interval:300000}", initialDelay = 60000)
-    public void scheduledScan() {
-        scanExecutor.execute(this::scanAll);
+    /**
+     * 每分钟调度 tick：按每个挂载各自配置的 rescanIntervalSeconds 独立定时全扫
+     * （旧版全局一个 5 分钟 @Scheduled、用户配置的间隔不生效，已废弃）：
+     * 实时监听关闭：到点即扫；实时监听开启：同一间隔作为兑底全扫周期
+     * （覆盖 WatchService 异常/事件丢失/网络盘掉线）。fixedDelay 不叠加。
+     */
+    @Scheduled(fixedDelay = 60_000, initialDelay = 90_000)
+    public void schedulerTick() {
+        if (!scanEnabled) {
+            return;
+        }
+        List<StorageSetting> settings;
+        try {
+            settings = storageSettingService.listEnabledSettings();
+        } catch (Exception e) {
+            log.warn("调度 tick 读取启用设置失败: {}", e.getMessage());
+            return;
+        }
+        long now = System.currentTimeMillis();
+        for (StorageSetting setting : settings) {
+            try {
+                IStorageOperationService instance = storageServiceFacade.getStorageService(setting.getId());
+                if (!instance.isMountMode() || instance.isDirectAccess()) {
+                    // 本地挂载（直读）无后台扫描：浏览时由 reconcileDirectLevel 按层对账
+                    continue;
+                }
+                long intervalMillis = resolveIntervalMillis(instance);
+                Long last = lastScanFinishedAt.get(setting.getId());
+                if (last == null || now - last >= intervalMillis) {
+                    scanSettingAsync(setting.getId(), null);
+                }
+            } catch (Exception e) {
+                // 实例不可用（禁用中/网络盘掉线）等：跳过本轮，下个 tick 再试
+                log.debug("调度 tick 跳过挂载: settingId={}, error={}", setting.getId(), e.getMessage());
+            }
+        }
     }
 
-    /** 启动后先跑一次（对齐 cleanupFolderDownloadTasksOnStartup 模式），异步避免阻塞就绪流程 */
+    /** 解析单个挂载的定时扫描间隔毫秒：用户配置 > 全局兑底（实时监听开启时间隔语义不变，仅作兑底周期） */
+    private long resolveIntervalMillis(IStorageOperationService instance) {
+        Long configured = instance.rescanIntervalSeconds();
+        if (configured != null && configured > 0) {
+            return configured * 1000L;
+        }
+        return globalScanIntervalMillis;
+    }
+
+    /**
+     * 启动后先跑一次兑底全扫（对齐 cleanupFolderDownloadTasksOnStartup 模式）：
+     * 覆盖实时监听不可用/事件丢失场景，同时为各挂载建立扫描基线与实时监听；异步避免阻塞就绪流程。
+     * （旧全局 @Scheduled 已被 schedulerTick 按每挂载独立间隔调度取代）
+     */
     @EventListener(ApplicationReadyEvent.class)
     public void scanOnStartup() {
         scanExecutor.execute(this::scanAll);
@@ -111,15 +181,19 @@ public class MountScanService {
         for (StorageSetting setting : settings) {
             try {
                 IStorageOperationService instance = storageServiceFacade.getStorageService(setting.getId());
-                if (!instance.isMountMode()) {
+                if (!instance.isMountMode() || instance.isDirectAccess()) {
                     continue;
                 }
                 scanSetting(setting);
+                // 启动全扫同样计入「上次扫描完成」：避免启动 90 秒后 tick 对大目录重复全扫一轮
+                lastScanFinishedAt.put(setting.getId(), System.currentTimeMillis());
             } catch (Exception e) {
                 log.error("挂载扫描失败: settingId={}", setting.getId(), e);
             }
         }
-    }    /**
+    }
+
+    /**
      * 异步触发单个挂载设置扫描（手动接口/启用配置入口）：立即返回，避免大目录扫描占住 HTTP 线程导致请求超时；
      * 完成后挂载点与索引均已可见。userId 为触发时的登录用户（用于挂载点懒创建），可空。
      */
@@ -134,6 +208,8 @@ public class MountScanService {
                 scanSetting(setting, userId);
             } catch (Exception e) {
                 log.error("异步扫描失败: settingId={}", settingId, e);
+            } finally {
+                lastScanFinishedAt.put(settingId, System.currentTimeMillis());
             }
         });
     }
@@ -158,6 +234,10 @@ public class MountScanService {
                 return;
             }
             if (!instance.isMountMode()) {
+                return;
+            }
+            if (instance.isDirectAccess()) {
+                // 本地挂载（直读）：无后台扫描，浏览时按层实时对账
                 return;
             }
             if (userId != null) {
@@ -240,6 +320,16 @@ public class MountScanService {
 
             // 5. 批量落库
             applyChanges(ctx, true);
+
+            // 6. 扫描完成后对齐实时监听（首次扫描/配置变更/启停后自然收敛：期望开启则启动，期望关闭则停止）
+            MountWatchService watcher = this.watchService;
+            if (watcher != null) {
+                try {
+                    watcher.alignWatch(setting.getId(), instance);
+                } catch (Exception e) {
+                    log.warn("对齐实时监听状态失败: settingId={}", setting.getId(), e);
+                }
+            }
         });
     }
 
@@ -322,6 +412,197 @@ public class MountScanService {
                 }
                 ctx.seenPaths.add(rel);
             }
+        }
+    }
+
+    /**
+     * 本地挂载（直读）单层实时对账：浏览某目录前列一次真实目录，
+     * 以真实文件系统为唯一真相源把该层子行对齐（新增/更新/消失硬删），替代后台扫描。
+     * <p>
+     * 规则镜像 scan 单层逻辑：命中本设置软删（回收站）路径的条目跳过导入（墓碑永久删除后再导）；
+     * 类型不符（文件<->目录）按「旧子树硬删 + 新插」；列举/解析失败保留现有索引（宁多留勿误删）。
+     * 行按用户各自对账：共享存储下各用户浏览自己的父行时各自收敛，跨用户/外部改动在下次浏览时对齐。
+     * 全程持 MountLocks，与写穿透、同用户并发浏览互斥。
+     */
+    public void reconcileDirectLevel(String settingId, FileInfo parentRow) {
+        if (settingId == null || parentRow == null) {
+            return;
+        }
+        try {
+            mountManager.locks().callWithLock(settingId, () -> doReconcileDirectLevel(settingId, parentRow));
+        } catch (Exception e) {
+            log.warn("本地挂载（直读）对账失败（本次沿用现有索引）: settingId={}, parent={}, error={}",
+                    settingId, parentRow.getId(), e.getMessage());
+        }
+    }
+
+    private void doReconcileDirectLevel(String settingId, FileInfo parentRow) {
+        IStorageOperationService instance;
+        try {
+            instance = storageServiceFacade.getStorageService(settingId);
+        } catch (Exception e) {
+            log.warn("本地挂载（直读）实例不可用，跳过对账: settingId={}, error={}", settingId, e.getMessage());
+            return;
+        }
+        if (!instance.isDirectAccess()) {
+            return;
+        }
+        String parentKey;
+        try {
+            parentKey = mountPathResolver.resolveRelativeKey(parentRow, settingId);
+        } catch (Exception e) {
+            log.warn("本地挂载（直读）父路径解析失败，跳过对账: fileId={}, error={}", parentRow.getId(), e.getMessage());
+            return;
+        }
+        List<StorageObjectEntry> entries;
+        try {
+            entries = instance.listObjects(parentKey);
+        } catch (Exception e) {
+            log.warn("本地挂载（直读）列目录失败，本次沿用现有索引: settingId={}, dir={}, error={}",
+                    settingId, parentKey, e.getMessage());
+            return;
+        }
+
+        // 回收站墓碑路径集合：命中条目跳过导入（与 scan ⑥ 规则一致，墓碑永久删除后再导）
+        Set<String> softDeletedPaths = fileInfoService.list(new QueryWrapper()
+                        .where(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.eq(settingId))
+                        .and(FILE_INFO.IS_DELETED.eq(true)))
+                .stream()
+                .map(f -> {
+                    try {
+                        return mountPathResolver.resolveRelativeKey(f, settingId);
+                    } catch (Exception e) {
+                        return null;
+                    }
+                })
+                .filter(StrUtil::isNotEmpty)
+                .collect(Collectors.toSet());
+
+        // 该父目录下的现有非删子行（行按用户归属，此处对账的是浏览者自己的行）
+        List<FileInfo> children = fileInfoService.list(new QueryWrapper()
+                .where(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.eq(settingId))
+                .and(FILE_INFO.PARENT_ID.eq(parentRow.getId()))
+                .and(FILE_INFO.IS_DELETED.eq(false)));
+        Map<String, FileInfo> byLowerName = new HashMap<>();
+        for (FileInfo child : children) {
+            if (child.getDisplayName() != null) {
+                byLowerName.put(child.getDisplayName().toLowerCase(), child);
+            }
+        }
+
+        List<FileInfo> inserts = new ArrayList<>();
+        List<FileInfo> updates = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+
+        for (StorageObjectEntry entry : entries) {
+            String rel = entry.getKey();
+            String name = rel.contains("/") ? rel.substring(rel.lastIndexOf('/') + 1) : rel;
+            if (!MountManager.isValidNameSegment(name)) {
+                log.warn("本地挂载（直读）对账发现非法文件名，跳过: {}", rel);
+                continue;
+            }
+            if (softDeletedPaths.contains(rel)) {
+                // 该路径在回收站：占用名字，不导入
+                continue;
+            }
+            String nameKey = name.toLowerCase();
+            FileInfo existing = byLowerName.get(nameKey);
+            if (existing == null) {
+                inserts.add(entry.isDir()
+                        ? buildDirRecord(parentRow, name, settingId, toLocalDateTime(entry.getLastModified()))
+                        : buildFileRecord(parentRow, name, rel, settingId, entry));
+                seen.add(nameKey);
+                continue;
+            }
+            if (Boolean.TRUE.equals(existing.getIsDir()) != entry.isDir()) {
+                // 类型不符（与 scan ⑫ 一致）：旧子树硬删，按新类型重插
+                hardDeleteSubtree(existing);
+                inserts.add(entry.isDir()
+                        ? buildDirRecord(parentRow, name, settingId, toLocalDateTime(entry.getLastModified()))
+                        : buildFileRecord(parentRow, name, rel, settingId, entry));
+                seen.add(nameKey);
+                continue;
+            }
+            boolean dirty = false;
+            LocalDateTime remoteMtime = toLocalDateTime(entry.getLastModified());
+            if (entry.isDir()) {
+                if (remoteMtime != null && !remoteMtime.equals(existing.getUpdateTime())) {
+                    existing.setUpdateTime(remoteMtime);
+                    dirty = true;
+                }
+            } else {
+                if (existing.getSize() == null
+                        ? entry.getSize() != null
+                        : !existing.getSize().equals(entry.getSize())) {
+                    existing.setSize(entry.getSize());
+                    dirty = true;
+                }
+                if (remoteMtime != null && !remoteMtime.equals(existing.getUpdateTime())) {
+                    existing.setUpdateTime(remoteMtime);
+                    dirty = true;
+                }
+                if (!rel.equals(existing.getObjectKey())) {
+                    existing.setObjectKey(rel);
+                    dirty = true;
+                }
+            }
+            if (!name.equals(existing.getDisplayName())) {
+                // 外部改名（含大小写调整）：行名对齐真实 FS
+                existing.setDisplayName(name);
+                existing.setOriginalName(name);
+                if (!entry.isDir()) {
+                    existing.setSuffix(FileUtils.extName(name));
+                    existing.setMimeType(mimeOf(name));
+                }
+                dirty = true;
+            }
+            if (dirty) {
+                updates.add(existing);
+            }
+            seen.add(nameKey);
+        }
+
+        // 真实 FS 中已消失的非删子行：连同其非删子树硬删（墓碑行不动，与 scan 删除段一致）
+        List<String> vanishIds = new ArrayList<>();
+        for (FileInfo child : children) {
+            if (child.getDisplayName() != null
+                    && !seen.contains(child.getDisplayName().toLowerCase())) {
+                hardDeleteSubtreeIds(child, vanishIds);
+            }
+        }
+
+        if (!inserts.isEmpty()) {
+            fileInfoService.saveBatch(inserts);
+        }
+        if (!updates.isEmpty()) {
+            fileInfoService.updateBatch(updates);
+        }
+        if (!vanishIds.isEmpty()) {
+            fileInfoService.removeByIds(vanishIds);
+        }
+        if (!inserts.isEmpty() || !updates.isEmpty() || !vanishIds.isEmpty()) {
+            log.debug("本地挂载（直读）对账完成: dir={}, 新增={}, 更新={}, 硬删={}",
+                    parentKey, inserts.size(), updates.size(), vanishIds.size());
+        }
+    }
+
+    /** 硬删该行及其非删子树（收集到 ids 后由调用方批量删）；文件行无子节点，目录行按 parent 链递归 */
+    private void hardDeleteSubtreeIds(FileInfo row, List<String> ids) {
+        ids.add(row.getId());
+        if (Boolean.TRUE.equals(row.getIsDir())) {
+            for (FileInfo child : fileInfoService.list(new QueryWrapper()
+                    .where(FILE_INFO.PARENT_ID.eq(row.getId()))
+                    .and(FILE_INFO.IS_DELETED.eq(false)))) {
+                hardDeleteSubtreeIds(child, ids);
+            }
+        }
+    }
+
+    private void hardDeleteSubtree(FileInfo row) {
+        List<String> ids = new ArrayList<>();
+        hardDeleteSubtreeIds(row, ids);
+        if (!ids.isEmpty()) {
+            fileInfoService.removeByIds(ids);
         }
     }
 

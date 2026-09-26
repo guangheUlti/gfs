@@ -1,7 +1,8 @@
 [
   {"label":"挂载显示名","dataType":"string","identifier":"mountName","validation":{"required":false}},
   {"label":"挂载根路径","dataType":"string","identifier":"rootPath","validation":{"required":true},"placeholder":"如 D:/data 或 D:\\data，支持 d: 盘根写法"},
-  {"label":"扫描间隔（秒）","dataType":"string","identifier":"rescanIntervalSeconds","validation":{"required":false}},
+  {"label":"实时监听外部变更","dataType":"boolean","identifier":"realtimeWatch","validation":{"required":false},"description":"开启后 OS 目录变更事件秒级同步索引；关闭则按扫描间隔定时同步"},
+  {"label":"扫描间隔（秒）","dataType":"string","identifier":"rescanIntervalSeconds","validation":{"required":false},"placeholder":"留空默认 1800（30 分钟）；开启实时监听时作为兜底全扫周期"},
   {"label":"跟随符号链接","dataType":"boolean","identifier":"followSymlinks","validation":{"required":false}},
   {"label":"开启落盘加密","dataType":"boolean","identifier":"encryptionEnabled","validation":{"required":false}},
   {"label":"加密密钥","dataType":"string","identifier":"encryptionSecret","validation":{"required":false},"showIf":{"identifier":"encryptionEnabled","value":"true"},"placeholder":"开启加密后必填，变更密钥将导致旧文件无法解密"}

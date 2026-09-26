@@ -1,0 +1,4 @@
+[
+  {"label":"目录显示名","dataType":"string","identifier":"mountName","validation":{"required":true},"description":"该内存挂载在网盘中显示的文件夹名","placeholder":"如 内存盘"},
+  {"label":"内存大小（MB）","dataType":"string","identifier":"capacityMb","validation":{"required":true},"description":"在服务器内存中开辟的容量，按需增长不预分配；实例删除或服务重启后内容即释放。当前环境实际可申请上限见下方实时提示","placeholder":"如 512"}
+]

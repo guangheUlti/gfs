@@ -65,6 +65,10 @@
     "toastEnterField": "请输入{{label}}",
     "rescan": "重新扫描",
     "rescanOk": "扫描已触发，稍后刷新查看结果",
-    "rescanFail": "触发扫描失败，请稍后重试"
+    "rescanFail": "触发扫描失败，请稍后重试",
+    "lastScanPrefix": "上次扫描：",
+    "lastScanJustNow": "刚刚",
+    "lastScanMinutesAgo": "{{n}} 分钟前",
+    "lastScanHoursAgo": "{{n}} 小时前"
   }
 }

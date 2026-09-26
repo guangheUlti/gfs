@@ -38,7 +38,7 @@ import java.util.List;
 @Slf4j
 @StoragePlugin(
         identifier = "FTP",
-        name = "FTP存储",
+        name = "FTP",
         description = "通过 FTP/FTPS 协议接入传统文件服务器，支持被动模式与 TLS 加密（FTPS），兼容各类老牌主机面板。",
         icon = "icon-bendicunchu1",
         schemaResource = "classpath:schema/ftp-schema.json"

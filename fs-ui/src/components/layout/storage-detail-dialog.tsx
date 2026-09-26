@@ -1,14 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
-import { HardDrive, Info } from 'lucide-react'
+import { Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   getStorageCapacity,
   getSystemInfo,
   STORAGE_CAPACITY_REFETCH_INTERVAL_MS,
-  type DiskPartition,
 } from '@/api/home'
-import { AnimatedCircularProgressBar } from '@/components/ui/animated-circular-progress-bar'
-import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogContent,
@@ -21,12 +18,10 @@ import { cn } from '@/lib/utils'
 import { formatCapacityBytes } from '@/utils/format'
 
 /** 使用率越高越醒目：与侧栏存储条同一套告警色 */
-function usageColor(percent: number): { ring: string; bar: string; text: string } {
-  if (percent >= 90)
-    return { ring: 'bg-red-500', bar: 'bg-red-500', text: 'text-red-500' }
-  if (percent >= 75)
-    return { ring: 'bg-amber-500', bar: 'bg-amber-500', text: 'text-amber-500' }
-  return { ring: 'bg-primary', bar: 'bg-primary', text: 'text-primary' }
+function usageColor(percent: number): { bar: string; text: string } {
+  if (percent >= 90) return { bar: 'bg-red-500', text: 'text-red-500' }
+  if (percent >= 75) return { bar: 'bg-amber-500', text: 'text-amber-500' }
+  return { bar: 'bg-primary', text: 'text-primary' }
 }
 
 function formatPercent(percent: number): string {
@@ -34,93 +29,6 @@ function formatPercent(percent: number): string {
   if (percent <= 0) return '0%'
   if (percent < 1) return '<1%'
   return `${percent.toFixed(1)}%`
-}
-
-function Panel({
-  title,
-  icon: Icon,
-  children,
-  className,
-}: {
-  title: string
-  icon: React.ComponentType<{ className?: string }>
-  children: React.ReactNode
-  className?: string
-}) {
-  return (
-    <div className={cn('rounded-xl border bg-card', className)}>
-      <div className='flex items-center gap-2 border-b px-4 py-2.5'>
-        <Icon className='size-4 text-muted-foreground' strokeWidth={1.75} />
-        <span className='text-sm font-medium'>{title}</span>
-      </div>
-      <div className='space-y-2.5 px-4 py-3'>{children}</div>
-    </div>
-  )
-}
-
-function MiniUsageBar({
-  usedBytes,
-  totalBytes,
-}: {
-  usedBytes: number
-  totalBytes: number
-}) {
-  const percent = totalBytes > 0 ? Math.min(100, (usedBytes / totalBytes) * 100) : 0
-  const color = usageColor(percent)
-  return (
-    <div className='space-y-1'>
-      <div className='h-1.5 w-full overflow-hidden rounded-full bg-muted'>
-        <div
-          className={cn('h-full rounded-full transition-all', color.bar)}
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-      <div className='flex justify-between text-xs text-muted-foreground tabular-nums'>
-        <span>{formatCapacityBytes(usedBytes)}</span>
-        <span>{formatPercent(percent)}</span>
-      </div>
-    </div>
-  )
-}
-
-function DiskCard({
-  disk,
-  highlight,
-  t,
-}: {
-  disk: DiskPartition
-  highlight?: boolean
-  t: (key: string) => string
-}) {
-  return (
-    <div
-      className={cn(
-        'rounded-lg border p-3',
-        highlight && 'border-primary/40 bg-primary/5'
-      )}
-    >
-      <div className='mb-1.5 flex items-center gap-1.5'>
-        <HardDrive className='size-3.5 text-muted-foreground' strokeWidth={1.75} />
-        <span
-          className='min-w-0 truncate font-mono text-xs font-medium'
-          title={disk.mountPoint}
-        >
-          {disk.mountPoint}
-        </span>
-        {highlight && (
-          <Badge variant='secondary' className='ms-auto shrink-0 text-[10px]'>
-            {t('storageDialog.currentStorage')}
-          </Badge>
-        )}
-      </div>
-      <MiniUsageBar usedBytes={disk.usedBytes} totalBytes={disk.totalBytes} />
-      <div className='mt-1 text-xs text-muted-foreground tabular-nums'>
-        {t('storageDialog.diskTotal', { total: formatCapacityBytes(disk.totalBytes) })}
-        {' · '}
-        {t('storageDialog.diskFree', { free: formatCapacityBytes(disk.freeBytes) })}
-      </div>
-    </div>
-  )
 }
 
 function StorageDetailBody({ open }: { open: boolean }) {
@@ -148,67 +56,38 @@ function StorageDetailBody({ open }: { open: boolean }) {
     capacityKnown && totalBytes ? Math.min(100, (usedBytes / totalBytes) * 100) : 0
   const color = usageColor(percent)
 
-  const storagePath = sysInfo?.storagePath ?? null
-
-  /** 高亮与当前存储路径匹配的磁盘分区 */
-  const isCurrentDisk = (disk: DiskPartition) =>
-    !!storagePath && disk.mountPoint != null && storagePath.startsWith(disk.mountPoint)
-
   return (
     <div className='space-y-4'>
-      {/* 顶部：环形使用率 + 关键数字 */}
-      <div className='flex flex-col items-center gap-5 rounded-xl border bg-card p-5 sm:flex-row'>
+      {/* 顶部：横向使用率条 + 已使用 */}
+      <div className='rounded-xl border bg-card p-5'>
         {capacityLoading ? (
-          <Skeleton className='size-36 rounded-full' />
+          <Skeleton className='h-12 w-full rounded-full' />
         ) : (
-          <div className='relative shrink-0'>
-            <AnimatedCircularProgressBar
-              value={Math.round(percent)}
-              gaugePrimaryColor={
-                percent >= 90 ? '#ef4444' : percent >= 75 ? '#f59e0b' : 'var(--primary)'
-              }
-              gaugeSecondaryColor='var(--muted)'
-              className={cn('size-36 [&_span]:text-muted-foreground')}
-              showValue={false}
-            />
-            <div className='absolute inset-0 flex flex-col items-center justify-center'>
-              <span className={cn('text-2xl font-semibold tabular-nums', color.text)}>
-                {capacityKnown ? formatPercent(percent) : '—'}
-              </span>
+          <div className='space-y-2.5'>
+            <div className='flex items-baseline justify-between gap-3'>
               <span className='text-xs text-muted-foreground'>
                 {t('storageDialog.usedPercent')}
               </span>
+              <span
+                className={cn(
+                  'text-2xl font-semibold tabular-nums leading-none',
+                  color.text
+                )}
+              >
+                {capacityKnown ? formatPercent(percent) : '—'}
+              </span>
+            </div>
+            <div className='h-2.5 w-full overflow-hidden rounded-full bg-muted'>
+              <div
+                className={cn(
+                  'h-full rounded-full transition-all duration-500',
+                  color.bar
+                )}
+                style={{ width: `${capacityKnown ? percent : 0}%` }}
+              />
             </div>
           </div>
         )}
-        <div className='grid w-full min-w-0 grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4'>
-          {[
-            { label: t('storageDialog.used'), value: formatCapacityBytes(usedBytes) },
-            {
-              label: t('storageDialog.free'),
-              value: capacityKnown ? formatCapacityBytes((totalBytes as number) - usedBytes) : '—',
-            },
-            {
-              label: t('storageDialog.total'),
-              value: capacityKnown ? formatCapacityBytes(totalBytes) : '—',
-            },
-            {
-              label: t('storageDialog.files'),
-              value: sysInfo?.storageType ?? '—',
-            },
-          ].map((item) => (
-            <div key={item.label} className='min-w-0 rounded-lg bg-muted/50 p-3'>
-              <div className='truncate text-xs text-muted-foreground'>{item.label}</div>
-              <div className='mt-1 truncate text-base font-semibold tabular-nums'>
-                {capacityLoading || sysLoading ? (
-                  <Skeleton className='h-5 w-16' />
-                ) : (
-                  item.value
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
 
       {!capacityKnown && !capacityLoading && (
@@ -218,21 +97,32 @@ function StorageDetailBody({ open }: { open: boolean }) {
         </div>
       )}
 
-      {/* 磁盘分区 */}
-      {sysInfo?.disks && sysInfo.disks.length > 0 && (
-        <Panel title={t('storageDialog.disks')} icon={HardDrive}>
-          <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-3'>
-            {sysInfo.disks.map((disk) => (
-              <DiskCard
-                key={disk.mountPoint}
-                disk={disk}
-                highlight={isCurrentDisk(disk)}
-                t={t}
-              />
-            ))}
+      {/* 下方四个关键指标：存储类型 / 已用空间 / 剩余空间 / 总容量 */}
+      <div className='grid grid-cols-2 gap-3 xl:grid-cols-4'>
+        {[
+          { label: t('storageDialog.files'), value: sysInfo?.storageType ?? '—' },
+          { label: t('storageDialog.used'), value: formatCapacityBytes(usedBytes) },
+          {
+            label: t('storageDialog.free'),
+            value: capacityKnown ? formatCapacityBytes((totalBytes as number) - usedBytes) : '—',
+          },
+          {
+            label: t('storageDialog.total'),
+            value: capacityKnown ? formatCapacityBytes(totalBytes) : '—',
+          },
+        ].map((item) => (
+          <div key={item.label} className='min-w-0 rounded-lg bg-muted/50 p-3'>
+            <div className='truncate text-xs text-muted-foreground'>{item.label}</div>
+            <div className='mt-1 truncate text-base font-semibold tabular-nums'>
+              {capacityLoading || sysLoading ? (
+                <Skeleton className='h-5 w-16' />
+              ) : (
+                item.value
+              )}
+            </div>
           </div>
-        </Panel>
-      )}
+        ))}
+      </div>
     </div>
   )
 }

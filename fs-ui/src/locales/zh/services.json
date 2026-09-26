@@ -5,7 +5,8 @@
     "loadFailed": "服务配置加载失败",
     "webdavDesc": "复用主服务 HTTP 端口（80），路径前缀 /dav，支持 Windows 网络驱动器映射",
     "sftpDesc": "独立端口提供 SFTP 文件服务，支持 sshfs 挂载与 WinSCP 等客户端",
-    "ftpDesc": "独立端口提供 FTP 文件服务，支持 FileZilla 等客户端与断点续传下载"
+    "ftpDesc": "独立端口提供 FTP 文件服务，支持 FileZilla 等客户端与断点续传下载",
+    "ossDesc": "复用主服务 HTTP 端口（80），路径前缀 /oss，S3 兼容 API，支持 rclone 与各类 S3 SDK"
   },
   "status": {
     "running": "运行中",
@@ -68,6 +69,41 @@
       "filezilla": "FileZilla / WinSCP：协议选 FTP（明文），端口 {{port}}，账号密码为网盘登录账号",
       "pasv": "被动模式数据端口 50000-50100，防火墙需放行；下载支持断点续传，上传不支持 REST 续传",
       "security": "FTP 为明文协议，仅建议内网使用；对外暴露请改用 SFTP 或 WebDAV + HTTPS"
+    },
+    "oss": {
+      "client": "rclone：rclone config 新建 S3 类型 remote，端点 http://<主机>/oss，区域 us-east-1，凭证使用下方密钥对",
+      "keys": "SDK/工具连接时桶名固定为 gfs，路径风格 path-style（如 /oss/gfs/目录/文件.txt）",
+      "prefix": "SigV4 签名认证：请求需携带 AWS4-HMAC-SHA256 授权头（rclone、AWS SDK、Cyberduck、WinSCP S3 等均原生支持）",
+      "semantics": "删除操作进回收站可恢复；不支持桶管理、ACL 与匿名访问；密钥吊销后立即失效"
+    }
+  },
+  "oss": {
+    "keys": {
+      "title": "访问密钥",
+      "create": "新建密钥",
+      "creating": "创建中...",
+      "loading": "加载中...",
+      "empty": "暂无密钥，点击「新建密钥」签发一对 SigV4 凭证",
+      "noRemark": "无备注",
+      "revoked": "已吊销",
+      "lastUsed": "最后使用",
+      "createTitle": "新建访问密钥",
+      "createDesc": "签发一对 Access Key / Secret Key 用于 S3 兼容客户端鉴权。",
+      "remarkLabel": "备注（可选）",
+      "remarkPh": "如：rclone 备份用",
+      "cancel": "取消",
+      "createdTitle": "密钥创建成功",
+      "createdDesc": "Secret Key 仅此一次展示，请立即复制保存；关闭后无法再次查看。",
+      "accessKeyLabel": "Access Key",
+      "secretKeyLabel": "Secret Key",
+      "copiedAk": "Access Key 已复制",
+      "copiedSk": "Secret Key 已复制",
+      "copyFailed": "复制失败，请手动复制",
+      "done": "我已保存",
+      "revoke": "吊销",
+      "revokeTitle": "确认吊销",
+      "revokeDesc": "吊销后使用该密钥的客户端将立即失去访问权限，且不可恢复。确定要继续吗？",
+      "revokeOk": "密钥已吊销"
     }
   }
 }

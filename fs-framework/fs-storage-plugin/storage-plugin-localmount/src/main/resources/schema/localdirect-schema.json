@@ -1,0 +1,5 @@
+[
+  {"label":"目录显示名","dataType":"string","identifier":"mountName","validation":{"required":true},"description":"该本地目录在网盘中显示的文件夹名","placeholder":"如 项目文档"},
+  {"label":"本地根路径","dataType":"string","identifier":"rootPath","validation":{"required":true},"placeholder":"如 D:/data 或 D:\\data，支持 d: 盘根写法"},
+  {"label":"跟随符号链接","dataType":"boolean","identifier":"followSymlinks","validation":{"required":false}}
+]

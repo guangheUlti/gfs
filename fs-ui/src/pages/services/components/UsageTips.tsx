@@ -12,6 +12,7 @@ export function UsageTips({ setting }: { setting: ServiceSettingVO }) {
     webdav: ['windows', 'rclone', 'basic', 'lock'],
     sftp: ['client', 'sshfs', 'winscp', 'readonly'],
     ftp: ['client', 'filezilla', 'pasv', 'security'],
+    oss: ['client', 'keys', 'prefix', 'semantics'],
   }
   const keys = keysByType[serviceType] ?? ['client']
 

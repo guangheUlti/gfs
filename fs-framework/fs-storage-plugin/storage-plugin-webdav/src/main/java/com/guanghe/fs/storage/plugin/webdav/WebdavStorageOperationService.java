@@ -32,7 +32,7 @@ import java.util.Map;
 @Slf4j
 @StoragePlugin(
         identifier = "WebDAV",
-        name = "WebDAV存储",
+        name = "WebDAV",
         description = "通过 WebDAV 协议接入坚果云、Alist、Nextcloud 等网盘与自建服务，跨平台通用性强。",
         icon = "icon-bendicunchu1",
         schemaResource = "classpath:schema/webdav-schema.json"

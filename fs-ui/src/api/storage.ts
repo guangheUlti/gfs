@@ -15,6 +15,17 @@ export function getStoragePlatforms() {
 }
 
 /**
+ * 查询平台当前还可申请的最大配置容量（字节）；平台无容量概念时返回 null。
+ * request.get 已解包 Result.data，null 也会原样返回。
+ */
+export async function getPlatformMaxCapacity(identifier: string) {
+  const data = await request.get<number | null>(
+    `/apis/storage/platforms/${identifier}/capacity`
+  )
+  return data ?? null
+}
+
+/**
  * 获取用户已配置的存储平台列表
  */
 export function getUserStorageSettings() {
@@ -68,4 +79,14 @@ export function getActiveStoragePlatforms() {
  */
 export function scanMountStorage(settingId: number | string) {
   return request.post(`/apis/file/mount/scan/${settingId}`)
+}
+
+/**
+ * 查询挂载上次扫描完成时间（epoch 毫秒）；尚未扫过返回 null
+ */
+export async function getMountLastScanTime(settingId: number | string) {
+  const data = await request.get<number | null>(
+    `/apis/file/mount/last-scan/${settingId}`
+  )
+  return data ?? null
 }

@@ -4,7 +4,7 @@ import com.guanghe.fs.storage.plugin.core.config.StorageConfig;
 import lombok.Data;
 
 /**
- * 本地目录挂载配置
+ * 本地挂载配置
  *
  * @Author: guangheUlti
  * @Date: 2026/09/09
@@ -21,8 +21,11 @@ public class LocalMountConfig {
     /** 是否跟随符号链接（"true" 开启，默认 false；前端以开关提交布尔值） */
     private String followSymlinks;
 
-    /** 扫描间隔秒数（可选，覆盖全局扫描间隔） */
+    /** 扫描间隔秒数（可选；定时重扫周期，留空用全局默认 5 分钟；开启实时监听时退化为兜底全扫周期） */
     private String rescanIntervalSeconds;
+
+    /** 实时监听（"true" 开启，默认关闭）：OS 目录变更事件秒级触发同步，无需等定时扫描 */
+    private String realtimeWatch;
 
     /** 是否开启落盘加密（"true" 开启） */
     private String encryptionEnabled;
@@ -43,6 +46,27 @@ public class LocalMountConfig {
     /** 是否跟随符号链接（容错解析，非 "true" 一律视为关闭；布尔 true 由 Jackson 宽松转成 "true"） */
     public boolean isFollowSymlinks() {
         return "true".equalsIgnoreCase(followSymlinks == null ? "" : followSymlinks.trim());
+    }
+
+    /** 是否开启实时监听（容错解析，非 "true" 一律视为关闭；布尔 true 由 Jackson 宽松转成 "true"） */
+    public boolean isRealtimeWatch() {
+        return "true".equalsIgnoreCase(realtimeWatch == null ? "" : realtimeWatch.trim());
+    }
+
+    /**
+     * 定时重扫间隔（秒）：解析失败/非正数返回 null（表示未配置，用全局默认）。
+     */
+    public Long parsedRescanIntervalSeconds() {
+        try {
+            if (rescanIntervalSeconds == null || rescanIntervalSeconds.trim().isEmpty()) {
+                return null;
+            }
+            long v = Long.parseLong(rescanIntervalSeconds.trim());
+            return v > 0 ? v : null;
+            // 非数字一律按未配置处理
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /**

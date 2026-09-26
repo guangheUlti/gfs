@@ -5,7 +5,8 @@
     "loadFailed": "Failed to load service settings",
     "webdavDesc": "Reuses the main HTTP port (80) under /dav; supports Windows drive mapping",
     "sftpDesc": "Standalone SFTP endpoint; works with sshfs mounts and clients like WinSCP",
-    "ftpDesc": "Standalone FTP endpoint; works with clients like FileZilla and resumable downloads"
+    "ftpDesc": "Standalone FTP endpoint; works with clients like FileZilla and resumable downloads",
+    "ossDesc": "Reuses the main HTTP port (80) under /oss; S3-compatible API for rclone and S3 SDKs"
   },
   "status": {
     "running": "Running",
@@ -68,6 +69,41 @@
       "filezilla": "FileZilla / WinSCP: choose FTP (plain), port {{port}}, and use your drive credentials",
       "pasv": "Passive data ports 50000-50100 must be allowed by the firewall; downloads support resume, uploads do not",
       "security": "FTP is a plaintext protocol for LAN use only; prefer SFTP or WebDAV over HTTPS when exposed"
+    },
+    "oss": {
+      "client": "rclone: create an S3 remote with rclone config, set the endpoint to http://<host>/oss, region us-east-1, and use the key pair below",
+      "keys": "SDK/tools use the fixed bucket name gfs with path-style addressing (e.g. /oss/gfs/folder/file.txt)",
+      "prefix": "SigV4 authentication: requests must carry an AWS4-HMAC-SHA256 Authorization header (rclone, AWS SDKs, Cyberduck, WinSCP S3 all support it natively)",
+      "semantics": "Deletes go to the recycle bin and are recoverable; bucket management, ACL and anonymous access are not supported; revoked keys stop working immediately"
+    }
+  },
+  "oss": {
+    "keys": {
+      "title": "Access keys",
+      "create": "Create key",
+      "creating": "Creating…",
+      "loading": "Loading…",
+      "empty": "No keys yet. Create a SigV4 credential pair to connect S3 clients.",
+      "noRemark": "No remark",
+      "revoked": "Revoked",
+      "lastUsed": "Last used",
+      "createTitle": "Create access key",
+      "createDesc": "Issue an Access Key / Secret Key pair for S3-compatible clients.",
+      "remarkLabel": "Remark (optional)",
+      "remarkPh": "e.g. for rclone backup",
+      "cancel": "Cancel",
+      "createdTitle": "Key created",
+      "createdDesc": "The Secret Key is shown only once — copy and store it now; it cannot be viewed again.",
+      "accessKeyLabel": "Access Key",
+      "secretKeyLabel": "Secret Key",
+      "copiedAk": "Access Key copied",
+      "copiedSk": "Secret Key copied",
+      "copyFailed": "Copy failed; please copy manually",
+      "done": "Saved",
+      "revoke": "Revoke",
+      "revokeTitle": "Confirm revocation",
+      "revokeDesc": "Clients using this key lose access immediately and this cannot be undone. Continue?",
+      "revokeOk": "Key revoked"
     }
   }
 }

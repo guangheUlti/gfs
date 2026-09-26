@@ -184,6 +184,11 @@
                 <artifactId>storage-plugin-localmount</artifactId>
                 <version>${revision}</version>
             </dependency>
+            <dependency>
+                <groupId>com.guanghe.fs</groupId>
+                <artifactId>storage-plugin-memory</artifactId>
+                <version>${revision}</version>
+            </dependency>
             <!-- Apache MINA SSHD（对外 SFTP 服务端） -->
             <dependency>
                 <groupId>org.apache.sshd</groupId>

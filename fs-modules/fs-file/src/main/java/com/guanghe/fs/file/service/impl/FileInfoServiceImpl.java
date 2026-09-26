@@ -24,6 +24,7 @@ import com.guanghe.fs.file.mapper.FileInfoMapper;
 import com.guanghe.fs.file.mount.MountManager;
 import com.guanghe.fs.file.mount.MountPathResolver;
 import com.guanghe.fs.file.mount.MountPointService;
+import com.guanghe.fs.file.mount.MountScanService;
 import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.file.service.FileObjectReferenceService;
 import com.guanghe.fs.framework.common.constant.RedisKey;
@@ -93,6 +94,10 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     @Autowired
     private MountManager mountManager;
 
+    // 挂载扫描/对账服务（直读存储浏览时按层实时对账，字段注入容忍循环依赖）
+    @Autowired
+    private MountScanService mountScanService;
+
     @Autowired
     private com.guanghe.fs.storage.service.StorageSettingService storageSettingService;
 
@@ -108,6 +113,19 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
             return storageServiceFacade.getStorageService(settingId).isMountMode();
         } catch (Exception e) {
             log.warn("判断挂载存储失败，按非挂载处理: settingId={}", settingId, e);
+            return false;
+        }
+    }
+
+    /** 当前配置是否为本地挂载（直读）存储（能力位判断，勿比较 identifier 字符串） */
+    private boolean isDirectStorage(String settingId) {
+        if (StrUtil.isBlank(settingId)) {
+            return false;
+        }
+        try {
+            return storageServiceFacade.getStorageService(settingId).isDirectAccess();
+        } catch (Exception e) {
+            log.warn("判断直读存储失败，按非直读处理: settingId={}", settingId, e);
             return false;
         }
     }
@@ -400,6 +418,17 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         String oldObjectKey = fileInfo.getObjectKey();
         String oldContentMd5 = fileInfo.getContentMd5();
         Long oldSize = fileInfo.getSize();
+        // 挂载式存储：物理路径即对象键（父键+文件名），内容更新只能原地覆盖写（挂载路径无引用计数概念），
+        // 不走秒传复用/换键；md5 恒 NULL 与挂载红线一致（对账不比对 md5）。
+        if (isMountStorage(storagePlatformSettingId)) {
+            IStorageOperationService storageService =
+                    storageServiceFacade.getStorageService(storagePlatformSettingId);
+            mountManager.locks().callWithLock(storagePlatformSettingId, () ->
+                    storageService.uploadFile(new ByteArrayInputStream(bytes), oldObjectKey));
+            fileInfo.setUpdateTime(LocalDateTime.now());
+            updateById(fileInfo);
+            return;
+        }
         FileObjectReferenceService referenceService = objectReferenceServiceProvider.getObject();
         try (FileObjectReferenceService.ReferenceLock ignored =
                      referenceService.acquireContentLock(storagePlatformSettingId, newMd5, (long) bytes.length)) {
@@ -456,7 +485,11 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     /** 写入文本物理对象（含内容级复用）并落库文件记录 */
     private FileInfo writeTextObject(String userId, String storagePlatformSettingId,
                                      String parentId, String displayName, String suffix, byte[] bytes) {
-        String contentMd5 = DigestUtil.md5Hex(bytes);
+        // 挂载式存储：物理路径即对象键（父键+显示名），与分片上传同一规则；
+        // 不做秒传复用（路径由目录位置决定，不可指向他人对象）、md5 恒 NULL（与挂载设计红线一致，
+        // 否则对账/扫描会把「md5 非空但目录里真实条目大小不同」的行误判）。同名覆盖交给 generateUniqueName 预防。
+        boolean mountMode = isMountStorage(storagePlatformSettingId);
+        String contentMd5 = mountMode ? null : DigestUtil.md5Hex(bytes);
         FileObjectReferenceService referenceService = objectReferenceServiceProvider.getObject();
         LocalDateTime now = LocalDateTime.now();
         FileInfo fileInfo = new FileInfo();
@@ -473,21 +506,37 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         fileInfo.setIsDeleted(false);
         try (FileObjectReferenceService.ReferenceLock ignored =
                      referenceService.acquireContentLock(storagePlatformSettingId, contentMd5, (long) bytes.length)) {
-            FileInfo reusable = referenceService.findReusableFile(
-                    contentMd5, (long) bytes.length, storagePlatformSettingId);
-            if (reusable != null) {
-                try (FileObjectReferenceService.ReferenceLock objectLock =
-                             referenceService.acquireObjectLock(
-                                     reusable.getStoragePlatformSettingId(), reusable.getObjectKey())) {
-                    fileInfo.setObjectKey(reusable.getObjectKey());
+            if (mountMode) {
+                // 挂载式：先写真实对象（成功后再插 DB，失败不落库，与 createDirectory 同序）
+                String objectKey;
+                if (StrUtil.isNotBlank(parentId)) {
+                    FileInfo parent = getAuthorizedFile(parentId);
+                    String parentKey = mountPathResolver.resolveRelativeKey(parent, storagePlatformSettingId);
+                    objectKey = parentKey.isEmpty() ? displayName : parentKey + "/" + displayName;
+                } else {
+                    objectKey = displayName;
                 }
-            } else {
-                String objectKey = FileUtils.generateObjectKey(
-                        userId, IdUtil.fastSimpleUUID() + "." + suffix);
                 IStorageOperationService storageService =
                         storageServiceFacade.getStorageService(storagePlatformSettingId);
                 storageService.uploadFile(new ByteArrayInputStream(bytes), objectKey);
                 fileInfo.setObjectKey(objectKey);
+            } else {
+                FileInfo reusable = referenceService.findReusableFile(
+                        contentMd5, (long) bytes.length, storagePlatformSettingId);
+                if (reusable != null) {
+                    try (FileObjectReferenceService.ReferenceLock objectLock =
+                                 referenceService.acquireObjectLock(
+                                         reusable.getStoragePlatformSettingId(), reusable.getObjectKey())) {
+                        fileInfo.setObjectKey(reusable.getObjectKey());
+                    }
+                } else {
+                    String objectKey = FileUtils.generateObjectKey(
+                            userId, IdUtil.fastSimpleUUID() + "." + suffix);
+                    IStorageOperationService storageService =
+                            storageServiceFacade.getStorageService(storagePlatformSettingId);
+                    storageService.uploadFile(new ByteArrayInputStream(bytes), objectKey);
+                    fileInfo.setObjectKey(objectKey);
+                }
             }
             fileInfo.setContentMd5(contentMd5);
             fileInfo.setSize((long) bytes.length);
@@ -1190,6 +1239,25 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
                 mountPointService.ensureMountPoint(userId, settingMap);
             } catch (Exception e) {
                 log.warn("挂载点懒创建失败，不影响本次列表: settingId={}", storagePlatformSettingId, e);
+            }
+        }
+
+        // 本地挂载（直读）：进入子目录前列一次真实目录并按层对账（真实 FS 为唯一真相源，无后台扫描）。
+        // 对账失败只告警不阻断，本次列表沿用现有索引行。
+        if (StrUtil.isNotBlank(storagePlatformSettingId)
+                && qry.getParentId() != null
+                && !Boolean.TRUE.equals(qry.getIsRecents())
+                && isDirectStorage(storagePlatformSettingId)) {
+            try {
+                FileInfo parent = getById(qry.getParentId());
+                if (parent != null
+                        && storagePlatformSettingId.equals(parent.getStoragePlatformSettingId())
+                        && Boolean.TRUE.equals(parent.getIsDir())
+                        && !Boolean.TRUE.equals(parent.getIsDeleted())) {
+                    mountScanService.reconcileDirectLevel(storagePlatformSettingId, parent);
+                }
+            } catch (Exception e) {
+                log.warn("本地挂载（直读）目录对账失败，不影响本次列表: parentId={}", qry.getParentId(), e);
             }
         }
 

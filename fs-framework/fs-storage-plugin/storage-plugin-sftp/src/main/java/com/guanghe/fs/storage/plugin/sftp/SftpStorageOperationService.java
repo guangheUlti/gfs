@@ -46,7 +46,7 @@ import java.util.Stack;
 @Slf4j
 @StoragePlugin(
         identifier = "SFTP",
-        name = "SFTP存储",
+        name = "SFTP",
         description = "通过 SFTP 协议接入远程服务器目录，支持密码与私钥两种认证方式，适合把文件托管到自有主机。",
         icon = "icon-bendicunchu1",
         schemaResource = "classpath:schema/sftp-schema.json"

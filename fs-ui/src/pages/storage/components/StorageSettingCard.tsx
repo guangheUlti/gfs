@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { StorageSetting, ConfigScheme } from '@/types/storage'
 import {
   Database,
@@ -19,6 +20,7 @@ import {
   toggleStorageSetting,
   updateStorageSetting,
   scanMountStorage,
+  getMountLastScanTime,
 } from '@/api/storage'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -77,10 +79,33 @@ export function StorageSettingCard({
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [copiedConfig, setCopiedConfig] = useState(false)
   const [isRescanning, setIsRescanning] = useState(false)
+  const queryClient = useQueryClient()
 
   const isMountPlatform = setting.storagePlatform?.identifier === 'LocalMount'
-  // 内置本地存储（id=Local）：恒启用，支持查看/编辑根目录，不支持禁用与删除
-  const isBuiltinLocal = setting.storagePlatform?.identifier === 'Local'
+  // 内置本地存储：固定 id=Local（恒启用，支持查看/编辑根目录，不支持禁用与删除）。
+  // 注意不能用 identifier 判定：附加的本地存储实例 identifier 同样是 Local，但 id 是 UUID，必须有删除/启停
+  const isBuiltinLocal = setting.id === 'Local'
+
+  // 上次扫描完成时间（仅本地入库类有「重新扫描」按钮的平台查询）
+  const { data: lastScanAt } = useQuery({
+    queryKey: ['mountLastScan', setting.id],
+    queryFn: () => getMountLastScanTime(setting.id),
+    enabled: isMountPlatform,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  })
+
+  /** 相对时间文案：刚刚 / N 分钟前 / N 小时前 / 具体时间 */
+  const lastScanText = (() => {
+    if (!lastScanAt) return null
+    const diff = Date.now() - lastScanAt
+    if (diff < 60_000) return t('card.lastScanJustNow')
+    if (diff < 3_600_000)
+      return t('card.lastScanMinutesAgo', { n: Math.floor(diff / 60_000) })
+    if (diff < 86_400_000)
+      return t('card.lastScanHoursAgo', { n: Math.floor(diff / 3_600_000) })
+    return new Date(lastScanAt).toLocaleString()
+  })()
 
   const schemes: ConfigScheme[] = JSON.parse(
     setting.storagePlatform.configScheme
@@ -232,6 +257,10 @@ export function StorageSettingCard({
     try {
       await scanMountStorage(setting.id)
       toast.success(t('card.rescanOk'))
+      // 扫描为异步，延迟刷新上次扫描时间
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['mountLastScan', setting.id] })
+      }, 3000)
     } catch (error) {
       toast.error(t('card.rescanFail'))
     } finally {
@@ -406,6 +435,12 @@ export function StorageSettingCard({
               </Button>
             )}
           </div>
+        )}
+        {isMountPlatform && !isBuiltinLocal && lastScanText && (
+          <p className='mt-2 text-center text-xs text-muted-foreground'>
+            {t('card.lastScanPrefix')}
+            {lastScanText}
+          </p>
         )}
       </li>
 

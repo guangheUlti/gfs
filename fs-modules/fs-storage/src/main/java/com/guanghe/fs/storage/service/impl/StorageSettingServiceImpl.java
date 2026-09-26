@@ -72,13 +72,13 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     }
 
     /**
-     * 挂载启用回调（由 fs-file 在启动时注入）：启用挂载式配置后触发一次异步扫描，
-     * 使真实目录内容立即可见；非挂载平台不回调。
+     * 挂载配置变更回调（由 fs-file 在启动时注入）：启用或编辑保存挂载式配置后触发一次异步扫描，
+     * 使真实目录内容立即可见，并按新配置对齐实时监听；非挂载平台不回调。
      */
-    private volatile java.util.function.Consumer<String> mountEnabledConsumer;
+    private volatile java.util.function.Consumer<String> mountConfigChangedConsumer;
 
-    public void setMountEnabledConsumer(java.util.function.Consumer<String> consumer) {
-        this.mountEnabledConsumer = consumer;
+    public void setMountConfigChangedConsumer(java.util.function.Consumer<String> consumer) {
+        this.mountConfigChangedConsumer = consumer;
     }
 
     /**
@@ -282,14 +282,17 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
             storageServiceFacade.removeInstance(settingId);
         } else {
             storageServiceFacade.refreshInstance(settingId);
-            // 启用挂载式配置后自动扫描一次（异步，回调内自行判断平台能力位）
-            java.util.function.Consumer<String> enabledConsumer = this.mountEnabledConsumer;
-            if (enabledConsumer != null) {
-                try {
-                    enabledConsumer.accept(settingId);
-                } catch (Exception e) {
-                    log.warn("启用后触发挂载扫描失败: settingId={}", settingId, e);
-                }
+            // 启用挂载式配置后自动扫描一次（异步，回调内自行判断平台能力位）。
+            // 必须在事务提交后再触发：异步线程读库时 enabled 已落库，否则扫描线程读到旧 enabled=0 会跳过本轮（实测踩坑）
+            java.util.function.Consumer<String> changedConsumer = this.mountConfigChangedConsumer;
+            if (changedConsumer != null) {
+                afterCommit(() -> {
+                    try {
+                        changedConsumer.accept(settingId);
+                    } catch (Exception e) {
+                        log.warn("启用后触发挂载扫描失败: settingId={}", settingId, e);
+                    }
+                });
             }
         }
     }
@@ -370,6 +373,35 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
         this.updateById(storageSetting);
         // 刷新缓存
         storageServiceFacade.refreshInstance(cmd.getSettingId());
+        // 挂载式配置编辑保存后自动异步扫描一次并按新配置对齐实时监听（回调内自行判断平台能力位，非挂载平台无副作用）。
+        // 同启用分支：事务提交后再触发，避免异步线程读到未提交的旧配置
+        java.util.function.Consumer<String> changedConsumer = this.mountConfigChangedConsumer;
+        if (changedConsumer != null) {
+            afterCommit(() -> {
+                try {
+                    changedConsumer.accept(cmd.getSettingId());
+                } catch (Exception e) {
+                    log.warn("编辑保存后触发挂载扫描失败: settingId={}", cmd.getSettingId(), e);
+                }
+            });
+        }
+    }
+
+    /**
+     * 事务提交后执行回调；无事务时立即执行（与 afterCommit 语义对齐，兼容非事务调用路径）。
+     */
+    private void afterCommit(Runnable action) {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            action.run();
+                        }
+                    });
+        } else {
+            action.run();
+        }
     }
 
     /**
@@ -479,11 +511,9 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
             throw new BusinessException(I18nUtils.getMessage("storage.delete.has.files"));
         }
 
-        this.removeById(id);
-        storageServiceFacade.removeInstance(id);
-
-        // 挂载平台删除：卸载 = 只清网盘索引（含挂载点与回收站记录），绝不碰真实文件（8.4-⑧）
-        // 能力位驱动：LocalMount / SMB 等一切 isMountMode 平台统一走索引清理，禁止字符串比较
+        // 挂载/直读平台删除：先卸载索引（含挂载点与回收站记录），再删配置——
+        // 顺序不可颠倒：removeInstance 后实例无法加载，卸载回调会静默失败导致索引残留（孤煫行）。
+        // 卸载只清网盘索引，绝不碰真实文件（8.4-⑧）；若后续删配置失败，索引会在下次浏览/扫描时自重建。
         try {
             IStorageOperationService instance = storageServiceFacade.getStorageService(id);
             if (instance != null && instance.isMountMode()) {
@@ -492,6 +522,9 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
         } catch (Exception e) {
             log.error("挂载卸载清理索引失败: settingId={}", id, e);
         }
+
+        this.removeById(id);
+        storageServiceFacade.removeInstance(id);
 
         log.info("存储配置已删除并移除缓存: settingId={}", id);
     }

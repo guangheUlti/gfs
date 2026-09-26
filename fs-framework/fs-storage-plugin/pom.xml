@@ -26,5 +26,6 @@
         <module>storage-plugin-sftp</module>
         <module>storage-plugin-ftp</module>
         <module>storage-plugin-localmount</module>
+        <module>storage-plugin-memory</module>
     </modules>
 </project>

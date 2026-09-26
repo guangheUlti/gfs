@@ -30,7 +30,7 @@
   },
   "storageDialog": {
     "title": "Storage",
-    "description": "Cloud drive capacity, system info and runtime status",
+    "description": "Cloud drive usage at a glance",
     "usedPercent": "used",
     "used": "Used",
     "free": "Free",

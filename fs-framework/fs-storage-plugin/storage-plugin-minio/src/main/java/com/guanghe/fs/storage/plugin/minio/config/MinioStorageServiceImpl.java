@@ -14,7 +14,7 @@ import com.guanghe.fs.storage.plugin.core.s3.AbstractS3CompatibleStorageService;
  */
 @StoragePlugin(
         identifier = "Minio",
-        name = "Minio对象存储",
+        name = "Minio对象",
         description = "RustFS 是一个基于 Rust 构建的高性能分布式对象存储系统。Rust 是全球最受开发者喜爱的编程语言之一，RustFS 完美结合了 MinIO 的简洁性与 Rust 的内存安全及高性能优势。它提供完整的 S3 兼容性，完全开源，并专为数据湖、人工智能（AI）和大数据负载进行了优化。",
         icon = "icon-bendicunchu1",
         link = "https://github.com/rustfs/rustfs",

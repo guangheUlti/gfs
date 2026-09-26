@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/apis/file/mount")
 @RequiredArgsConstructor
-@Tag(name = "挂载扫描", description = "本地目录挂载手动扫描接口")
+@Tag(name = "挂载扫描", description = "本地挂载手动扫描接口")
 public class MountScanController {
 
     private final MountScanService mountScanService;
@@ -45,5 +46,12 @@ public class MountScanController {
         // 完成后挂载点与索引均已可见，稍后刷新文件页即可
         mountScanService.scanSettingAsync(settingId, StpUtil.getLoginIdAsString());
         return Result.ok();
+    }
+
+    @GetMapping("/last-scan/{settingId}")
+    @SaCheckPermission("storage:manage")
+    @Operation(summary = "查询上次扫描完成时间", description = "返回 epoch 毫秒；尚未扫过（含重启后未到启动兑底扫描）返回 null")
+    public Result<Long> lastScan(@PathVariable String settingId) {
+        return Result.ok(mountScanService.getLastScanFinishedAt(settingId));
     }
 }

@@ -65,6 +65,10 @@
     "toastEnterField": "Enter {{label}}",
     "rescan": "Rescan",
     "rescanOk": "Scan triggered, refresh later to see results",
-    "rescanFail": "Failed to trigger scan, please try again"
+    "rescanFail": "Failed to trigger scan, please try again",
+    "lastScanPrefix": "Last scan: ",
+    "lastScanJustNow": "just now",
+    "lastScanMinutesAgo": "{{n}} min ago",
+    "lastScanHoursAgo": "{{n}} h ago"
   }
 }

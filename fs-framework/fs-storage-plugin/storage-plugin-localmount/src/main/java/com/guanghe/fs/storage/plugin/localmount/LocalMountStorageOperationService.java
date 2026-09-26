@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * 本地目录挂载插件（读写）
+ * 本地挂载插件（读写）
  * <p>
  * 目录树镜像真实文件系统：DB 中文件记录的 object_key = 相对挂载根的真实相对路径（posix），
  * GFS 内写操作穿透真实 FS，外部改动靠扫描同步回 DB。
@@ -45,8 +45,8 @@ import java.util.stream.Stream;
 @Slf4j
 @StoragePlugin(
         identifier = "LocalMount",
-        name = "本地目录挂载",
-        description = "把服务器本地真实目录挂进网盘：目录结构与真实文件系统一一对应，网盘内的增删改直接作用于真实文件，外部改动可一键重新扫描同步。",
+        name = "本地入库",
+        description = "把服务器本地真实目录扫描入库：目录结构镜像进网盘数据库，网盘内的增删改穿透真实文件，外部改动可一键重新扫描同步索引。",
         icon = "icon-bendicunchu1",
         schemaResource = "classpath:schema/localmount-schema.json"
 )
@@ -54,6 +54,12 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
 
     private Path rootPath;
     private boolean followSymlinks;
+
+    /** 实时监听开关（配置快照，供 fs-file 侧能力位查询） */
+    private boolean realtimeWatch;
+
+    /** 定时重扫间隔秒数（配置快照；null 表示未配置，用全局默认） */
+    private Long rescanIntervalSeconds;
 
     /** 落盘加密口令（encryptionEnabled=true 时非空） */
     private String encryptionSecret;
@@ -71,13 +77,13 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
         LocalMountConfig cfg = readConfig(config);
         String normalized = cfg.normalizedRootPath();
         if (normalized == null || normalized.isEmpty()) {
-            throw new StorageConfigException("本地目录挂载配置错误：挂载根路径不能为空");
+            throw new StorageConfigException("本地挂载配置错误：挂载根路径不能为空");
         }
         // 开启加密时口令必填（与 Local 插件同规则）
         if (cfg.isEncryptionEnabled()) {
             String secret = cfg.getEncryptionSecret();
             if (secret == null || secret.trim().isEmpty()) {
-                throw new StorageConfigException("本地目录挂载配置错误：开启落盘加密后必须设置密钥（encryptionSecret）");
+                throw new StorageConfigException("本地挂载配置错误：开启落盘加密后必须设置密钥（encryptionSecret）");
             }
         }
     }
@@ -89,18 +95,20 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
         String normalized = cfg.normalizedRootPath();
         Path raw = Paths.get(normalized);
         if (!Files.isDirectory(raw, LinkOption.NOFOLLOW_LINKS)) {
-            throw new StorageConfigException("本地目录挂载配置错误：根路径不存在或不是目录: " + normalized);
+            throw new StorageConfigException("本地挂载配置错误：根路径不存在或不是目录: " + normalized);
         }
         try {
             // 统一使用真实路径（解析大小写/符号链接差异），便于后续逃逸校验
             this.rootPath = raw.toRealPath();
         } catch (IOException e) {
-            throw new StorageConfigException("本地目录挂载配置错误：根路径无法解析: " + e.getMessage());
+            throw new StorageConfigException("本地挂载配置错误：根路径无法解析: " + e.getMessage());
         }
         this.followSymlinks = cfg.isFollowSymlinks();
+        this.realtimeWatch = cfg.isRealtimeWatch();
+        this.rescanIntervalSeconds = cfg.parsedRescanIntervalSeconds();
         this.encryptionSecret = cfg.isEncryptionEnabled() ? cfg.getEncryptionSecret().trim() : null;
-        log.info("{} 本地目录挂载初始化完成: rootPath={}, followSymlinks={}, encryption={}",
-                getLogPrefix(), rootPath, followSymlinks, encryptionSecret != null ? "AES-CTR 开启" : "关闭");
+        log.info("{} 本地挂载初始化完成: rootPath={}, followSymlinks={}, realtimeWatch={}, rescanIntervalSeconds={}, encryption={}",
+                getLogPrefix(), rootPath, followSymlinks, realtimeWatch, rescanIntervalSeconds, encryptionSecret != null ? "AES-CTR 开启" : "关闭");
     }
 
     public Path getRootPath() {
@@ -266,7 +274,7 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
 
     @Override
     public String getFileUrl(String objectKey, Integer expireSeconds) {
-        throw new StorageOperationException("本地目录挂载不支持生成公网直链");
+        throw new StorageOperationException("本地挂载不支持生成公网直链");
     }
 
     @Override
@@ -283,6 +291,29 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
     @Override
     public boolean isMountMode() {
         return true;
+    }
+
+    @Override
+    public Path mountRootPath() {
+        ensureNotPrototype();
+        return rootPath;
+    }
+
+    @Override
+    public boolean isRealtimeWatchSupported() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsWatchRealtime() {
+        ensureNotPrototype();
+        return realtimeWatch;
+    }
+
+    @Override
+    public Long rescanIntervalSeconds() {
+        ensureNotPrototype();
+        return rescanIntervalSeconds;
     }
 
     @Override
@@ -439,7 +470,7 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
         try {
             return LocalMountConfig.toObject(config);
         } catch (Exception e) {
-            throw new StorageConfigException("本地目录挂载配置解析失败: " + e.getMessage());
+            throw new StorageConfigException("本地挂载配置解析失败: " + e.getMessage());
         }
     }
 

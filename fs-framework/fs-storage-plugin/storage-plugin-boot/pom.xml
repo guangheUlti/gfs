@@ -56,10 +56,16 @@
             <artifactId>storage-plugin-ftp</artifactId>
         </dependency>
 
-        <!-- 本地目录挂载插件 -->
+        <!-- 本地挂载插件 -->
         <dependency>
             <groupId>com.guanghe.fs</groupId>
             <artifactId>storage-plugin-localmount</artifactId>
+        </dependency>
+
+        <!-- 内存存储插件 -->
+        <dependency>
+            <groupId>com.guanghe.fs</groupId>
+            <artifactId>storage-plugin-memory</artifactId>
         </dependency>
 
     </dependencies>

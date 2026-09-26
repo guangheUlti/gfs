@@ -8,6 +8,7 @@ import {
   getStoragePlatforms,
   addStorageSetting,
   getUserStorageSettings,
+  getPlatformMaxCapacity,
 } from '@/api/storage'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -73,6 +74,24 @@ export function AddStorageModal({
   const selectedPlatform = platforms.find(
     (p) => p.id.toString() === selectedPlatformId
   )
+
+  // 平台可申请的最大配置容量（字节）；null 表示平台无容量概念，不展示提示
+  const { data: maxCapacityBytes } = useQuery({
+    queryKey: ['platformMaxCapacity', selectedPlatform?.identifier],
+    queryFn: () => getPlatformMaxCapacity(selectedPlatform!.identifier),
+    enabled: !!selectedPlatform?.identifier,
+    staleTime: 30_000,
+  })
+
+  /** 容量提示文案（MB 展示，>1024MB 同时给 GB） */
+  const capacityHint = (() => {
+    if (maxCapacityBytes == null) return null
+    const mb = Math.floor(maxCapacityBytes / 1024 / 1024)
+    if (mb <= 0) return null
+    return mb >= 1024
+      ? `当前环境还可申请最大容量：约 ${mb} MB（${(mb / 1024).toFixed(1)} GB）`
+      : `当前环境还可申请最大容量：约 ${mb} MB`
+  })()
   const userPlatformIdentifiers = userSettings.map(
     (s) => s.storagePlatform.identifier
   )
@@ -286,6 +305,12 @@ export function AddStorageModal({
                       {field.description && (
                         <p className='text-xs text-muted-foreground'>
                           {field.description}
+                        </p>
+                      )}
+                      {field.identifier === 'capacityMb' && capacityHint && (
+                        <p className='flex items-center gap-1 text-xs text-primary'>
+                          <Info className='h-3 w-3 flex-shrink-0' />
+                          <span>{capacityHint}</span>
                         </p>
                       )}
                       {errors[field.identifier] && (

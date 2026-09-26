@@ -23,6 +23,8 @@ public class StorageUtils {
     private static final List<String> PLATFORM_DISPLAY_ORDER = List.of(
             LOCAL_PLATFORM_IDENTIFIER,
             "LocalMount",
+            "LocalDirect",
+            "Memory",
             "WebDAV",
             "SFTP",
             "FTP",

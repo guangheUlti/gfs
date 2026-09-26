@@ -43,4 +43,13 @@ public class MountLocks {
             return null;
         });
     }
+
+    /**
+     * 该挂载的锁是否正被持有（任意线程）。
+     * 供实时监听丢弃写穿透期间的对账触发：写穿透自身保证 DB 一致，无需扫描重复对账。
+     */
+    public boolean isLocked(String settingId) {
+        ReentrantLock lock = locks.get(settingId);
+        return lock != null && lock.isLocked();
+    }
 }

@@ -7,6 +7,7 @@ import com.guanghe.fs.storage.plugin.core.model.StorageObjectEntry;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -159,6 +160,65 @@ public interface IStorageOperationService extends Closeable {
     }
 
     /**
+     * 当前环境还可申请的最大配置容量（字节）。供「添加存储」表单实时提示。
+     * <p>
+     * 与具体配置实例无关（可在原型上调用，无需 {@code ensureNotPrototype()}）：
+     * 返回「还能新建多大容量的实例」的保守估计；无法估计时返回 null，前端不展示。
+     *
+     * @return 可申请最大容量字节数，不可知返回 null
+     */
+    default Long getMaxConfigurableCapacity() {
+        return null;
+    }
+
+    /**
+     * 挂载根路径（仅本地磁盘类挂载实现，供实时监听注册 OS 目录事件用）。
+     *
+     * @return 挂载根绝对路径；非本地磁盘类平台返回 null
+     */
+    default Path mountRootPath() {
+        return null;
+    }
+
+    /**
+     * 定时重扫间隔（秒）。仅挂载式实现。
+     * <p>
+     * 空表示「用全局默认」：调用方以 {@code fs.file.mount.scan-interval}（毫秒）兑底。
+     * 开启实时监听（{@link #supportsWatchRealtime()}）时，本间隔自动退化为兑底全扫周期，
+     * 覆盖监听丢失（WatchService 异常、事件丢失、网络盘等场景）。
+     *
+     * @return 间隔秒数；null 表示未配置
+     */
+    default Long rescanIntervalSeconds() {
+        return null;
+    }
+
+    /**
+     * 是否支持 OS 级实时监听（WatchService）。
+     * <p>
+     * 与「用户是否开启」无关，只描述插件平台能力：本地磁盘类挂载为 true，
+     * SMB/SFTP/FTP 等网络协议挂载为 false（协议无目录变更推送）。
+     *
+     * @return 平台是否支持实时监听
+     */
+    default boolean isRealtimeWatchSupported() {
+        return false;
+    }
+
+    /**
+     * 用户是否开启了实时监听（需 {@link #isRealtimeWatchSupported()} 为 true 才有意义）。
+     * <p>
+     * 开启后：外部变更经 OS 事件秒级触发增量对账；定时扫描退化为兑底
+     * （周期取 {@link #rescanIntervalSeconds()}，未配置则用全局默认）。
+     * 关闭后：仅按间隔定时全扫。
+     *
+     * @return 是否开启实时监听
+     */
+    default boolean supportsWatchRealtime() {
+        return false;
+    }
+
+    /**
      * 是否为挂载式存储（目录树镜像真实文件系统）。
      * <p>
      * 业务代码一律用能力位判断，勿比较 identifier 字符串。
@@ -167,6 +227,19 @@ public interface IStorageOperationService extends Closeable {
      * @return 是否挂载式
      */
     default boolean isMountMode() {
+        return false;
+    }
+
+    /**
+     * 是否为「本地挂载」（LocalDirect，直读式）存储：不建后台扫描索引，
+     * 浏览时实时列目录并按层对账索引行，每次增删改查都直接作用于真实文件系统。
+     * <p>
+     * 业务代码一律用能力位判断，勿比较 identifier 字符串；
+     * 直读平台同时满足 {@link #isMountMode()}=true（复用写穿透链路）。
+     *
+     * @return 是否直读式访问
+     */
+    default boolean isDirectAccess() {
         return false;
     }
 

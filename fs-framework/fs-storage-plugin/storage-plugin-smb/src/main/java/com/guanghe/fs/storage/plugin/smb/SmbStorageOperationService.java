@@ -43,7 +43,7 @@ import java.util.List;
 @Slf4j
 @StoragePlugin(
         identifier = "Smb",
-        name = "SMB网络存储",
+        name = "SMB网络",
         description = "通过 SMB/CIFS 协议接入局域网共享目录（Windows 共享、Samba 等），适合家庭 NAS 与内网文件服务器场景。",
         icon = "icon-bendicunchu1",
         schemaResource = "classpath:schema/smb-schema.json"
