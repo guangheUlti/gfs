@@ -761,19 +761,11 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     const filesWithPath = files as (File & FileWithPath)[]
 
     // ========== 限制检查 ==========
-    
-    // 1. 总大小检查
-    const totalSize = filesWithPath.reduce((sum, file) => sum + file.size, 0)
-    if (totalSize > UPLOAD_LIMITS.MAX_TOTAL_SIZE) {
-      const currentSize = formatFileSize(totalSize)
-      const maxSize = formatFileSize(UPLOAD_LIMITS.MAX_TOTAL_SIZE)
-      toast.error(`单次上传总大小不能超过 ${maxSize}，当前为 ${currentSize}`, {
-        description: '建议分批上传或使用客户端'
-      })
-      throw new Error('总大小超限')
-    }
 
-    // 2. 目录深度检查
+    // 总大小（用于上传提示）
+    const totalSize = filesWithPath.reduce((sum, file) => sum + file.size, 0)
+
+    // 1. 目录深度检查
     let maxDepth = 0
     let deepestPath = ''
     filesWithPath.forEach((file) => {
@@ -791,7 +783,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       throw new Error('目录深度超限')
     }
 
-    // 3. 文件名长度检查
+    // 2. 文件名长度检查
     const invalidFiles = filesWithPath.filter((file) => {
       const path = file.webkitRelativePath || file.name
       return file.name.length > UPLOAD_LIMITS.MAX_FILENAME_LENGTH || 
@@ -805,7 +797,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       throw new Error('文件名或路径过长')
     }
 
-    // 4. 自动过滤系统文件
+    // 3. 自动过滤系统文件
     const filteredFiles = filesWithPath.filter((file) => {
       const path = file.webkitRelativePath || file.name
       return !shouldFilterFile(path)

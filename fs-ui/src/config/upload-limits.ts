@@ -5,12 +5,6 @@
 
 export const UPLOAD_LIMITS = {
   /**
-   * 单次上传总大小限制（字节）
-   * 推荐值：10GB（个人网盘）、5GB（企业网盘）、50GB（内部系统）
-   */
-  MAX_TOTAL_SIZE: 10 * 1024 * 1024 * 1024, // 10GB
-
-  /**
    * 最大目录深度
    * 推荐值：10（个人网盘）、8（企业网盘）、15（内部系统）
    */
@@ -126,39 +120,4 @@ export function isMimeTypeBlocked(mimeType: string): boolean {
   }
 
   return UPLOAD_LIMITS.BLOCKED_MIMETYPES.includes(mimeType)
-}
-
-/**
- * 预设配置
- */
-export const PRESET_CONFIGS = {
-  /**
-   * 个人网盘配置（推荐）
-   */
-  PERSONAL: {
-    MAX_TOTAL_SIZE: 10 * 1024 * 1024 * 1024, // 10GB
-    MAX_DEPTH: 10,
-    AUTO_FILTER_SYSTEM_FILES: true,
-    BLOCKED_EXTENSIONS: [],
-  },
-
-  /**
-   * 企业网盘配置
-   */
-  ENTERPRISE: {
-    MAX_TOTAL_SIZE: 5 * 1024 * 1024 * 1024, // 5GB
-    MAX_DEPTH: 8,
-    AUTO_FILTER_SYSTEM_FILES: true,
-    BLOCKED_EXTENSIONS: ['.exe', '.bat', '.cmd', '.sh', '.dll'],
-  },
-
-  /**
-   * 内部系统配置
-   */
-  INTERNAL: {
-    MAX_TOTAL_SIZE: 50 * 1024 * 1024 * 1024, // 50GB
-    MAX_DEPTH: 15,
-    AUTO_FILTER_SYSTEM_FILES: false,
-    BLOCKED_EXTENSIONS: [],
-  },
 }
