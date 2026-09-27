@@ -341,7 +341,10 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        FileShareVO share = this.getDetail(cmd.getShareId());
+        // 匿名可访问（/apis/share/verify/code 在认证排除名单）：
+        // 不能走 getDetail()——它按当前登录用户过滤，访客会直接 401
+        FileShare share = this.getOne(new QueryWrapper()
+                .where(FILE_SHARE.ID.eq(cmd.getShareId())));
         if (share == null) {
             throw new BusinessException(I18nUtils.getMessage("share.not.exist"));
         }
