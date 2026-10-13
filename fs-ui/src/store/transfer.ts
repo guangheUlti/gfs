@@ -115,6 +115,48 @@ let pollingTimerId: number | null = null
 let beforeUnloadWarningSetup = false
 const POLLING_INTERVAL = 3000
 
+const LOCAL_SESSION_TASKS_KEY = 'gfsLocalSessionTaskIds'
+
+function loadLocalSessionTaskIds(): Set<string> {
+  try {
+    const raw = sessionStorage.getItem(LOCAL_SESSION_TASKS_KEY)
+    const arr = raw ? (JSON.parse(raw) as string[]) : []
+    return new Set(Array.isArray(arr) ? arr : [])
+  } catch {
+    return new Set()
+  }
+}
+
+/**
+ * 本机会话创建的传输任务 ID（含下载队列占位 tempId）。
+ * sessionStorage 按标签页/窗口隔离，等价于按设备隔离，且同一标签页
+ * 刷新后保留——正是「本机刷新中断的任务」与「他端正在活跃传输的任务」
+ * 的区分依据：刷新后只对带本机标记的任务做续传/取消，避免同账号
+ * 多端登录时，B 端刷新页面把 A 端正在进行的上传/下载误取消。
+ */
+const localSessionTaskIds = loadLocalSessionTaskIds()
+
+function persistLocalSessionTaskIds() {
+  try {
+    sessionStorage.setItem(
+      LOCAL_SESSION_TASKS_KEY,
+      JSON.stringify(Array.from(localSessionTaskIds))
+    )
+  } catch {
+    // 存储不可用时退化为内存态：刷新后无法区分他端任务，宁可不自清理也不误杀
+  }
+}
+
+function markLocalSessionTask(taskId: string) {
+  localSessionTaskIds.add(taskId)
+  persistLocalSessionTaskIds()
+}
+
+function unmarkLocalSessionTask(taskId: string) {
+  if (!localSessionTaskIds.delete(taskId)) return
+  persistLocalSessionTaskIds()
+}
+
 function convertVOToTask(vo: FileTransferTaskVO): TransferTask {
   const now = Date.now()
   const progress = vo.progress ?? 0
@@ -217,6 +259,11 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       newTasks.set(taskId, updatedTask)
       set({ tasks: newTasks })
 
+      // 本机会话标记随终态释放，避免集合无限增长
+      if (['completed', 'failed', 'cancelled'].includes(newStatus)) {
+        unmarkLocalSessionTask(taskId)
+      }
+
       if (newStatus === 'completed' && !completedActionsTriggered.has(taskId)) {
         get().triggerCompletedActions(updatedTask)
       }
@@ -238,6 +285,9 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
 
   triggerCompletedActions: (task: TransferTask) => {
     const { completedActionsTriggered, fileCache } = get()
+    // 幂等防重：轮询补偿与迟到的 SSE complete 可能先后各触发一次，
+    // 双触发会导致完成 toast 重复弹、跳转重复执行
+    if (completedActionsTriggered.has(task.taskId)) return
     completedActionsTriggered.add(task.taskId)
 
     if (task.taskType === 'download') {
@@ -445,13 +495,16 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     const { tasks } = get()
     const unfinishedTasks = Array.from(tasks.values()).filter(
       (task) =>
-        task.status === 'idle' ||
-        task.status === 'initialized' ||
-        task.status === 'uploading' ||
-        task.status === 'checking' ||
-        task.status === 'downloading' ||
-        task.status === 'paused' ||
-        task.status === 'merging'
+        (task.status === 'idle' ||
+          task.status === 'initialized' ||
+          task.status === 'uploading' ||
+          task.status === 'checking' ||
+          task.status === 'downloading' ||
+          task.status === 'paused' ||
+          task.status === 'merging') &&
+        // 只处理本机会话创建的任务：他端正在活跃传输的任务在本机只是
+        // 「可见的镜像」，取消会把另一台设备的上传/下载直接中断
+        localSessionTaskIds.has(task.taskId)
     )
 
     if (unfinishedTasks.length === 0) return
@@ -572,6 +625,12 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
 
       const newTasks = new Map(tasks)
 
+      // 本地还没触发过完成动作、后端却已 completed 的上传任务：
+      // 下面直接覆盖状态会绕过 transitionTo，若 SSE complete 恰在断线
+      // 窗口丢失（后端只推一次），完成动作（toast/列表刷新/自动跳回
+      // 文件页）将永不触发，用户会一直停在传输页
+      const newlyCompletedUploadIds: string[] = []
+
       // 确保 taskVOs 是数组
       const taskList = Array.isArray(taskVOs) ? taskVOs : []
 
@@ -609,6 +668,15 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
             newTask.status === 'cancelled'
           ) {
             newTasks.set(vo.taskId, newTask)
+            // 仅上传任务走此补偿：下载任务的完成由下载执行器在本地
+            // 保存成功后经 transitionTo 触发，提前触发会误报「下载完成」
+            if (
+              newTask.status === 'completed' &&
+              existingTask.status !== 'completed' &&
+              newTask.taskType === 'upload'
+            ) {
+              newlyCompletedUploadIds.push(vo.taskId)
+            }
           } else {
             newTasks.set(vo.taskId, {
               ...existingTask,
@@ -649,6 +717,13 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       })
 
       set({ tasks: newTasks })
+
+      // 状态已覆盖为 completed，此处补触发完成动作（内部幂等，
+      // SSE complete 已触发过则自动跳过）
+      newlyCompletedUploadIds.forEach((taskId) => {
+        const task = newTasks.get(taskId)
+        if (task) get().triggerCompletedActions(task)
+      })
     } catch (error) {
       console.error('同步传输任务失败:', error)
       // 静默失败，不抛出错误
@@ -702,6 +777,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       chunkSize,
       mimeType: file.type || 'application/octet-stream',
     })
+    markLocalSessionTask(taskId)
 
     const now = Date.now()
 
@@ -963,6 +1039,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
         fileName: file.displayName,
         fileSize: file.size,
       })
+      markLocalSessionTask(tempId)
 
       newTasks.set(tempId, {
         taskId: tempId,
@@ -1003,6 +1080,8 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
 
     const newTasks = new Map(tasks)
     newTasks.delete(tempId)
+    unmarkLocalSessionTask(tempId)
+    markLocalSessionTask(realTaskId)
     newTasks.set(realTaskId, {
       ...(oldTask ?? {}),
       taskId: realTaskId,
@@ -1437,12 +1516,14 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       const { tasks } = get()
       const hasUploadingTasks = Array.from(tasks.values()).some(
         (task) =>
-          task.status === 'idle' ||
-          task.status === 'initialized' ||
-          task.status === 'uploading' ||
-          task.status === 'checking' ||
-          task.status === 'merging' ||
-          task.status === 'paused'
+          // 他端任务在本机只读不传，离开页面不会中断它们，无需警告
+          localSessionTaskIds.has(task.taskId) &&
+          (task.status === 'idle' ||
+            task.status === 'initialized' ||
+            task.status === 'uploading' ||
+            task.status === 'checking' ||
+            task.status === 'merging' ||
+            task.status === 'paused')
       )
 
       if (hasUploadingTasks) {
