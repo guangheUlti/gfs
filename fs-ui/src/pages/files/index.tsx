@@ -172,11 +172,40 @@ export default function FilesPage() {
    * 键盘快捷键
    */
   useEffect(() => {
+    // 输入态（搜索框/改名框等）不响应文件操作快捷键：
+    // Delete 在输入框里是正常编辑字符，绝不能误弹删除确认框
+    const isInteractiveTarget = () => {
+      const el = document.activeElement as HTMLElement | null
+      if (!el) return false
+      const tag = el.tagName
+      return (
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        el.isContentEditable
+      )
+    }
+
     const handleKeyDown = (e: KeyboardEvent) => {
       // ESC 键退出多选模式并取消选中
       if (e.key === 'Escape') {
         if (selectedKeys.length > 0) clearSelection()
         if (selectMode) setSelectMode(false)
+      }
+
+      // F5 刷新文件列表而非重载整个页面：F5 无破坏性且重载会丢失
+      // 搜索/筛选等页面状态，故不限制输入态/弹窗态，一律拦截
+      if (e.key === 'F5') {
+        e.preventDefault()
+        fileList.refresh()
+        return
+      }
+
+      // F2 / Delete：输入框内或弹窗打开时让位给组件自身交互
+      // （删除/永久删除确认框是 alertdialog 角色，需一并检测）
+      if (e.key === 'F2' || e.key === 'Delete') {
+        if (isInteractiveTarget()) return
+        if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return
       }
 
       // F2 键重命名（仅当选中单个文件时）
@@ -189,11 +218,27 @@ export default function FilesPage() {
           operations.openRenameModal(selectedFile)
         }
       }
+
+      // Delete 键触发删除确认：单选/多选复用右键菜单同一入口，
+      // 回收站关闭时 open 内部自动切换为「永久删除」确认框
+      if (canWrite && e.key === 'Delete' && selectedKeys.length >= 1) {
+        e.preventDefault()
+        if (selectedKeys.length === 1) {
+          const selectedFile = fileList.fileList.find(
+            (file) => file.id === selectedKeys[0]
+          )
+          if (selectedFile) {
+            operations.openDeleteConfirm(selectedFile)
+            return
+          }
+        }
+        operations.openBatchDeleteConfirm(selectedFiles)
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedKeys, fileList.fileList, canWrite, selectMode])
+  }, [selectedKeys, selectedFiles, fileList.fileList, canWrite, selectMode])
 
   /**
    * 当目录变化时清空选中状态并退出多选模式
