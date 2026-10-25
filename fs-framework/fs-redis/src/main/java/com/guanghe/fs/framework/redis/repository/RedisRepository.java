@@ -3,13 +3,18 @@ package com.guanghe.fs.framework.redis.repository;
 import com.guanghe.fs.framework.common.utils.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -48,6 +53,31 @@ public class RedisRepository {
         Set<String> keys = redisTemplate.keys("*");
         assert keys != null;
         return redisTemplate.delete(keys);
+    }
+
+    /**
+     * 按模式遍历键（SCAN 游标迭代，不用 KEYS，避免大库阻塞）。
+     * 适合管理端偶尔调用的场景（如列出被锁定的账号），不要放进高频路径。
+     *
+     * @param pattern 匹配模式，如 {@code login:guard:lock:*}
+     * @return 命中的键集合（无匹配返回空集合）
+     */
+    public Set<String> keys(String pattern) {
+        Set<String> result = new HashSet<>();
+        try {
+            redisTemplate.execute((RedisCallback<Void>) connection -> {
+                ScanOptions options = ScanOptions.scanOptions().match(pattern).count(500).build();
+                try (Cursor<byte[]> cursor = connection.keyCommands().scan(options)) {
+                    while (cursor.hasNext()) {
+                        result.add(new String(cursor.next(), StandardCharsets.UTF_8));
+                    }
+                }
+                return null;
+            });
+        } catch (Exception e) {
+            log.error("按模式遍历 Redis 键失败: pattern={}", pattern, e);
+        }
+        return result;
     }
 
     /**

@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { RefreshCw, UserPlus } from 'lucide-react'
+import { LockOpen, RefreshCw, UserPlus } from 'lucide-react'
 import dayjs from 'dayjs'
 import { adminApi } from '@/api'
-import type { PendingUser } from '@/types/user'
+import type { LockedUser, PendingUser } from '@/types/user'
 import {
   SettingsPageDescription,
   SettingsPageTitle,
 } from '../components/settings-page-header'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import {
   Avatar,
   AvatarFallback,
@@ -35,20 +36,30 @@ import {
 } from '@/components/ui/alert-dialog'
 import { CreateUserDialog } from './create-user-dialog'
 
-/** 用户管理：手动创建用户 + 审核新注册用户 */
+/** 表格行：待审核用户与被防暴力锁定的账号共用一张表 */
+type Row =
+  | { kind: 'pending'; key: string; user: PendingUser }
+  | { kind: 'locked'; key: string; user: LockedUser }
+
+/** 用户管理：手动创建用户 + 审核新注册用户 + 解除锁定账号 */
 export function SettingsUserManagement() {
   const { t } = useTranslation('settings')
-  const [users, setUsers] = useState<PendingUser[]>([])
+  const [pending, setPending] = useState<PendingUser[]>([])
+  const [locked, setLocked] = useState<LockedUser[]>([])
   const [loading, setLoading] = useState(false)
   const [actingId, setActingId] = useState<string | null>(null)
   const [rejectTarget, setRejectTarget] = useState<PendingUser | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
 
-  const fetchPending = useCallback(async () => {
+  const fetchAll = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await adminApi.listPendingUsers()
-      setUsers(data ?? [])
+      const [pendingList, lockedList] = await Promise.all([
+        adminApi.listPendingUsers(),
+        adminApi.listLockedUsers(),
+      ])
+      setPending(pendingList ?? [])
+      setLocked(lockedList ?? [])
     } catch (err) {
       if (!err?.handled) toast.error(t('userManagement.listFailed'))
     } finally {
@@ -57,15 +68,15 @@ export function SettingsUserManagement() {
   }, [t])
 
   useEffect(() => {
-    fetchPending()
-  }, [fetchPending])
+    fetchAll()
+  }, [fetchAll])
 
   const handleApprove = async (user: PendingUser) => {
     setActingId(user.id)
     try {
       await adminApi.approveUser(user.id)
       toast.success(t('userManagement.approved'))
-      fetchPending()
+      fetchAll()
     } catch (err) {
       if (!err?.handled) toast.error(t('userManagement.actionFailed'))
     } finally {
@@ -80,13 +91,40 @@ export function SettingsUserManagement() {
       await adminApi.rejectUser(rejectTarget.id)
       toast.success(t('userManagement.rejected'))
       setRejectTarget(null)
-      fetchPending()
+      fetchAll()
     } catch (err) {
       if (!err?.handled) toast.error(t('userManagement.actionFailed'))
     } finally {
       setActingId(null)
     }
   }
+
+  const handleUnlock = async (user: LockedUser) => {
+    setActingId(`locked:${user.username}`)
+    try {
+      await adminApi.unlockUser(user.username)
+      toast.success(t('userManagement.unlocked'))
+      fetchAll()
+    } catch (err) {
+      if (!err?.handled) toast.error(t('userManagement.actionFailed'))
+    } finally {
+      setActingId(null)
+    }
+  }
+
+  // 待审核在前、锁定在后：两类都待管理员处理
+  const rows: Row[] = [
+    ...pending.map<Row>((user) => ({
+      kind: 'pending',
+      key: `pending:${user.id}`,
+      user,
+    })),
+    ...locked.map<Row>((user) => ({
+      kind: 'locked',
+      key: `locked:${user.username}`,
+      user,
+    })),
+  ]
 
   return (
     <div className='flex flex-1 flex-col'>
@@ -111,7 +149,7 @@ export function SettingsUserManagement() {
             variant='ghost'
             size='icon'
             className='size-8'
-            onClick={fetchPending}
+            onClick={fetchAll}
             disabled={loading}
             aria-label={t('userManagement.refresh')}
           >
@@ -126,12 +164,12 @@ export function SettingsUserManagement() {
             <TableHeader>
               <TableRow>
                 <TableHead>{t('userManagement.colUser')}</TableHead>
-                <TableHead>{t('userManagement.colRegisteredAt')}</TableHead>
+                <TableHead>{t('userManagement.colTime')}</TableHead>
                 <TableHead className='w-40'>{t('userManagement.colActions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading && users.length === 0 ? (
+              {loading && rows.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={3}
@@ -140,7 +178,7 @@ export function SettingsUserManagement() {
                     {t('userManagement.loading')}
                   </TableCell>
                 </TableRow>
-              ) : users.length === 0 ? (
+              ) : rows.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={3}
@@ -150,54 +188,95 @@ export function SettingsUserManagement() {
                   </TableCell>
                 </TableRow>
               ) : (
-                users.map((u) => (
-                  <TableRow key={u.id}>
-                    <TableCell>
-                      <div className='flex items-center gap-3'>
-                        <Avatar className='h-8 w-8'>
-                          {u.avatar && <AvatarImage src={u.avatar} />}
-                          <AvatarFallback className='text-xs'>
-                            {(u.nickname || u.username).slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className='min-w-0'>
-                          <div className='truncate text-sm font-medium'>
-                            {u.nickname || u.username}
-                          </div>
-                          <div className='truncate text-xs text-muted-foreground'>
-                            {u.username}
+                rows.map((row) => {
+                  const name = row.user.nickname || row.user.username
+                  const actingKey =
+                    row.kind === 'pending' ? row.user.id : `locked:${row.user.username}`
+                  return (
+                    <TableRow key={row.key}>
+                      <TableCell>
+                        <div className='flex items-center gap-3'>
+                          <Avatar className='h-8 w-8'>
+                            {row.user.avatar && (
+                              <AvatarImage src={row.user.avatar} />
+                            )}
+                            <AvatarFallback className='text-xs'>
+                              {name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className='min-w-0'>
+                            <div className='flex items-center gap-2'>
+                              <div className='truncate text-sm font-medium'>
+                                {name}
+                              </div>
+                              <Badge
+                                variant={
+                                  row.kind === 'pending'
+                                    ? 'secondary'
+                                    : 'destructive'
+                                }
+                                className='h-5 shrink-0 px-1.5 text-[10px] font-normal'
+                              >
+                                {row.kind === 'pending'
+                                  ? t('userManagement.badgePending')
+                                  : t('userManagement.badgeLocked')}
+                              </Badge>
+                            </div>
+                            <div className='truncate text-xs text-muted-foreground'>
+                              {row.user.username}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className='text-xs text-muted-foreground'>
-                      {u.createdAt
-                        ? dayjs(u.createdAt).format('YYYY-MM-DD HH:mm')
-                        : '—'}
-                    </TableCell>
-                    <TableCell>
-                      <div className='flex items-center gap-2'>
-                        <Button
-                          size='sm'
-                          className='h-7 px-2.5 text-xs'
-                          disabled={actingId === u.id}
-                          onClick={() => handleApprove(u)}
-                        >
-                          {t('userManagement.approve')}
-                        </Button>
-                        <Button
-                          variant='ghost'
-                          size='sm'
-                          className='h-7 px-2.5 text-xs text-destructive hover:text-destructive'
-                          disabled={actingId === u.id}
-                          onClick={() => setRejectTarget(u)}
-                        >
-                          {t('userManagement.reject')}
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      </TableCell>
+                      <TableCell className='text-xs text-muted-foreground'>
+                        {row.kind === 'pending'
+                          ? row.user.createdAt
+                            ? dayjs(row.user.createdAt).format('YYYY-MM-DD HH:mm')
+                            : '—'
+                          : t('userManagement.lockedRemaining', {
+                              minutes: Math.max(
+                                1,
+                                Math.ceil(row.user.remainingSeconds / 60)
+                              ),
+                            })}
+                      </TableCell>
+                      <TableCell>
+                        {row.kind === 'pending' ? (
+                          <div className='flex items-center gap-2'>
+                            <Button
+                              size='sm'
+                              className='h-7 px-2.5 text-xs'
+                              disabled={actingId === actingKey}
+                              onClick={() => handleApprove(row.user)}
+                            >
+                              {t('userManagement.approve')}
+                            </Button>
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              className='h-7 px-2.5 text-xs text-destructive hover:text-destructive'
+                              disabled={actingId === actingKey}
+                              onClick={() => setRejectTarget(row.user)}
+                            >
+                              {t('userManagement.reject')}
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            className='h-7 gap-1 px-2.5 text-xs'
+                            disabled={actingId === actingKey}
+                            onClick={() => handleUnlock(row.user)}
+                          >
+                            <LockOpen className='h-3.5 w-3.5' />
+                            {t('userManagement.unlock')}
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               )}
             </TableBody>
           </Table>
@@ -207,7 +286,7 @@ export function SettingsUserManagement() {
       <CreateUserDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onCreated={fetchPending}
+        onCreated={fetchAll}
       />
 
       <AlertDialog

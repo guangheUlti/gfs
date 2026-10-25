@@ -4,6 +4,7 @@ import com.guanghe.fs.framework.common.domain.Result;
 import com.guanghe.fs.log.constant.OperationType;
 import com.guanghe.fs.log.service.SysOperationLogService;
 import com.guanghe.fs.system.domain.dto.AdminUserCreateCmd;
+import com.guanghe.fs.system.domain.vo.LockedUserVO;
 import com.guanghe.fs.system.domain.vo.PendingUserVO;
 import com.guanghe.fs.system.service.SysUserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -61,6 +62,27 @@ public class AdminUserController {
                 "审核通过用户",
                 "USER",
                 id,
+                null,
+                null
+        );
+        return Result.ok();
+    }
+
+    @Operation(summary = "被锁定账号列表（连续登录失败触发防暴力锁定）")
+    @GetMapping("/locked")
+    public Result<List<LockedUserVO>> listLocked() {
+        return Result.ok(userService.listLockedUsers());
+    }
+
+    @Operation(summary = "解除账号锁定（清除所有 IP 的锁定与失败计数）")
+    @PutMapping("/locked/{username}/unlock")
+    public Result<?> unlock(@PathVariable String username) {
+        userService.unlockUser(username);
+        operationLogService.recordSuccess(
+                OperationType.UNLOCK_USER,
+                "解除账号锁定",
+                "USER",
+                username,
                 null,
                 null
         );

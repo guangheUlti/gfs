@@ -72,7 +72,9 @@ public class DavAuthFilter implements Filter {
         String username = decoded.substring(0, idx);
         String password = decoded.substring(idx + 1);
 
-        var user = authenticator.authenticate(username, password);
+        // 防暴力计数按「账号+IP」：用 TCP 层 remoteAddr，不取 X-Forwarded-For（请求头可伪造，
+        // 每请求换一个伪造 IP 就能无限重置计数，等于防护失效）
+        var user = authenticator.authenticate(username, password, req.getRemoteAddr());
         if (user == null) {
             unauthorized(resp);
             return;

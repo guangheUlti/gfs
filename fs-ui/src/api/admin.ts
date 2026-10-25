@@ -1,5 +1,10 @@
 import { request } from './request'
-import type { AdminUserCreateParams, OnlineUser, PendingUser } from '@/types/user'
+import type {
+  AdminUserCreateParams,
+  LockedUser,
+  OnlineUser,
+  PendingUser,
+} from '@/types/user'
 
 /**
  * 系统级管理 API（全局操作，仅系统管理员可用）
@@ -18,6 +23,18 @@ export const adminApi = {
   /** 审核通过（待审核 -> 正常） */
   approveUser: (userId: string) => {
     return request.put(`/apis/admin/users/${userId}/approve`)
+  },
+
+  /** 被锁定账号列表（连续登录失败触发防暴力锁定） */
+  listLockedUsers: () => {
+    return request.get<LockedUser[]>('/apis/admin/users/locked')
+  },
+
+  /** 解除账号锁定（清除该账号所有 IP 的锁定与失败计数） */
+  unlockUser: (username: string) => {
+    return request.put(
+      `/apis/admin/users/locked/${encodeURIComponent(username)}/unlock`
+    )
   },
 
   /** 拒绝注册申请（待审核 -> 已拒绝） */

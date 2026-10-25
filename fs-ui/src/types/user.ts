@@ -27,6 +27,18 @@ export interface PendingUser {
   createdAt: string
 }
 
+/** 被锁定账号（连续登录失败触发防暴力锁定，锁定数据在服务端 Redis） */
+export interface LockedUser {
+  username: string
+  /** 账号存在时才有 */
+  nickname?: string
+  avatar?: string
+  /** 剩余锁定秒数（多 IP 锁定取最大值） */
+  remainingSeconds: number
+  /** 被锁定的来源 IP 数量 */
+  ipCount: number
+}
+
 /** 管理员手动创建用户 POST `/apis/admin/users` */
 export interface AdminUserCreateParams {
   username: string

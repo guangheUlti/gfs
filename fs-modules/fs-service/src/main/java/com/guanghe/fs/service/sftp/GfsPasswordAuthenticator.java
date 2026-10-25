@@ -26,12 +26,26 @@ public class GfsPasswordAuthenticator implements PasswordAuthenticator {
 
     @Override
     public boolean authenticate(String username, String password, ServerSession session) {
-        SysUser user = authenticator.authenticate(username, password);
+        // 防暴力计数用会话对端 IP（与 WebDAV / Web 登录共用「账号+IP」锁定键）
+        SysUser user = authenticator.authenticate(username, password, remoteIp(session));
         if (user == null) {
             log.info("SFTP 认证失败: username={}", username);
             return false;
         }
         session.setAttribute(USER_ID_KEY, user.getId());
         return true;
+    }
+
+    /** 取 SSH 会话对端 IP；取不到返回 null（由守卫归入 unknown 桶） */
+    private String remoteIp(ServerSession session) {
+        if (session == null || session.getIoSession() == null
+                || session.getIoSession().getRemoteAddress() == null) {
+            return null;
+        }
+        java.net.SocketAddress address = session.getIoSession().getRemoteAddress();
+        if (address instanceof java.net.InetSocketAddress inet) {
+            return inet.getAddress() == null ? null : inet.getAddress().getHostAddress();
+        }
+        return null;
     }
 }

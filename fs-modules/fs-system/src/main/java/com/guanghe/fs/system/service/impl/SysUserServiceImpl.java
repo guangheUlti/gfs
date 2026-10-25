@@ -11,6 +11,7 @@ import com.guanghe.fs.storage.plugin.boot.StoragePluginManager;
 import com.guanghe.fs.storage.plugin.core.IStorageOperationService;
 import com.guanghe.fs.system.domain.SysUser;
 import com.guanghe.fs.system.domain.dto.*;
+import com.guanghe.fs.system.domain.vo.LockedUserVO;
 import com.guanghe.fs.system.domain.vo.PendingUserVO;
 import com.guanghe.fs.system.domain.vo.SysUserVO;
 import com.guanghe.fs.system.mapper.SysUserMapper;
@@ -272,6 +273,46 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         user.setStatus(targetStatus);
         this.updateById(user);
         Objects.requireNonNull(cacheManager.getCache("user")).evict(userId);
+    }
+
+    @Override
+    public List<LockedUserVO> listLockedUsers() {
+        assertSuperAdmin();
+        List<LoginGuardService.LockedAccount> locked = loginGuardService.listLockedAccounts();
+        if (locked.isEmpty()) {
+            return List.of();
+        }
+        // 锁定数据在 Redis，账号可能已被删除或根本不存在（扫描器乱试用户名），查库只为补昵称/头像
+        List<String> usernames = locked.stream().map(LoginGuardService.LockedAccount::account).toList();
+        java.util.Map<String, SysUser> byUsername = this.list(new QueryWrapper()
+                        .where(SYS_USER.USERNAME.in(usernames)))
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        SysUser::getUsername, u -> u, (a, b) -> a));
+        return locked.stream().map(item -> {
+            LockedUserVO vo = new LockedUserVO();
+            vo.setUsername(item.account());
+            vo.setRemainingSeconds(item.remainingSeconds());
+            vo.setIpCount(item.ipCount());
+            SysUser user = byUsername.get(item.account());
+            if (user != null) {
+                vo.setNickname(user.getNickname());
+                vo.setAvatar(AvatarUtils.resolve(user.getAvatar(), pluginManager::getLocalInstance));
+            }
+            return vo;
+        }).toList();
+    }
+
+    @Override
+    public void unlockUser(String username) {
+        assertSuperAdmin();
+        if (username == null || username.isBlank()) {
+            throw new BusinessException(I18nUtils.getMessage("admin.user.not.locked"));
+        }
+        int removed = loginGuardService.unlockAccount(username);
+        if (removed == 0) {
+            throw new BusinessException(I18nUtils.getMessage("admin.user.not.locked"));
+        }
     }
 
     @Override

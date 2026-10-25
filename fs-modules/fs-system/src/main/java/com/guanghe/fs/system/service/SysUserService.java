@@ -2,6 +2,7 @@ package com.guanghe.fs.system.service;
 
 import com.guanghe.fs.system.domain.SysUser;
 import com.guanghe.fs.system.domain.dto.*;
+import com.guanghe.fs.system.domain.vo.LockedUserVO;
 import com.guanghe.fs.system.domain.vo.PendingUserVO;
 import com.guanghe.fs.system.domain.vo.SysUserVO;
 import com.mybatisflex.core.service.IService;
@@ -98,6 +99,20 @@ public interface SysUserService extends IService<SysUser> {
      * @param userId 用户id
      */
     void rejectUser(String userId);
+
+    /**
+     * 查询被防暴力锁定的账号列表（连续登录失败触发，锁定数据在 Redis）
+     *
+     * @return 锁定账号列表
+     */
+    List<LockedUserVO> listLockedUsers();
+
+    /**
+     * 解除账号锁定（清除该账号在所有 IP 上的锁定与失败计数）
+     *
+     * @param username 登录账号
+     */
+    void unlockUser(String username);
 
     /**
      * 断言当前登录用户是系统管理员，否则抛出异常
