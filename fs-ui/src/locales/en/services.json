@@ -56,7 +56,7 @@
       "windows": "Windows: enable the WebClient service, then run net use Z: http://<host>/dav in Explorer or a command prompt",
       "rclone": "rclone: create a WebDAV remote with rclone config, set the URL to http://<host>/dav, and use your drive credentials",
       "basic": "Credentials are your drive login; Basic auth is plain HTTP — put an HTTPS reverse proxy in front for production",
-      "lock": "LOCK is not implemented: Office online editing may fail to save; Explorer mounts are unaffected"
+      "lock": "Write locks (LOCK/UNLOCK) are supported: Office can edit and save in place; locks live in memory, expire after 1 hour by default, and drop on service restart"
     },
     "sftp": {
       "client": "OpenSSH: sftp -P {{port}} <user>@<host>",

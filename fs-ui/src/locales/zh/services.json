@@ -56,7 +56,7 @@
       "windows": "Windows：开启 WebClient 服务后，在资源管理器或命令行执行 net use Z: http://<主机>/dav",
       "rclone": "rclone：rclone config 新建 WebDAV 类型 remote，地址填 http://<主机>/dav，账号密码为网盘登录账号",
       "basic": "账号密码即网盘登录账号；Basic 认证走明文 HTTP，生产环境建议配置 HTTPS 反向代理",
-      "lock": "未实现 LOCK：Office 在线直接编辑保存可能失败，资源管理器挂载不受影响"
+      "lock": "已支持写锁（LOCK/UNLOCK）：Office 可直接在线编辑保存；锁为内存实现，默认 1 小时过期，服务重启即失效"
     },
     "sftp": {
       "client": "OpenSSH：sftp -P {{port}} <账号>@<主机>",
