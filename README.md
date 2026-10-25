@@ -82,8 +82,9 @@
     - **SFTP 服务端**：独立端口（默认 9022，Apache MINA SSHD），支持 sshfs 挂载与 WinSCP / FileZilla / OpenSSH 客户端
     - **OSS（S3 兼容网关）**：复用主服务 HTTP 端口，路径前缀 `/oss`，整个网盘暴露为 S3 虚拟桶 `gfs`（path-style）；自实现 AWS SigV4 验签（无 AWS SDK），支持 rclone、AWS SDK、Cyberduck、WinSCP S3 等客户端；每用户可签发/吊销 SigV4 密钥对（SK 明文仅创建时返回一次，AES-256-GCM 加密存储）；支持分片上传三件套
     - 认证复用网盘账号（WebDAV/SFTP 走 BCrypt 校验，OSS 走 SigV4 密钥对），删除进回收站与 Web 端语义一致，内容级去重秒传
+    - 协议端密码认证与 Web 登录**共用防暴力锁定**（账号+IP 连续失败 3 次锁 30 分钟，可配置），换协议不会拿到额外尝试次数
     - 启用/停用热生效，服务重启后自动拉起；SFTP 主机密钥持久化，重启后客户端无指纹告警
-    - 已知限制：WebDAV 的 LOCK/UNLOCK 为最小内存实现（锁不持久化，重启/多实例失效，单实例够用）；SFTP 仅支持顺序写；OSS 固定单桶 gfs、不支持桶管理/ACL/匿名访问，`oss.aes-key` 需在配置中固化（缺失时随机生成，重启后已签发密钥失效）
+    - 已知限制：防暴力计数按「账号+IP」，不防多 IP 撞库（FTP 拿不到客户端 IP，只按账号维度）；WebDAV 的 LOCK/UNLOCK 为最小内存实现（锁不持久化，重启/多实例失效，单实例够用）；SFTP 仅支持顺序写；OSS 固定单桶 gfs、不支持桶管理/ACL/匿名访问，`oss.aes-key` 需在配置中固化（缺失时随机生成，重启后已签发密钥失效）
 
 ### 预览支持
 
