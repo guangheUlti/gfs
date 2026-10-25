@@ -70,6 +70,16 @@ public class OssAccessKeyController {
         return Result.ok();
     }
 
+    @Operation(summary = "永久删除已吊销的密钥记录（清理列表用）")
+    @DeleteMapping("/{id}/purge")
+    public Result<Void> purge(@PathVariable("id") String id) {
+        String userId = StpUtil.getLoginIdAsString();
+        if (!ossAccessKeyService.purge(userId, id)) {
+            throw new BusinessException(I18nUtils.getMessage("oss.key.delete.only.revoked"));
+        }
+        return Result.ok();
+    }
+
     /** 列表项：secretKey 不出库 */
     @Data
     public static class OssAccessKeyVO {

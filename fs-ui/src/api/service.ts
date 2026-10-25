@@ -92,3 +92,8 @@ export function createOssAccessKey(remark?: string) {
 export function revokeOssAccessKey(id: string) {
   return request.delete<void>(`/apis/service/oss/keys/${id}`)
 }
+
+/** 永久删除已吊销的密钥记录（仅清理列表，不能代替吊销） */
+export function purgeOssAccessKey(id: string) {
+  return request.delete<void>(`/apis/service/oss/keys/${id}/purge`)
+}

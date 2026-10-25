@@ -105,7 +105,11 @@
       "revoke": "Revoke",
       "revokeTitle": "Confirm revocation",
       "revokeDesc": "Clients using this key lose access immediately and this cannot be undone. Continue?",
-      "revokeOk": "Key revoked"
+      "revokeOk": "Key revoked",
+      "delete": "Delete",
+      "deleteTitle": "Confirm deletion",
+      "deleteDesc": "This revoked key record will be permanently removed from the list and cannot be restored. It is already unusable for access. Continue?",
+      "deleteOk": "Key record deleted"
     }
   }
 }

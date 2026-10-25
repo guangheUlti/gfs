@@ -62,6 +62,22 @@ public class OssAccessKeyService {
         return mapper.update(key) > 0;
     }
 
+    /**
+     * 永久删除密钥记录：只允许删已吊销的（status=1）。
+     * <p>
+     * 未吊销的直接物理删除会让客户端凭据「无声失效」且无法追溯，所以仍要求先吊销——
+     * 这个接口只是清理列表里的历史记录，不承担吊销职能。
+     *
+     * @return true 删除成功；false 不存在、非本人、或尚未吊销
+     */
+    public boolean purge(String userId, String keyId) {
+        OssAccessKey key = mapper.selectOneById(keyId);
+        if (key == null || !userId.equals(key.getUserId()) || key.getStatus() == null || key.getStatus() != 1) {
+            return false;
+        }
+        return mapper.deleteById(keyId) > 0;
+    }
+
     /** 按 Access Key 查有效密钥（状态正常） */
     public OssAccessKey findActiveByAccessKey(String accessKey) {
         if (accessKey == null || accessKey.isEmpty()) {

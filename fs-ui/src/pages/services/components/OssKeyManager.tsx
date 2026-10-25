@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, KeyRound, Plus, Trash2 } from 'lucide-react'
+import { Ban, Copy, KeyRound, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
   createOssAccessKey,
   listOssAccessKeys,
+  purgeOssAccessKey,
   revokeOssAccessKey,
   type OssAccessKeyCreatedVO,
 } from '@/api/service'
@@ -31,8 +32,9 @@ interface OssKeyManagerProps {
 }
 
 /**
- * OSS 访问密钥管理块：SigV4 密钥对（AK/SK）列表 + 签发 + 吊销。
+ * OSS 访问密钥管理块：SigV4 密钥对（AK/SK）列表 + 签发 + 吊销 + 删除已吊销记录。
  * Secret Key 明文仅在创建弹窗返回一次，关闭后不可再见。
+ * 吊销 = 标记失效（记录保留可追溯）；删除 = 清理已吊销的记录（不代替吊销）。
  */
 export function OssKeyManager({ serviceEnabled }: OssKeyManagerProps) {
   const { t } = useTranslation('services')
@@ -42,6 +44,7 @@ export function OssKeyManager({ serviceEnabled }: OssKeyManagerProps) {
   const [remark, setRemark] = useState('')
   const [created, setCreated] = useState<OssAccessKeyCreatedVO | null>(null)
   const [revokeTarget, setRevokeTarget] = useState<string | null>(null)
+  const [purgeTarget, setPurgeTarget] = useState<string | null>(null)
 
   const { data: keys = [], isLoading } = useQuery({
     queryKey: OSS_KEYS_QUERY_KEY,
@@ -66,6 +69,15 @@ export function OssKeyManager({ serviceEnabled }: OssKeyManagerProps) {
     onSuccess: () => {
       toast.success(t('oss.keys.revokeOk'))
       setRevokeTarget(null)
+      invalidate()
+    },
+  })
+
+  const purgeMutation = useMutation({
+    mutationFn: (id: string) => purgeOssAccessKey(id),
+    onSuccess: () => {
+      toast.success(t('oss.keys.deleteOk'))
+      setPurgeTarget(null)
       invalidate()
     },
   })
@@ -122,13 +134,23 @@ export function OssKeyManager({ serviceEnabled }: OssKeyManagerProps) {
                   {key.lastUsedAt && ` · ${t('oss.keys.lastUsed')}: ${key.lastUsedAt}`}
                 </p>
               </div>
-              {key.status === 0 && (
+              {key.status === 0 ? (
                 <Button
                   size='icon'
                   variant='ghost'
                   className='h-7 w-7 shrink-0 text-destructive'
                   disabled={revokeMutation.isPending}
                   onClick={() => setRevokeTarget(key.id)}
+                >
+                  <Ban className='h-3.5 w-3.5' />
+                </Button>
+              ) : (
+                <Button
+                  size='icon'
+                  variant='ghost'
+                  className='h-7 w-7 shrink-0 text-destructive'
+                  disabled={purgeMutation.isPending}
+                  onClick={() => setPurgeTarget(key.id)}
                 >
                   <Trash2 className='h-3.5 w-3.5' />
                 </Button>
@@ -227,6 +249,18 @@ export function OssKeyManager({ serviceEnabled }: OssKeyManagerProps) {
         confirmText={t('oss.keys.revoke')}
         isLoading={revokeMutation.isPending}
         handleConfirm={() => revokeTarget && revokeMutation.mutate(revokeTarget)}
+      />
+
+      {/* 删除已吊销记录确认 */}
+      <ConfirmDialog
+        destructive
+        open={purgeTarget != null}
+        onOpenChange={(open) => !open && setPurgeTarget(null)}
+        title={t('oss.keys.deleteTitle')}
+        desc={t('oss.keys.deleteDesc')}
+        confirmText={t('oss.keys.delete')}
+        isLoading={purgeMutation.isPending}
+        handleConfirm={() => purgeTarget && purgeMutation.mutate(purgeTarget)}
       />
     </div>
   )
