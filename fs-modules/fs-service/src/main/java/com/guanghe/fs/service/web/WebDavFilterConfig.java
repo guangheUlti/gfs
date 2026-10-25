@@ -2,6 +2,7 @@ package com.guanghe.fs.service.web;
 
 import cn.dev33.satoken.strategy.hooks.SaFirewallCheckHookForHttpMethod;
 import com.guanghe.fs.service.webdav.DavAuthFilter;
+import com.guanghe.fs.service.webdav.DavPathNormalizeFilter;
 import jakarta.annotation.PostConstruct;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
@@ -33,6 +34,22 @@ public class WebDavFilterConfig {
                 allow.add(m);
             }
         }
+    }
+
+    /**
+     * 路径归一化必须早于 sa-token 上下文（-104）与防火墙（-103）：
+     * 含 {@code //} 的 /dav URL（客户端用「集合 href + "/" + 文件名」拼接时会出现）
+     * 会被防火墙判为「非法请求」直接拦下，视频 GET 拿不到流。
+     */
+    @Bean
+    public FilterRegistrationBean<DavPathNormalizeFilter> davPathNormalizeFilterRegistration(
+            DavPathNormalizeFilter davPathNormalizeFilter) {
+        FilterRegistrationBean<DavPathNormalizeFilter> registration =
+                new FilterRegistrationBean<>(davPathNormalizeFilter);
+        registration.addUrlPatterns("/dav/*");
+        registration.setOrder(-110);
+        registration.setName("davPathNormalizeFilter");
+        return registration;
     }
 
     @Bean
