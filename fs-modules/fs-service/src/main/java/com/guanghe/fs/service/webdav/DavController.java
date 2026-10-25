@@ -74,6 +74,10 @@ public class DavController {
         }
     }
 
+    /**
+     * OPTIONS 的实战入口在 {@link DavAuthFilter}（Spring Boot 默认 dispatch-options-request=false，
+     * 容器的 HttpServlet.doOptions 会先回答并覆盖 Allow）。这里保留协议语义上的默认实现。
+     */
     private void handleOptions(HttpServletResponse response) {
         response.setStatus(HttpServletResponse.SC_OK);
         response.setHeader("Allow", ALLOW);

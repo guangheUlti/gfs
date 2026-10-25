@@ -17,12 +17,15 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
+import java.util.Set;
 
 /**
  * WebDAV Basic 认证过滤器：只拦 /dav/*，order 在最前。
  * <ul>
  *   <li>服务停用 → 503（不卸载 controller 映射）</li>
  *   <li>凭证缺失/格式错/校验失败 → 401 + WWW-Authenticate</li>
+ *   <li>只读模式且方法是写方法 → 403（见 {@link #READ_METHODS}）</li>
  *   <li>校验成功 → 桥接 Sa-Token（login + setTokenValue，带内存 token 缓存）</li>
  * </ul>
  */
@@ -32,6 +35,18 @@ import java.nio.charset.StandardCharsets;
 public class DavAuthFilter implements Filter {
 
     private static final String WWW_AUTHENTICATE = "Basic realm=\"GFS\", charset=\"UTF-8\"";
+
+    /**
+     * 只读模式下放行的方法：枚举目录 + 下载/预览均为只读。
+     * 其余（PUT/MKCOL/DELETE/MOVE/COPY/PROPPATCH/LOCK/UNLOCK/POST）全部 403。
+     */
+    private static final Set<String> READ_METHODS = Set.of("OPTIONS", "GET", "HEAD", "PROPFIND");
+
+    /** 可写模式的 Allow（含 WebDAV 扩展方法与 LOCK） */
+    private static final String ALLOW = "OPTIONS, GET, HEAD, PUT, POST, PROPFIND, MKCOL, DELETE, MOVE, COPY, LOCK, UNLOCK";
+
+    /** 只读模式的 Allow：不含任何写方法（LOCK 属写语义，也不声明） */
+    private static final String ALLOW_READ_ONLY = "OPTIONS, GET, HEAD, PROPFIND";
 
     private final DavUserAuthenticator authenticator;
     private final ServiceSettingService serviceSettingService;
@@ -78,6 +93,32 @@ public class DavAuthFilter implements Filter {
         if (user == null) {
             unauthorized(resp);
             return;
+        }
+
+        boolean readOnly = ServiceSettingService.isReadOnly(setting);
+
+        // OPTIONS 必须在这里答：Spring Boot 默认 dispatch-options-request=false，
+        // 请求不会进 DispatcherServlet，而是由 HttpServlet.doOptions 回一张固定的标准方法表
+        // （不认识 PROPFIND/COPY/LOCK，也不知道只读模式）。资源管理器/rclone 正是靠 OPTIONS 判能力。
+        if ("OPTIONS".equalsIgnoreCase(req.getMethod())) {
+            resp.setStatus(HttpServletResponse.SC_OK);
+            resp.setHeader("Allow", readOnly ? ALLOW_READ_ONLY : ALLOW);
+            resp.setHeader("DAV", readOnly ? "1" : "1, 2");
+            resp.setHeader("MS-Author-Via", "DAV");
+            resp.setContentLength(0);
+            return;
+        }
+
+        // 只读模式：认证通过后才判（未认证不泄露服务配置），写方法直接拒，
+        // 也不再桥接 token——被拒的写请求无需建会话
+        if (readOnly) {
+            if (!READ_METHODS.contains(req.getMethod().toUpperCase(Locale.ROOT))) {
+                log.debug("WebDAV 只读模式拒绝写请求: method={}, path={}", req.getMethod(), req.getRequestURI());
+                resp.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                resp.setContentType("text/plain; charset=UTF-8");
+                resp.getWriter().write("WebDAV is in read-only mode");
+                return;
+            }
         }
 
         // 桥接当前用户：后续 service 层 StpUtil.getLoginIdAsString() 正常工作

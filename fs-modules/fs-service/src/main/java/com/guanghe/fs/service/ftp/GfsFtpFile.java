@@ -119,12 +119,13 @@ public class GfsFtpFile implements FtpFile {
 
     @Override
     public boolean isWritable() {
-        return true; // 权限由 GFS 文件层语义约束（全量放行）
+        // 只读模式下客户端（FileZilla/WinSCP）靠它判断能否上传/改写，先如实回报
+        return !bridge.isReadOnly();
     }
 
     @Override
     public boolean isRemovable() {
-        return !norm().isEmpty() && doesExist();
+        return !bridge.isReadOnly() && !norm().isEmpty() && doesExist();
     }
 
     /**

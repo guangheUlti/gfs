@@ -3,6 +3,8 @@ import { request } from './request'
 export interface ServiceSettingVO {
   serviceType: 'webdav' | 'sftp' | 'ftp' | 'oss'
   enabled: boolean
+  /** 只读模式（仅 webdav）：开启后拒绝一切写操作 */
+  readOnly: boolean
   /** socket 型服务（sftp/ftp）有值；webdav/oss 复用主 HTTP 端口为 null */
   port: number | null
   bindAddress: string
@@ -15,6 +17,8 @@ export interface ServiceSettingVO {
 
 export interface UpdateServiceSettingParams {
   enabled: boolean
+  /** 仅 WebDAV，缺省表示不修改 */
+  readOnly?: boolean
   /** 仅 SFTP，1024-65535 */
   port?: number
   /** 仅 SFTP */

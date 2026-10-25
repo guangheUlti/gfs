@@ -22,9 +22,10 @@ public class GfsFileSystemFactory implements FileSystemFactory {
     private final GfsFileSystemProvider provider;
 
     public GfsFileSystemFactory(ObjectProvider<FileInfoService> fileInfoServiceProvider,
-                                SaTokenBridge saTokenBridge) {
+                                SaTokenBridge saTokenBridge,
+                                com.guanghe.fs.service.manager.ProtocolReadOnlyService readOnlyService) {
         this.provider = new GfsFileSystemProvider(fileInfoServiceProvider,
-                new GfsPathResolver(fileInfoServiceProvider), saTokenBridge);
+                new GfsPathResolver(fileInfoServiceProvider), saTokenBridge, readOnlyService);
     }
 
     @Override

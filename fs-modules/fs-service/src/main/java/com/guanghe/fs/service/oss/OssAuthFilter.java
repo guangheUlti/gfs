@@ -42,6 +42,9 @@ public class OssAuthFilter implements Filter {
     private final OssAccessKeyService ossAccessKeyService;
     private final com.guanghe.fs.service.webdav.DavUserAuthenticator davUserAuthenticator;
 
+    /** 只读模式下拒绝的写方法：PUT（上传/复制目标）、POST（分片初始化/合并）、DELETE（删对象） */
+    private static final java.util.Set<String> WRITE_METHODS = java.util.Set.of("PUT", "POST", "DELETE", "PATCH");
+
     /** lastUsedAt 刷新节流：1 分钟 */
     private static final long TOUCH_INTERVAL_MS = 60_000L;
     private final AtomicLong lastTouch = new AtomicLong(0);
@@ -76,6 +79,14 @@ public class OssAuthFilter implements Filter {
             writeError(resp, e.status, e.code, e.getMessage());
             return;
         }
+
+        // 只读模式：鉴权通过后再判写方法，回 S3 标准错误体（SDK/rclone 会显示 AccessDenied）
+        if (ServiceSettingService.isReadOnly(setting) && WRITE_METHODS.contains(req.getMethod())) {
+            log.debug("OSS 只读模式拒绝写请求: method={}, uri={}", req.getMethod(), req.getRequestURI());
+            writeError(resp, HttpServletResponse.SC_FORBIDDEN, "AccessDenied", "OSS is in read-only mode");
+            return;
+        }
+
         chain.doFilter(request, response);
     }
 

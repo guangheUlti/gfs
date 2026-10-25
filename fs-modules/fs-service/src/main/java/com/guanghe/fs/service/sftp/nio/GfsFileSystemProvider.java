@@ -35,14 +35,30 @@ public class GfsFileSystemProvider extends FileSystemProvider {
     private final ObjectProvider<FileInfoService> fileInfoServiceProvider;
     private final com.guanghe.fs.service.sftp.nio.GfsPathResolver pathResolver;
     private final com.guanghe.fs.service.sftp.SaTokenBridge saTokenBridge;
+    /** 只读开关快照（null = 不做限制，兼容单测/非 Spring 构造） */
+    private final com.guanghe.fs.service.manager.ProtocolReadOnlyService readOnlyService;
 
     public GfsFileSystemProvider(ObjectProvider<FileInfoService> fileInfoServiceProvider,
                                  GfsPathResolver pathResolver,
-                                 com.guanghe.fs.service.sftp.SaTokenBridge saTokenBridge) {
+                                 com.guanghe.fs.service.sftp.SaTokenBridge saTokenBridge,
+                                 com.guanghe.fs.service.manager.ProtocolReadOnlyService readOnlyService) {
         super();
         this.fileInfoServiceProvider = fileInfoServiceProvider;
         this.pathResolver = pathResolver;
         this.saTokenBridge = saTokenBridge;
+        this.readOnlyService = readOnlyService;
+    }
+
+    /**
+     * 只读模式断言：所有写入口先过这道门。
+     * <p>
+     * 抛 {@link AccessDeniedException}（IOException 子类）——sshd 会把它翻译成 SSH_FX_PERMISSION_DENIED，
+     * 客户端看到的是「权限不足」而不是连接中断，WinSCP/sshfs 能正确提示并保留目录列表。
+     */
+    private void assertWritable() throws AccessDeniedException {
+        if (readOnlyService != null && readOnlyService.isReadOnly("sftp")) {
+            throw new AccessDeniedException("SFTP is in read-only mode");
+        }
     }
 
     ObjectProvider<FileInfoService> files() {
@@ -105,6 +121,7 @@ public class GfsFileSystemProvider extends FileSystemProvider {
                 || options.contains(StandardOpenOption.CREATE_NEW);
         boolean append = options.contains(StandardOpenOption.APPEND);
         if (write || append) {
+            assertWritable();
             return new GfsWriteChannel(gp, append);
         }
         return new GfsReadChannel(gp);
@@ -121,6 +138,7 @@ public class GfsFileSystemProvider extends FileSystemProvider {
 
     @Override
     public void createDirectory(Path dir, FileAttribute<?>... attrs) throws IOException {
+        assertWritable();
         if (!(dir instanceof GfsPath gp)) {
             throw new IOException("not a gfs path");
         }
@@ -142,6 +160,7 @@ public class GfsFileSystemProvider extends FileSystemProvider {
 
     @Override
     public void delete(Path path) throws IOException {
+        assertWritable();
         if (!(path instanceof GfsPath gp)) {
             throw new IOException("not a gfs path");
         }
@@ -161,6 +180,7 @@ public class GfsFileSystemProvider extends FileSystemProvider {
 
     @Override
     public void move(Path source, Path target, CopyOption... options) throws IOException {
+        assertWritable();
         if (!(source instanceof GfsPath src) || !(target instanceof GfsPath dst)) {
             throw new IOException("not a gfs path");
         }
@@ -337,6 +357,7 @@ public class GfsFileSystemProvider extends FileSystemProvider {
 
     @Override
     public void copy(Path source, Path target, CopyOption... options) throws IOException {
+        assertWritable();
         if (!(source instanceof GfsPath src) || !(target instanceof GfsPath dst)) {
             throw new IOException("not a gfs path");
         }

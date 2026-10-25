@@ -42,6 +42,7 @@ public class ServiceSettingController {
 
     private final ServiceSettingService serviceSettingService;
     private final ProtocolServiceManager protocolServiceManager;
+    private final com.guanghe.fs.service.manager.ProtocolReadOnlyService protocolReadOnlyService;
     private final com.guanghe.fs.service.spi.ExternalFileServiceRegistry externalFileServiceRegistry;
 
     @Operation(summary = "全部服务配置 + 实时运行状态")
@@ -55,6 +56,7 @@ public class ServiceSettingController {
             ServiceSettingVO vo = new ServiceSettingVO();
             vo.setServiceType(setting.getServiceType());
             vo.setEnabled(setting.getEnabled() != null && setting.getEnabled() == 1);
+            vo.setReadOnly(ServiceSettingService.isReadOnly(setting));
             vo.setPort(setting.getPort());
             vo.setBindAddress(setting.getBindAddress());
             vo.setUpdatedAt(setting.getUpdatedAt());
@@ -76,6 +78,12 @@ public class ServiceSettingController {
         validate(type, cmd);
 
         setting.setEnabled(Boolean.TRUE.equals(cmd.getEnabled()) ? 1 : 0);
+        // 只读模式对四条协议（webdav/sftp/ftp/oss）均生效，存 config_data 扩展 JSON：
+        // 单个开关不值得为它加一列，也不用让已有安装手工执行 ALTER TABLE
+        if (cmd.getReadOnly() != null) {
+            setting.setConfigData(ServiceSettingService.mergeReadOnly(
+                    setting.getConfigData(), Boolean.TRUE.equals(cmd.getReadOnly())));
+        }
         if (cmd.getPort() != null) {
             setting.setPort(cmd.getPort());
         }
@@ -85,9 +93,13 @@ public class ServiceSettingController {
         setting.setUpdatedAt(LocalDateTime.now());
         serviceSettingService.updateById(setting);
 
+        // 只读开关无需重建服务，直接刷运行时快照，下一条写请求就生效
+        protocolReadOnlyService.update(type, ServiceSettingService.isReadOnly(setting));
+
         // 热生效：启动失败不抛给保存动作（失败状态经 /list 返回）
         protocolServiceManager.apply(type, setting);
-        log.info("对外文件服务配置已更新: type={}, enabled={}", type, setting.getEnabled());
+        log.info("对外文件服务配置已更新: type={}, enabled={}, readOnly={}",
+                type, setting.getEnabled(), ServiceSettingService.isReadOnly(setting));
         return Result.ok();
     }
 

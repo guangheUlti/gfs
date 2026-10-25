@@ -17,6 +17,8 @@
   },
   "form": {
     "enabled": "Enable service",
+    "readOnly": "Read-only mode",
+    "readOnlyHint": "When on, only reading is allowed (browse, download, stream); upload, mkdir, rename, move and delete are rejected. Takes effect immediately",
     "port": "Port",
     "portHint": "1024-65535, takes effect immediately after saving",
     "bindAddress": "Bind address",

@@ -18,6 +18,9 @@ public class ServiceSettingVO {
     @Schema(description = "是否启用")
     private Boolean enabled;
 
+    @Schema(description = "只读模式（仅 webdav）：开启后拒绝一切写操作")
+    private Boolean readOnly;
+
     @Schema(description = "监听端口（webdav 为空 = 复用 HTTP 80 端口）")
     private Integer port;
 

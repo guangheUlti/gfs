@@ -18,4 +18,7 @@ public class UpdateServiceSettingCmd {
 
     @Schema(description = "监听地址（仅 sftp）")
     private String bindAddress;
+
+    @Schema(description = "只读模式（仅 webdav）：true 时只允许读访问，写方法返回 403")
+    private Boolean readOnly;
 }

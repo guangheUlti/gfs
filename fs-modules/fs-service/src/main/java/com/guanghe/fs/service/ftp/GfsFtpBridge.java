@@ -39,17 +39,25 @@ public class GfsFtpBridge implements UserManager {
     private final SaTokenBridge saTokenBridge;
     private final com.guanghe.fs.service.webdav.DavUserAuthenticator authenticator;
     private final com.guanghe.fs.system.mapper.SysUserMapper userMapper;
+    private final com.guanghe.fs.service.manager.ProtocolReadOnlyService readOnlyService;
 
     public GfsFtpBridge(ObjectProvider<FileInfoService> fileInfoServiceProvider,
                         GfsPathResolver pathResolver,
                         SaTokenBridge saTokenBridge,
                         com.guanghe.fs.service.webdav.DavUserAuthenticator authenticator,
-                        com.guanghe.fs.system.mapper.SysUserMapper userMapper) {
+                        com.guanghe.fs.system.mapper.SysUserMapper userMapper,
+                        com.guanghe.fs.service.manager.ProtocolReadOnlyService readOnlyService) {
         this.fileInfoServiceProvider = fileInfoServiceProvider;
         this.pathResolver = pathResolver;
         this.saTokenBridge = saTokenBridge;
         this.authenticator = authenticator;
         this.userMapper = userMapper;
+        this.readOnlyService = readOnlyService;
+    }
+
+    /** 只读开关（FTP 侧：写命令一律拒绝，读命令不受影响） */
+    public boolean isReadOnly() {
+        return readOnlyService != null && readOnlyService.isReadOnly("ftp");
     }
 
     private FileInfoService files() {
@@ -238,6 +246,10 @@ public class GfsFtpBridge implements UserManager {
      * 创建目录（父链逐级 mkdir）
      */
     public boolean mkdir(String userId, String absPath) {
+        if (isReadOnly()) {
+            log.debug("FTP 只读模式拒绝 MKD: {}", absPath);
+            return false;
+        }
         return Boolean.TRUE.equals(saTokenBridge.runAs(userId, () -> {
             String normalized = GfsPathResolver.normalize(absPath);
             if (normalized.isEmpty()) {
@@ -274,6 +286,10 @@ public class GfsFtpBridge implements UserManager {
      * 删除文件/目录（进回收站，继承 GFS 删除语义）
      */
     public boolean delete(String userId, String absPath) {
+        if (isReadOnly()) {
+            log.debug("FTP 只读模式拒绝 DELE/RMD: {}", absPath);
+            return false;
+        }
         return saTokenBridge.runAs(userId, () -> {
             String normalized = GfsPathResolver.normalize(absPath);
             if (normalized.isEmpty()) {
@@ -292,6 +308,10 @@ public class GfsFtpBridge implements UserManager {
      * 改名（同目录语义）
      */
     public boolean rename(String userId, String absPath, String newName) {
+        if (isReadOnly()) {
+            log.debug("FTP 只读模式拒绝 RNFR/RNTO: {} -> {}", absPath, newName);
+            return false;
+        }
         return Boolean.TRUE.equals(saTokenBridge.runAs(userId, () -> {
             FileInfo file = pathResolver.resolve(absPath, userId);
             if (file == null) {
@@ -308,6 +328,10 @@ public class GfsFtpBridge implements UserManager {
      * 移动（跨目录改名）
      */
     public boolean move(String userId, String fromAbs, String toAbs) {
+        if (isReadOnly()) {
+            log.debug("FTP 只读模式拒绝跨目录移动: {} -> {}", fromAbs, toAbs);
+            return false;
+        }
         return Boolean.TRUE.equals(saTokenBridge.runAs(userId, () -> {
             FileInfo from = pathResolver.resolve(fromAbs, userId);
             if (from == null) {
@@ -366,6 +390,11 @@ public class GfsFtpBridge implements UserManager {
      * 写文件（spool 到临时文件，close 时提交；与 SFTP GfsWriteChannel 同策略，保证只写一次大文件不占内存）
      */
     public OutputStream writeFile(String userId, String absPath) throws IOException {
+        if (isReadOnly()) {
+            // STOR/APPE 在数据连接建立阶段就会被拒，FtpServer 回 550，不会落到 GFS 写流程
+            log.debug("FTP 只读模式拒绝 STOR/APPE: {}", absPath);
+            throw new IOException("FTP is in read-only mode");
+        }
         // FtpServer 的 DataConnection 会持续 write 并在数据连接关闭时 close，
         // 这里直接给一个 spool 缓冲流，close 时提交到 FileInfoService
         java.nio.file.Path temp = java.nio.file.Files.createTempFile("gfs-ftp-", ".spool");

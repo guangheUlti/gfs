@@ -46,9 +46,10 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
   }
 
   const configMutation = useMutation({
-    mutationFn: (enabled: boolean) =>
+    mutationFn: (params: { enabled: boolean; readOnly: boolean }) =>
       updateServiceConfig(setting.serviceType, {
-        enabled,
+        enabled: params.enabled,
+        readOnly: params.readOnly,
         ...(socketBased ? { port: Number(port), bindAddress: bindAddress.trim() } : {}),
       }),
     onSuccess: () => {
@@ -96,14 +97,20 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
       setConfirmOpen(false)
       return
     }
-    configMutation.mutate(pendingEnabled, {
-      onSettled: () => setConfirmOpen(false),
-    })
+    configMutation.mutate(
+      { enabled: pendingEnabled, readOnly: setting.readOnly },
+      { onSettled: () => setConfirmOpen(false) }
+    )
   }
 
   const handleSave = () => {
     if (!validatePort()) return
-    configMutation.mutate(setting.enabled)
+    configMutation.mutate({ enabled: setting.enabled, readOnly: setting.readOnly })
+  }
+
+  /** 只读开关即时保存：可逆的读权限收紧/放开，不需要二次确认 */
+  const handleReadOnlyToggle = (next: boolean) => {
+    configMutation.mutate({ enabled: setting.enabled, readOnly: next })
   }
 
   const handleAction = (action: ServiceAction) => actionMutation.mutate(action)
@@ -152,6 +159,21 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
             disabled={toggling || isBusyAction}
             onCheckedChange={handleToggle}
           />
+        </div>
+
+        <div className='space-y-1.5'>
+          <div className='flex items-center justify-between'>
+            <Label htmlFor={`${setting.serviceType}-read-only`} className='cursor-pointer'>
+              {t('form.readOnly')}
+            </Label>
+            <Switch
+              id={`${setting.serviceType}-read-only`}
+              checked={setting.readOnly}
+              disabled={toggling || isBusyAction}
+              onCheckedChange={handleReadOnlyToggle}
+            />
+          </div>
+          <p className='text-xs text-muted-foreground'>{t('form.readOnlyHint')}</p>
         </div>
 
         {socketBased && (
