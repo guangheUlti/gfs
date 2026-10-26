@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Cloud, Globe, HardDrive, SquareTerminal } from 'lucide-react'
+import { Cloud, Globe, HardDrive, SquareTerminal, Tv } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
@@ -131,6 +131,8 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
               <HardDrive className='h-5 w-5 text-muted-foreground' />
             ) : setting.serviceType === 'oss' ? (
               <Cloud className='h-5 w-5 text-muted-foreground' />
+            ) : setting.serviceType === 'alist' ? (
+              <Tv className='h-5 w-5 text-muted-foreground' />
             ) : (
               <Globe className='h-5 w-5 text-muted-foreground' />
             )}

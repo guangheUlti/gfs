@@ -23,6 +23,9 @@ public interface ServiceSettingService extends IService<ServiceSetting> {
     /** 服务类型：OSS（S3 兼容网关，/oss/**） */
     String TYPE_OSS = "oss";
 
+    /** 服务类型：AList（v3 开放 API，/api/** + /d/** 直链） */
+    String TYPE_ALIST = "alist";
+
     /** `config_data` 里的只读标记键（WebDAV 只读模式） */
     String CONFIG_READ_ONLY = "readOnly";
 
@@ -33,7 +36,8 @@ public interface ServiceSettingService extends IService<ServiceSetting> {
      * @return 是否合法
      */
     static boolean isValidType(String type) {
-        return TYPE_WEBDAV.equals(type) || TYPE_SFTP.equals(type) || TYPE_FTP.equals(type) || TYPE_OSS.equals(type);
+        return TYPE_WEBDAV.equals(type) || TYPE_SFTP.equals(type) || TYPE_FTP.equals(type)
+                || TYPE_OSS.equals(type) || TYPE_ALIST.equals(type);
     }
 
     /**

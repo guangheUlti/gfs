@@ -231,7 +231,7 @@ DROP TABLE IF EXISTS `service_settings`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `service_settings` (
   `id` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'id',
-  `service_type` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '服务类型：webdav / sftp',
+  `service_type` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '服务类型：webdav / alist / sftp / ftp / oss',
   `enabled` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否启用 0：否 1：是',
   `port` int DEFAULT NULL COMMENT '监听端口（webdav 复用 HTTP 80 端口，此列为空）',
   `bind_address` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '监听地址，默认 0.0.0.0',
@@ -247,7 +247,7 @@ CREATE TABLE `service_settings` (
 
 LOCK TABLES `service_settings` WRITE;
 /*!40000 ALTER TABLE `service_settings` DISABLE KEYS */;
-INSERT INTO `service_settings` VALUES ('svc-sftp','sftp',0,9022,'0.0.0.0',NULL,NULL,'2026-09-18 14:15:42',NULL,0),('svc-webdav','webdav',0,NULL,'0.0.0.0',NULL,NULL,NULL,NULL,0),('svc-ftp','ftp',0,9021,'0.0.0.0',NULL,NULL,NULL,NULL,0),('svc-oss','oss',0,NULL,'0.0.0.0',NULL,NULL,NULL,NULL,0);
+INSERT INTO `service_settings` VALUES ('svc-sftp','sftp',0,9022,'0.0.0.0',NULL,NULL,'2026-09-18 14:15:42',NULL,0),('svc-webdav','webdav',0,NULL,'0.0.0.0',NULL,NULL,NULL,NULL,0),('svc-ftp','ftp',0,9021,'0.0.0.0',NULL,NULL,NULL,NULL,0),('svc-oss','oss',0,NULL,'0.0.0.0',NULL,NULL,NULL,NULL,0),('svc-alist','alist',0,NULL,'0.0.0.0',NULL,NULL,NULL,NULL,0);
 /*!40000 ALTER TABLE `service_settings` ENABLE KEYS */;
 UNLOCK TABLES;
 

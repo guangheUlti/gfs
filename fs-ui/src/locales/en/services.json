@@ -6,7 +6,8 @@
     "webdavDesc": "Reuses the main HTTP port (80) under /dav; supports Windows drive mapping",
     "sftpDesc": "Standalone SFTP endpoint; works with sshfs mounts and clients like WinSCP",
     "ftpDesc": "Standalone FTP endpoint; works with clients like FileZilla and resumable downloads",
-    "ossDesc": "Reuses the main HTTP port (80) under /oss; S3-compatible API for rclone and S3 SDKs"
+    "ossDesc": "Reuses the main HTTP port (80) under /oss; S3-compatible API for rclone and S3 SDKs",
+    "alistDesc": "Reuses the main HTTP port (80) with an AList v3 compatible API (/api + /d raw links); works with TVBox-style players and rclone"
   },
   "status": {
     "running": "Running",
@@ -71,6 +72,12 @@
       "filezilla": "FileZilla / WinSCP: choose FTP (plain), port {{port}}, and use your drive credentials",
       "pasv": "Passive data ports 50000-50100 must be allowed by the firewall; downloads support resume, uploads do not",
       "security": "FTP is a plaintext protocol for LAN use only; prefer SFTP or WebDAV over HTTPS when exposed"
+    },
+    "alist": {
+      "client": "TV box players: choose AList as the drive type, set the URL to http://<host>:{{port}} (no path), and use your drive credentials",
+      "playback": "Playback uses signed /d links (valid for 12 hours) with Range requests, so seeking does not re-download the file",
+      "clients": "rclone / AList clients: same endpoint; the API is standard AList v3 (fs/list, fs/get, fs/put, ...), the token comes from login",
+      "readonly": "Read-only mode is recommended: a TV box only needs read access; when on, mkdir/rename/move/copy/remove/put return 403"
     },
     "oss": {
       "client": "rclone: create an S3 remote with rclone config, set the endpoint to http://<host>/oss, region us-east-1, and use the key pair below",

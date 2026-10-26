@@ -6,7 +6,8 @@
     "webdavDesc": "复用主服务 HTTP 端口（80），路径前缀 /dav，支持 Windows 网络驱动器映射",
     "sftpDesc": "独立端口提供 SFTP 文件服务，支持 sshfs 挂载与 WinSCP 等客户端",
     "ftpDesc": "独立端口提供 FTP 文件服务，支持 FileZilla 等客户端与断点续传下载",
-    "ossDesc": "复用主服务 HTTP 端口（80），路径前缀 /oss，S3 兼容 API，支持 rclone 与各类 S3 SDK"
+    "ossDesc": "复用主服务 HTTP 端口（80），路径前缀 /oss，S3 兼容 API，支持 rclone 与各类 S3 SDK",
+    "alistDesc": "复用主服务 HTTP 端口（80），实现 AList v3 开放 API（/api + /d 直链），影视仓/TVBox、rclone 可直接接入"
   },
   "status": {
     "running": "运行中",
@@ -71,6 +72,12 @@
       "filezilla": "FileZilla / WinSCP：协议选 FTP（明文），端口 {{port}}，账号密码为网盘登录账号",
       "pasv": "被动模式数据端口 50000-50100，防火墙需放行；下载支持断点续传，上传不支持 REST 续传",
       "security": "FTP 为明文协议，仅建议内网使用；对外暴露请改用 SFTP 或 WebDAV + HTTPS"
+    },
+    "alist": {
+      "client": "影视仓 / TVBox：网盘类型选 AList，地址填 http://<主机>:{{port}}（不加任何路径），账号密码即网盘登录账号",
+      "playback": "点击视频走 /d 签名直链（12 小时有效）：Range 分片按需拉取，拖动进度不会重新下载整个文件",
+      "clients": "rclone / AList 桌面端：端点同上，接口为标准 AList v3（fs/list、fs/get、fs/put 等），密钥为登录后下发的 token",
+      "readonly": "建议保持只读：客厅盒子只需要读权限；开启后 mkdir/rename/move/copy/remove/put 一律返回 403"
     },
     "oss": {
       "client": "rclone：rclone config 新建 S3 类型 remote，端点 http://<主机>/oss，区域 us-east-1，凭证使用下方密钥对",

@@ -48,6 +48,7 @@ public class ProtocolServiceManager implements SmartLifecycle {
 
     @Override
     public void start() {
+        ensureSettings();
         List<ServiceSetting> settings = serviceSettingService.list(
                 new QueryWrapper().where(SERVICE_SETTING.ENABLED.eq(1)));
         settings.forEach(setting -> {
@@ -78,6 +79,38 @@ public class ProtocolServiceManager implements SmartLifecycle {
     @Override
     public boolean isRunning() {
         return running;
+    }
+
+    /**
+     * 补齐缺失的配置行。
+     * <p>
+     * 协议实现是 SPI 注册的，但配置表是每协议一行：老库升级后新协议（例如 alist）没有记录时，
+     * 管理页既看不到卡片也调不了配置接口（requireByType 会报 not found）。
+     * 这里以注册表为准补行，新协议无需用户手工执行 INSERT。
+     */
+    private void ensureSettings() {
+        try {
+            java.util.Set<String> existing = serviceSettingService.list().stream()
+                    .map(ServiceSetting::getServiceType)
+                    .collect(java.util.stream.Collectors.toSet());
+            for (String type : registry.all().keySet()) {
+                if (existing.contains(type)) {
+                    continue;
+                }
+                ServiceSetting setting = new ServiceSetting();
+                setting.setId("svc-" + type);
+                setting.setServiceType(type);
+                setting.setEnabled(0);
+                setting.setBindAddress("0.0.0.0");
+                setting.setDeleted(0);
+                setting.setCreatedAt(java.time.LocalDateTime.now());
+                setting.setUpdatedAt(java.time.LocalDateTime.now());
+                serviceSettingService.save(setting);
+                log.info("补齐对外文件服务配置行: type={}", type);
+            }
+        } catch (Exception e) {
+            log.warn("补齐对外文件服务配置行失败（不影响已有服务）", e);
+        }
     }
 
     /**

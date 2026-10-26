@@ -8,9 +8,9 @@ import { UsageTips } from './components/UsageTips'
  * 对外文件服务配置页：全部 SPI 注册服务卡片并列展示（webdav/sftp/ftp…）
  * 服务卡片内容多，不跟存储配置页共用等分网格，大屏下一行两张等宽卡片
  */
-/** 卡片展示顺序：webdav → oss → sftp → ftp（常用协议在前，备用协议在后） */
+/** 卡片展示顺序：webdav → alist → sftp → ftp → oss（常用协议在前，对象存储网关放最后） */
 function serviceOrder(type: string): number {
-  const order = ['webdav', 'oss', 'sftp', 'ftp']
+  const order = ['webdav', 'alist', 'sftp', 'ftp', 'oss']
   const idx = order.indexOf(type)
   return idx === -1 ? order.length : idx
 }

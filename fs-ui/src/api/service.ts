@@ -1,11 +1,11 @@
 import { request } from './request'
 
 export interface ServiceSettingVO {
-  serviceType: 'webdav' | 'sftp' | 'ftp' | 'oss'
+  serviceType: 'webdav' | 'alist' | 'sftp' | 'ftp' | 'oss'
   enabled: boolean
-  /** 只读模式（仅 webdav）：开启后拒绝一切写操作 */
+  /** 只读模式（四条 HTTP/协议端均支持）：开启后拒绝一切写操作 */
   readOnly: boolean
-  /** socket 型服务（sftp/ftp）有值；webdav/oss 复用主 HTTP 端口为 null */
+  /** socket 型服务（sftp/ftp）有值；webdav/alist/oss 复用主 HTTP 端口为 null */
   port: number | null
   bindAddress: string
   /** running / stopped / error */
