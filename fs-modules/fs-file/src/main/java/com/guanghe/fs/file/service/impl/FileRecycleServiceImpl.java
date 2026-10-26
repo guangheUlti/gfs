@@ -25,6 +25,7 @@ import io.github.linpeilie.Converter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -315,6 +316,43 @@ public class FileRecycleServiceImpl implements FileRecycleService {
             this.permanentlyDeleteFiles(topLevelIds);
         }
     }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    @Override
+    public void purgeStorageFiles(String storageSettingId) {
+        if (StrUtil.isBlank(storageSettingId)) {
+            return;
+        }
+        List<FileInfo> files = fileInfoService.list(new QueryWrapper()
+                .where(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.eq(storageSettingId)));
+        if (CollUtil.isEmpty(files)) {
+            return;
+        }
+        // 挂载式存储（本地挂载/本地入库/SMB）的真实目录是唯一真相源：只清索引，绝不碰真实文件
+        boolean indexOnly = isMountStorage(storageSettingId);
+        Map<String, List<String>> idsByUser = files.stream()
+                .filter(file -> StrUtil.isNotBlank(file.getUserId()))
+                .collect(Collectors.groupingBy(
+                        FileInfo::getUserId,
+                        LinkedHashMap::new,
+                        Collectors.mapping(FileInfo::getId, Collectors.toList())));
+
+        for (Map.Entry<String, List<String>> entry : idsByUser.entrySet()) {
+            if (indexOnly) {
+                fileInfoService.removeByIds(entry.getValue());
+                fileUserFavoritesService.removeByFileIds(entry.getValue(), entry.getKey());
+            } else {
+                // 复用彻底删除链路：清索引 + 事务提交后删除无引用物理对象。
+                // 必须直接走 doPermanentDelete(false)：带 userId 的 permanentlyDeleteFiles
+                // 是“回收站专用”语义（onlyRecycled=true），对活动文件会报“未找到要删除的文件”。
+                this.doPermanentDelete(entry.getValue(), entry.getKey(), false);
+            }
+        }
+        log.info("存储文件清理完成: settingId={}, files={}, indexOnly={}",
+                storageSettingId, files.size(), indexOnly);
+    }
+
+
 
     /**
      * 追加存储平台过滤条件。

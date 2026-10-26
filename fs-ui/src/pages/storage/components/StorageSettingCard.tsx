@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import type { StorageSetting, ConfigScheme } from '@/types/storage'
+import type { StorageSetting, ConfigScheme, StorageFileUsage } from '@/types/storage'
 import {
   Database,
   Eye,
@@ -21,6 +21,7 @@ import {
   updateStorageSetting,
   scanMountStorage,
   getMountLastScanTime,
+  getStorageFileUsage,
 } from '@/api/storage'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -79,6 +80,8 @@ export function StorageSettingCard({
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [copiedConfig, setCopiedConfig] = useState(false)
   const [isRescanning, setIsRescanning] = useState(false)
+  const [deleteUsage, setDeleteUsage] = useState<StorageFileUsage | null>(null)
+  const [isUsageLoading, setIsUsageLoading] = useState(false)
   const queryClient = useQueryClient()
 
   const isMountPlatform = setting.storagePlatform?.identifier === 'LocalMount'
@@ -239,10 +242,26 @@ export function StorageSettingCard({
     }
   }
 
+  // 打开删除确认：先查文件占用，有文件时由弹窗提示将先清理这些文件
+  const handleOpenDelete = async () => {
+    setIsUsageLoading(true)
+    try {
+      setDeleteUsage(await getStorageFileUsage(setting.id))
+    } catch {
+      setDeleteUsage(null)
+    } finally {
+      setIsUsageLoading(false)
+      setDeleteDialogOpen(true)
+    }
+  }
+
   const handleDelete = async () => {
     setIsLoading(true)
     try {
-      await deleteStorageSetting(setting.id)
+      await deleteStorageSetting(
+        setting.id,
+        (deleteUsage?.fileCount ?? 0) > 0
+      )
       toast.success(t('card.deleteOk', { name: setting.storagePlatform.name }))
       onRefresh()
       setDeleteDialogOpen(false)
@@ -301,7 +320,7 @@ export function StorageSettingCard({
 
   return (
     <>
-      <li className='rounded-lg border p-4 hover:shadow-md'>
+      <li className='flex min-w-0 flex-col rounded-lg border p-4 hover:shadow-md'>
         {/* Header */}
         <div className='mb-8 flex items-center justify-between'>
           {isBuiltinLocal ? (
@@ -362,34 +381,27 @@ export function StorageSettingCard({
 
         {/* Actions Menu */}
         {isBuiltinLocal ? (
-          <div className='mt-4 flex flex-wrap items-center gap-2'>
+          <div className='mt-auto grid grid-cols-2 gap-2 pt-4'>
             <Button
               variant='outline'
               size='sm'
               onClick={() => setViewModalOpen(true)}
-              className='min-w-[70px] flex-1'
             >
               <Eye className='mr-1.5 h-3 w-3' />
               {t('card.view')}
             </Button>
-            <Button
-              variant='outline'
-              size='sm'
-              onClick={handleOpenEdit}
-              className='min-w-[70px] flex-1'
-            >
+            <Button variant='outline' size='sm' onClick={handleOpenEdit}>
               <Settings className='mr-1.5 h-3 w-3' />
               {t('card.edit')}
             </Button>
           </div>
         ) : (
-          <div className='mt-4 flex flex-wrap items-center gap-2'>
+          <div className='mt-auto grid grid-cols-2 gap-2 pt-4'>
             <Button
               variant={setting.enabled === 1 ? 'outline' : 'default'}
               size='sm'
               onClick={() => setToggleDialogOpen(true)}
               disabled={isLoading}
-              className='min-w-[70px] flex-1'
             >
               {setting.enabled === 1 ? t('card.disable') : t('card.enable')}
             </Button>
@@ -397,25 +409,20 @@ export function StorageSettingCard({
               variant='outline'
               size='sm'
               onClick={() => setViewModalOpen(true)}
-              className='min-w-[70px] flex-1'
             >
               <Eye className='mr-1.5 h-3 w-3' />
               {t('card.view')}
             </Button>
-            <Button
-              variant='outline'
-              size='sm'
-              onClick={handleOpenEdit}
-              className='min-w-[70px] flex-1'
-            >
+            <Button variant='outline' size='sm' onClick={handleOpenEdit}>
               <Settings className='mr-1.5 h-3 w-3' />
               {t('card.edit')}
             </Button>
             <Button
               variant='outline'
               size='sm'
-              onClick={() => setDeleteDialogOpen(true)}
-              className='min-w-[70px] flex-1 text-red-600 hover:border-red-300 hover:text-red-700'
+              onClick={handleOpenDelete}
+              disabled={isUsageLoading}
+              className='text-red-600 hover:border-red-300 hover:text-red-700'
             >
               <Trash2 className='mr-1.5 h-3 w-3' />
               {t('card.delete')}
@@ -426,7 +433,7 @@ export function StorageSettingCard({
                 size='sm'
                 onClick={handleRescan}
                 disabled={isRescanning}
-                className='min-w-[70px] flex-1'
+                className='col-span-2'
               >
                 <RefreshCw
                   className={`mr-1.5 h-3 w-3 ${isRescanning ? 'animate-spin' : ''}`}
@@ -645,8 +652,24 @@ export function StorageSettingCard({
         onOpenChange={setDeleteDialogOpen}
         handleConfirm={handleDelete}
         isLoading={isLoading}
-        title={t('card.deleteTitle')}
-        desc={t('card.deleteDesc', { name: setting.storagePlatform.name })}
+        title={
+          deleteUsage && deleteUsage.fileCount > 0
+            ? t('card.deleteWithFilesTitle')
+            : t('card.deleteTitle')
+        }
+        desc={
+          deleteUsage && deleteUsage.fileCount > 0
+            ? t(
+                deleteUsage.indexOnly
+                  ? 'card.deleteWithFilesIndexOnly'
+                  : 'card.deleteWithFilesPurge',
+                {
+                  name: setting.storagePlatform.name,
+                  count: deleteUsage.fileCount,
+                }
+              )
+            : t('card.deleteDesc', { name: setting.storagePlatform.name })
+        }
         confirmText={isLoading ? t('card.deleting') : t('card.confirmDelete')}
         cancelBtnText={t('card.cancel')}
       />

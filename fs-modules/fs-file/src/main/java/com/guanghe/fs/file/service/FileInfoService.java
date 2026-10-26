@@ -35,6 +35,11 @@ public interface FileInfoService extends IService<FileInfo> {
     long countByStorageSettingId(String settingId);
 
     /**
+     * 统计指定存储配置下的全部文件记录数（含回收站），用于删除存储配置时的清理确认
+     */
+    long countAllByStorageSettingId(String settingId);
+
+    /**
      * 下载文件
      *
      * @param fileId 文件ID

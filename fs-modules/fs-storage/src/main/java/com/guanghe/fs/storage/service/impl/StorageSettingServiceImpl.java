@@ -10,6 +10,7 @@ import com.guanghe.fs.storage.domain.StorageSetting;
 import com.guanghe.fs.storage.domain.cmd.StorageSettingAddCmd;
 import com.guanghe.fs.storage.domain.cmd.StorageSettingEditCmd;
 import com.guanghe.fs.storage.domain.vo.StorageActivePlatformsVO;
+import com.guanghe.fs.storage.domain.vo.StorageFileUsageVO;
 import com.guanghe.fs.storage.domain.vo.StoragePlatformVO;
 import com.guanghe.fs.storage.domain.vo.StorageSettingUserVO;
 import com.guanghe.fs.storage.facade.StorageServiceFacade;
@@ -89,6 +90,23 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
 
     public void setStorageInUseChecker(java.util.function.Predicate<String> checker) {
         this.storageInUseChecker = checker;
+    }
+
+    /**
+     * 存储文件清理（由 fs-file 在启动时注入）：删除配置前清理该存储下的全部文件。
+     * 直读存储只清索引，托管存储连物理文件一并删除。
+     */
+    private volatile java.util.function.Consumer<String> storageFilesPurger;
+
+    public void setStorageFilesPurger(java.util.function.Consumer<String> purger) {
+        this.storageFilesPurger = purger;
+    }
+
+    /** 存储文件占用统计（由 fs-file 在启动时注入）：删除前给前端提示文件数量与清理方式 */
+    private volatile java.util.function.Function<String, StorageFileUsageVO> storageFileUsageProvider;
+
+    public void setStorageFileUsageProvider(java.util.function.Function<String, StorageFileUsageVO> provider) {
+        this.storageFileUsageProvider = provider;
     }
 
     private final Converter converter;
@@ -491,7 +509,7 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
             @CacheEvict(value = "storageSettings", key = "'global'"),
             @CacheEvict(value = "storageActivePlatforms", key = "'global'")
     })
-    public void deleteStorageSettingById(String id) {
+    public void deleteStorageSettingById(String id, boolean purgeFiles) {
         // 内置本地存储是系统默认存储，禁止删除
         if (StorageUtils.LOCAL_PLATFORM_IDENTIFIER.equals(id)) {
             throw new BusinessException(I18nUtils.getMessage("storage.local.delete.forbidden"));
@@ -505,10 +523,20 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
         if (id.equals(cacheSettingId)) {
             throw new BusinessException(I18nUtils.getMessage("storage.config.in.use"));
         }
-        // 该存储下仍有文件索引时禁止删除，防止文件永久失联
-        java.util.function.Predicate<String> inUseChecker = this.storageInUseChecker;
-        if (inUseChecker != null && inUseChecker.test(id)) {
-            throw new BusinessException(I18nUtils.getMessage("storage.delete.has.files"));
+        if (purgeFiles) {
+            // 先清理文件再删配置：清理走独立事务（REQUIRES_NEW），必须在存储实例仍可用时提交，
+            // 否则托管存储的物理对象删除会因实例已被移除而无法执行
+            java.util.function.Consumer<String> purger = this.storageFilesPurger;
+            if (purger == null) {
+                throw new BusinessException(I18nUtils.getMessage("storage.purge.unavailable"));
+            }
+            purger.accept(id);
+        } else {
+            // 该存储下仍有文件索引时禁止删除，防止文件永久失联
+            java.util.function.Predicate<String> inUseChecker = this.storageInUseChecker;
+            if (inUseChecker != null && inUseChecker.test(id)) {
+                throw new BusinessException(I18nUtils.getMessage("storage.delete.has.files"));
+            }
         }
 
         // 挂载/直读平台删除：先卸载索引（含挂载点与回收站记录），再删配置——
@@ -544,6 +572,12 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
                 new QueryWrapper()
                         .where(STORAGE_SETTING.ENABLED.eq(CommonConstant.Y))
         );
+    }
+
+    @Override
+    public StorageFileUsageVO getStorageFileUsage(String id) {
+        java.util.function.Function<String, StorageFileUsageVO> provider = this.storageFileUsageProvider;
+        return provider == null ? null : provider.apply(id);
     }
 
     private String maskSensitiveConfig(String configData) {

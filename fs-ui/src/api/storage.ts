@@ -3,6 +3,7 @@ import type {
   StorageSetting,
   ActiveStoragePlatform,
   AddStorageSettingParams,
+  StorageFileUsage,
   UpdateStorageSettingParams,
 } from '@/types/storage'
 import { request } from './request'
@@ -47,10 +48,24 @@ export function updateStorageSetting(data: UpdateStorageSettingParams) {
 }
 
 /**
- * 删除存储平台配置
+ * 查询存储配置的文件占用情况（删除前提示用）；占用统计组件未就绪时返回 null
  */
-export function deleteStorageSetting(id: number) {
-  return request.delete(`/apis/storage/settings/${id}`)
+export async function getStorageFileUsage(id: number) {
+  const data = await request.get<StorageFileUsage | null>(
+    `/apis/storage/settings/${id}/file-usage`
+  )
+  return data ?? null
+}
+
+/**
+ * 删除存储平台配置
+ *
+ * @param purgeFiles 是否先清理该存储下的全部文件（直读存储只清索引，托管存储连物理文件一并删除）
+ */
+export function deleteStorageSetting(id: number, purgeFiles = false) {
+  return request.delete(`/apis/storage/settings/${id}`, {
+    params: { purgeFiles },
+  })
 }
 
 /**

@@ -5,6 +5,7 @@ import com.guanghe.fs.storage.domain.cmd.StorageSettingAddCmd;
 import com.mybatisflex.core.service.IService;
 import com.guanghe.fs.storage.domain.cmd.StorageSettingEditCmd;
 import com.guanghe.fs.storage.domain.vo.StorageActivePlatformsVO;
+import com.guanghe.fs.storage.domain.vo.StorageFileUsageVO;
 import com.guanghe.fs.storage.domain.vo.StorageSettingUserVO;
 
 import java.util.List;
@@ -55,9 +56,19 @@ public interface StorageSettingService extends IService<StorageSetting> {
     /**
      * 删除存储平台配置信息
      *
-     * @param id
+     * @param id         配置ID
+     * @param purgeFiles 为 true 时先清理该存储下的全部文件（直读存储只清索引，托管存储连物理文件一并删除）再删除配置；
+     *                   为 false 时该存储下仍有文件索引则拒绝删除
      */
-    void deleteStorageSettingById(String id);
+    void deleteStorageSettingById(String id, boolean purgeFiles);
+
+    /**
+     * 查询存储配置的文件占用情况（删除前提示用）
+     *
+     * @param id 配置ID
+     * @return 文件占用信息；占用统计组件未就绪时返回 null
+     */
+    StorageFileUsageVO getStorageFileUsage(String id);
 
     /**
      * 根据存储平台标识查询所有配置（用于检查是否有用户开通）

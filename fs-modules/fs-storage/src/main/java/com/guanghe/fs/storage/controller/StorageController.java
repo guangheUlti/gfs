@@ -10,6 +10,7 @@ import com.guanghe.fs.storage.domain.StorageSetting;
 import com.guanghe.fs.storage.domain.cmd.StorageSettingAddCmd;
 import com.guanghe.fs.storage.domain.cmd.StorageSettingEditCmd;
 import com.guanghe.fs.storage.domain.vo.StorageActivePlatformsVO;
+import com.guanghe.fs.storage.domain.vo.StorageFileUsageVO;
 import com.guanghe.fs.storage.domain.vo.StoragePlatformVO;
 import com.guanghe.fs.storage.domain.vo.StorageSettingUserVO;
 import com.guanghe.fs.storage.service.StoragePlatformService;
@@ -118,21 +119,30 @@ public class StorageController {
         return Result.ok();
     }
 
-    @Operation(summary = "删除存储平台配置")
+    @Operation(summary = "删除存储平台配置", description = "purgeFiles=true 时先清理该存储下的全部文件，再删除配置")
     @DeleteMapping("/settings/{id}")
     @SaCheckPermission("storage:manage")
-    public Result<StorageSetting> saveOrUpdateStorageSetting(@PathVariable String id) {
+    public Result<StorageSetting> saveOrUpdateStorageSetting(
+            @PathVariable String id,
+            @RequestParam(name = "purgeFiles", required = false, defaultValue = "false") boolean purgeFiles) {
         StorageSetting setting = storageSettingService.getById(id);
-        storageSettingService.deleteStorageSettingById(id);
+        storageSettingService.deleteStorageSettingById(id, purgeFiles);
         operationLogService.recordSuccess(
                 OperationType.DELETE_STORAGE,
-                "删除存储配置",
+                purgeFiles ? "删除存储配置（含文件清理）" : "删除存储配置",
                 "STORAGE",
                 id,
                 setting == null ? id : setting.getRemark(),
                 setting == null ? null : "存储类型: " + setting.getPlatformIdentifier()
         );
         return Result.ok();
+    }
+
+    @Operation(summary = "查询存储平台配置的文件占用情况", description = "删除前提示用：文件数量（含回收站）与清理方式")
+    @GetMapping("/settings/{id}/file-usage")
+    @SaCheckPermission("storage:manage")
+    public Result<StorageFileUsageVO> getStorageFileUsage(@PathVariable String id) {
+        return Result.ok(storageSettingService.getStorageFileUsage(id));
     }
 
     @Operation(summary = "获取用户已启用存储平台列表")
