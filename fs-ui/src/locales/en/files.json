@@ -47,7 +47,8 @@
   "table": {
     "colName": "Name",
     "colSize": "Size",
-    "colModified": "Modified"
+    "colModified": "Modified",
+    "folder": "Folder"
   },
   "rowMenu": {
     "preview": "Preview",

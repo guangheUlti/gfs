@@ -74,10 +74,17 @@ import { Toolbar } from './Toolbar'
 
 const RECYCLE_TABLE_HEAD: Record<string, string> = {
   displayName: '',
-  size: 'w-32',
-  deletedTime: 'w-48',
+  // 手机（<sm）只保留名称 + 操作，否则 5 列挤进 300px 只能靠横向滚动
+  size: 'w-32 hidden sm:table-cell',
+  deletedTime: 'w-48 hidden sm:table-cell',
   // 行尾操作列只在触屏出现，鼠标端靠右键菜单；表头用 sr-only 占位
   actions: 'w-10 px-1 text-right hoverable:hidden',
+}
+
+/** 与表头同步隐藏的手机端次要列 */
+const RECYCLE_TABLE_CELL: Record<string, string> = {
+  size: 'hidden sm:table-cell',
+  deletedTime: 'hidden sm:table-cell',
 }
 
 export default function RecycleBinView() {
@@ -305,15 +312,18 @@ export default function RecycleBinView() {
             return null
           }
           return (
-            <div className='flex items-center gap-3'>
-              <div className='flex h-8 w-8 items-center justify-center rounded'>
+            <div className='flex min-w-0 items-center gap-3'>
+              <div className='flex h-8 w-8 shrink-0 items-center justify-center rounded'>
                 <FileIcon
                   type={file.isDir ? 'dir' : file.suffix || ''}
                   size={28}
                   className='shrink-0'
                 />
               </div>
-              <span className='truncate text-sm font-normal text-foreground/90'>
+              <span
+                className='min-w-0 truncate text-sm font-normal text-foreground/90'
+                title={file.displayName}
+              >
                 {file.displayName}
               </span>
             </div>
@@ -523,10 +533,10 @@ export default function RecycleBinView() {
                   setSelectedIds([])
                 }}
               >
-                {/* 窄屏不压缩列宽，改为横向滚动保留全部列；
+                {/* 窄屏隐藏大小/删除时间两列（手机只看名称+操作），宽屏才保 40rem 最小宽度；
                     containerClassName 必须清掉自带的 overflow-auto，否则它就成了粘性表头最近的滚动祖先 */}
                 <Table
-                  className='min-w-[40rem]'
+                  className='sm:min-w-[40rem]'
                   containerClassName='overflow-visible'
                 >
                   {/* sticky 加在 th 而非 thead（Firefox 不支持 table-section 级 sticky），不画表头底线 */}
@@ -581,7 +591,8 @@ export default function RecycleBinView() {
                                   className={cn(
                                     // 操作列只在触屏出现：鼠标端靠右键，与文件页一致
                                     cell.column.id === 'actions' &&
-                                      'hoverable:hidden'
+                                      'hoverable:hidden',
+                                    RECYCLE_TABLE_CELL[cell.column.id] ?? ''
                                   )}
                                   onClick={
                                     cell.column.id === 'actions'

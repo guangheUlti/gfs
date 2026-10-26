@@ -55,10 +55,14 @@ export function Toolbar({
   }
 
   return (
-    // 窄屏时占满所在行并允许收缩，搜索框吃掉剩余宽度；宽屏恢复内容宽度靠右排列
-    <div className='flex min-w-0 flex-1 items-center gap-2 sm:w-auto sm:flex-none'>
+    /*
+      窄屏只保留「输入框 + 新建菜单 + 选择」：独立的「搜索」按钮在手机上隐藏（回车/清空即可搜），
+      否则 312px 的手机上输入框只剩 ~64px，几乎无法输入；宽屏恢复完整分裂按钮。
+    */
+    <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:w-auto sm:flex-none sm:flex-nowrap'>
       {/* 回车即搜（清空后回车恢复全量）；输入非空时右侧显示清空按钮，点击恢复全量列表 */}
-      <div className='relative min-w-0 flex-1 sm:w-44 sm:flex-none'>
+      {/* 手机端给输入框留最小可输入宽度：容不下时「选择/更多」整体换到第二行，而不是把输入框压成几十像素 */}
+      <div className='relative min-w-[7.5rem] flex-1 sm:w-44 sm:min-w-0 sm:flex-none'>
         <Input
           placeholder={t('toolbar.searchPlaceholder')}
           value={searchKeyword}
@@ -88,7 +92,9 @@ export function Toolbar({
             variant='outline'
             size='sm'
             className={
-              canWrite ? 'gap-1.5 rounded-r-none border-r-0' : 'gap-1.5'
+              canWrite
+                ? 'hidden gap-1.5 rounded-r-none border-r-0 sm:inline-flex'
+                : 'hidden gap-1.5 sm:inline-flex'
             }
             onClick={() => onSearch(searchKeyword)}
           >
@@ -101,7 +107,8 @@ export function Toolbar({
                 <Button
                   variant='outline'
                   size='sm'
-                  className='rounded-l-none px-1.5'
+                  /* 手机端左侧没有「搜索」半截，圆角要收回来，否则是个缺一角的按钮 */
+                  className='rounded-md px-1.5 sm:rounded-l-none'
                   aria-label={t('index.fileActions')}
                 >
                   <ChevronDown className='h-4 w-4 opacity-70' />
@@ -144,7 +151,8 @@ export function Toolbar({
         <Button
           variant={selectMode ? 'default' : 'outline'}
           size='sm'
-          className='shrink-0 hoverable:hidden'
+          /* 手机上它常在第二行末尾；不与搜索框抢宽度 */
+          className='ms-auto shrink-0 hoverable:hidden'
           onClick={onToggleSelectMode}
         >
           {selectMode ? t('index.done') : t('index.select')}

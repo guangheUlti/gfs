@@ -241,12 +241,13 @@ export function FileListView({
               <TableHead className='text-muted-foreground h-[48px] px-2 text-left text-xs font-medium sm:px-4 sm:text-sm'>
                 {t('table.colName')}
               </TableHead>
+              {/* 手机（<sm）不展示这两列：名称列吃掉全部宽度，大小/时间折叠到名称下方一行 */}
               {/* em 宽度按最长内容 1023.99 GB 设计，随响应式字号缩放 */}
-              <TableHead className='text-muted-foreground h-[48px] w-[9em] px-2 text-left text-xs font-medium sm:px-4 sm:text-sm'>
+              <TableHead className='text-muted-foreground hidden h-[48px] w-[9em] px-2 text-left text-xs font-medium sm:table-cell sm:px-4 sm:text-sm'>
                 {t('table.colSize')}
               </TableHead>
               {/* 恒定 16 字符 yyyy-MM-dd HH:mm，9.3em 文本 + 列内边距 */}
-              <TableHead className='text-muted-foreground h-[48px] w-[11.5em] px-2 text-left text-xs font-medium sm:px-4 sm:text-sm'>
+              <TableHead className='text-muted-foreground hidden h-[48px] w-[11.5em] px-2 text-left text-xs font-medium sm:table-cell sm:px-4 sm:text-sm'>
                 {t('table.colModified')}
               </TableHead>
               {/* 行尾操作列只在触屏设备上出现：鼠标端靠右键菜单 */}
@@ -316,23 +317,44 @@ export function FileListView({
                             />
                           )}
                         </div>
-                        <span
-                          className={cn(
-                            'min-w-0 line-clamp-2 break-words text-sm font-medium text-foreground/90 transition-colors',
-                            'group-hover:text-primary'
-                          )}
-                          title={file.displayName}
-                        >
-                          <Highlight
-                            text={file.displayName}
-                            keyword={searchKeyword}
-                          />
-                        </span>
+                        <div className='min-w-0 flex-1'>
+                          {/*
+                            手机单行截断（长文件名不再被挤成三四个字并换行撑高行），
+                            宽屏恢复两行自动换行；完整名称始终可通过 title / 详情查看。
+                          */}
+                          <span
+                            className={cn(
+                              'block min-w-0 truncate text-sm font-medium text-foreground/90 transition-colors',
+                              'sm:line-clamp-2 sm:whitespace-normal sm:break-words',
+                              'group-hover:text-primary'
+                            )}
+                            title={file.displayName}
+                          >
+                            <Highlight
+                              text={file.displayName}
+                              keyword={searchKeyword}
+                            />
+                          </span>
+                          {/* 手机专享：大小 · 修改时间折叠到文件名下方，删除右侧两列后不再挤压名称 */}
+                          <div className='mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] leading-tight text-muted-foreground tabular-nums sm:hidden'>
+                            <span className='shrink-0'>
+                              {file.isDir
+                                ? t('table.folder')
+                                : formatFileSize(file.size)}
+                            </span>
+                            <span aria-hidden className='shrink-0 opacity-50'>
+                              ·
+                            </span>
+                            <span className='truncate'>
+                              {formatFileListDisplayTime(file.updateTime)}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell
                       className={cn(
-                        'min-h-[48px] align-middle px-2 py-1.5 text-xs tabular-nums whitespace-nowrap text-muted-foreground transition-colors sm:px-4 sm:text-sm',
+                        'hidden min-h-[48px] align-middle px-2 py-1.5 text-xs tabular-nums whitespace-nowrap text-muted-foreground transition-colors sm:table-cell sm:px-4 sm:text-sm',
                         'group-hover:text-primary'
                       )}
                     >
@@ -340,7 +362,7 @@ export function FileListView({
                     </TableCell>
                     <TableCell
                       className={cn(
-                        'min-h-[48px] align-middle px-2 py-1.5 text-xs tabular-nums whitespace-nowrap text-muted-foreground transition-colors sm:px-4 sm:text-sm',
+                        'hidden min-h-[48px] align-middle px-2 py-1.5 text-xs tabular-nums whitespace-nowrap text-muted-foreground transition-colors sm:table-cell sm:px-4 sm:text-sm',
                         'group-hover:text-primary'
                       )}
                     >

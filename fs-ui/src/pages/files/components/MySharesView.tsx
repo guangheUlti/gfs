@@ -100,12 +100,20 @@ import { copyToClipboard } from '@/utils/clipboard'
 
 const SHARE_TABLE_HEAD: Record<string, string> = {
   shareName: '',
-  expireTime: 'w-36',
-  viewCount: 'w-28 text-center',
-  downloadCount: 'w-28 text-center',
-  createdAt: 'w-44',
+  // 手机（<sm）只留 名称 + 浏览次数 + 操作：六列塞进 300px 只会变成横向滚动
+  expireTime: 'w-36 hidden sm:table-cell',
+  viewCount: 'w-14 text-center sm:w-28',
+  downloadCount: 'w-28 text-center hidden sm:table-cell',
+  createdAt: 'w-44 hidden sm:table-cell',
   // 行尾操作列只在触屏出现，鼠标端靠右键菜单；表头用 sr-only 占位
   actions: 'w-10 px-1 text-right hoverable:hidden',
+}
+
+/** 与表头同步隐藏的手机端次要列 */
+const SHARE_TABLE_CELL: Record<string, string> = {
+  expireTime: 'hidden sm:table-cell',
+  downloadCount: 'hidden sm:table-cell',
+  createdAt: 'hidden sm:table-cell',
 }
 
 export function MySharesView() {
@@ -460,12 +468,31 @@ export function MySharesView() {
       {
         accessorKey: 'shareName',
         header: t('myShares.colName'),
-        cell: ({ row }) => (
-          <div className='flex items-center gap-3'>
-            <LinkIcon className='h-4 w-4 shrink-0 text-primary' />
-            <span className='truncate text-sm'>{row.original.shareName}</span>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const share = row.original
+          const expired = !share.isPermanent && isExpired(share.expireTime)
+          return (
+            <div className='flex min-w-0 items-center gap-2 sm:gap-3'>
+              <LinkIcon className='h-4 w-4 shrink-0 text-primary' />
+              <div className='min-w-0 flex-1'>
+                <span className='block truncate text-sm'>
+                  {share.shareName}
+                </span>
+                {/* 手机端到期/浏览/创建三列被隐藏，把最要紧的到期状态折叠到名称下方 */}
+                <span
+                  className={cn(
+                    'mt-0.5 block truncate text-[11px] leading-tight sm:hidden',
+                    expired ? 'text-destructive' : 'text-muted-foreground'
+                  )}
+                >
+                  {share.isPermanent
+                    ? t('myShares.permanent')
+                    : formatExpireTime(share.expireTime)}
+                </span>
+              </div>
+            </div>
+          )
+        },
       },
       {
         id: 'expireTime',
@@ -737,7 +764,7 @@ export function MySharesView() {
                 {/* 窄屏不压缩列宽，改为横向滚动保留全部列；
                     containerClassName 必须清掉自带的 overflow-auto，否则它就成了粘性表头最近的滚动祖先 */}
                 <Table
-                  className='min-w-[60rem]'
+                  className='sm:min-w-[60rem]'
                   containerClassName='overflow-visible'
                 >
                   {/* sticky 加在 th 而非 thead（Firefox 不支持 table-section 级 sticky），不画表头底线 */}
@@ -792,7 +819,8 @@ export function MySharesView() {
                                   className={cn(
                                     // 操作列只在触屏出现：鼠标端靠右键，与文件页一致
                                     cell.column.id === 'actions' &&
-                                      'hoverable:hidden'
+                                      'hoverable:hidden',
+                                    SHARE_TABLE_CELL[cell.column.id] ?? ''
                                   )}
                                   onClick={
                                     cell.column.id === 'actions'

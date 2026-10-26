@@ -164,8 +164,13 @@ export function SettingsUserManagement() {
             <TableHeader>
               <TableRow>
                 <TableHead>{t('userManagement.colUser')}</TableHead>
-                <TableHead>{t('userManagement.colTime')}</TableHead>
-                <TableHead className='w-40'>{t('userManagement.colActions')}</TableHead>
+                {/* 手机（<sm）把时间折叠到用户名下方，只留 用户 + 操作 两列，避免表格横向滚动 */}
+                <TableHead className='hidden sm:table-cell'>
+                  {t('userManagement.colTime')}
+                </TableHead>
+                <TableHead className='w-28 sm:w-40'>
+                  {t('userManagement.colActions')}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -190,6 +195,17 @@ export function SettingsUserManagement() {
               ) : (
                 rows.map((row) => {
                   const name = row.user.nickname || row.user.username
+                  const timeText =
+                    row.kind === 'pending'
+                      ? row.user.createdAt
+                        ? dayjs(row.user.createdAt).format('YYYY-MM-DD HH:mm')
+                        : '—'
+                      : t('userManagement.lockedRemaining', {
+                          minutes: Math.max(
+                            1,
+                            Math.ceil(row.user.remainingSeconds / 60)
+                          ),
+                        })
                   const actingKey =
                     row.kind === 'pending' ? row.user.id : `locked:${row.user.username}`
                   return (
@@ -225,20 +241,15 @@ export function SettingsUserManagement() {
                             <div className='truncate text-xs text-muted-foreground'>
                               {row.user.username}
                             </div>
+                            {/* 手机专享：被折叠掉的时间列内容放到用户名下方 */}
+                            <div className='truncate text-[11px] text-muted-foreground sm:hidden'>
+                              {timeText}
+                            </div>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className='text-xs text-muted-foreground'>
-                        {row.kind === 'pending'
-                          ? row.user.createdAt
-                            ? dayjs(row.user.createdAt).format('YYYY-MM-DD HH:mm')
-                            : '—'
-                          : t('userManagement.lockedRemaining', {
-                              minutes: Math.max(
-                                1,
-                                Math.ceil(row.user.remainingSeconds / 60)
-                              ),
-                            })}
+                      <TableCell className='hidden text-xs text-muted-foreground sm:table-cell'>
+                        {timeText}
                       </TableCell>
                       <TableCell>
                         {row.kind === 'pending' ? (

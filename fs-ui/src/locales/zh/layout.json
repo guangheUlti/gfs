@@ -1,6 +1,7 @@
 {
   "sidebar": {
     "userPlaceholder": "用户",
+    "appName": "光何AI",
     "openMenu": "打开菜单",
     "groups": {
       "files": "文件",

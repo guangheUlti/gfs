@@ -47,7 +47,8 @@
   "table": {
     "colName": "名称",
     "colSize": "大小",
-    "colModified": "修改时间"
+    "colModified": "修改时间",
+    "folder": "文件夹"
   },
   "rowMenu": {
     "preview": "预览",

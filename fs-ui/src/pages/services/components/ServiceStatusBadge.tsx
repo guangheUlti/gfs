@@ -36,7 +36,10 @@ export function ServiceStatusBadge({
     <Badge
       variant={STATUS_VARIANT[status] ?? 'secondary'}
       className={
-        status === 'running' ? 'bg-emerald-600 text-white hover:bg-emerald-600' : undefined
+        // shrink-0 + nowrap：卡片头部被描述文字挤压时，「运行中」绝不能被挤成两行
+        status === 'running'
+          ? 'shrink-0 whitespace-nowrap bg-emerald-600 text-white hover:bg-emerald-600'
+          : 'shrink-0 whitespace-nowrap'
       }
     >
       {label}
