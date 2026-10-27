@@ -29,7 +29,7 @@ public interface ServiceSettingService extends IService<ServiceSetting> {
     /** `config_data` 里的只读标记键（各协议只读模式） */
     String CONFIG_READ_ONLY = "readOnly";
 
-    /** `config_data` 里的游客只读标记键（仅 AList：未登录也可浏览/播放） */
+    /** `config_data` 里的游客访问标记键（仅 AList：未登录也可浏览/播放） */
     String CONFIG_ALLOW_GUEST = "allowGuest";
 
     /** `config_data` 里的游客视角账号键（仅 AList：匿名请求以该账号身份只读） */
@@ -60,13 +60,13 @@ public interface ServiceSettingService extends IService<ServiceSetting> {
     }
 
     /**
-     * 解析游客只读：`config_data` 中 allowGuest=true 即允许未登录的只读访问（仅 AList）。
+     * 解析游客访问：`config_data` 中 allowGuest=true 即允许未登录的只读访问（仅 AList）。
      * <p>
      * 影视仓/TVBox 的 AList 入口不登录、也不发 token，只按「游客 + 目录密码」模型
      * 调 /api/fs/list 和 /d 直链；不开这个开关它们一个请求都过不了。
      *
      * @param setting 服务配置
-     * @return 是否允许游客只读
+     * @return 是否允许游客访问
      */
     static boolean isGuestAllowed(ServiceSetting setting) {
         return isFlag(setting, CONFIG_ALLOW_GUEST);
@@ -119,7 +119,7 @@ public interface ServiceSettingService extends IService<ServiceSetting> {
     }
 
     /**
-     * 在既有 `config_data` JSON 上合并游客只读标记（仅 AList 使用）。
+     * 在既有 `config_data` JSON 上合并游客访问标记（仅 AList 使用）。
      */
     static String mergeGuest(String rawConfig, boolean allowGuest) {
         return mergeFlag(rawConfig, CONFIG_ALLOW_GUEST, allowGuest);

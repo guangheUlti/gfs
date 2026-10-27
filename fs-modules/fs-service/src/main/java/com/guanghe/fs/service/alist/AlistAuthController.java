@@ -93,7 +93,7 @@ public class AlistAuthController {
      * 字段取 AList v3 官方 settings 的子集：客户端（尤其页面端）会读
      * {@code version} / {@code default_page_size} 决定分页与功能开关；
      * 未实现的能力（SSO/LDAP/WebAuthn）一律给 false，免得客户端去调不存在的端点。
-     * {@code allow_guest} 跟随后台「游客只读」开关与公开账号：账号不可用时也回 false，
+     * {@code allow_guest} 跟随后台「游客访问」开关与公开账号：账号不可用时也回 false，
      * 免得客户端以为可以匿名浏览、结果每个请求都 401。
      */
     @GetMapping("/public/settings")

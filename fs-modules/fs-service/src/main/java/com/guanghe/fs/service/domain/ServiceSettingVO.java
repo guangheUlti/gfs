@@ -21,7 +21,7 @@ public class ServiceSettingVO {
     @Schema(description = "只读模式（全部协议）：开启后拒绝一切写操作")
     private Boolean readOnly;
 
-    @Schema(description = "游客只读（仅 alist）：开启后未登录也可浏览与播放")
+    @Schema(description = "游客访问（仅 alist）：开启后未登录也可浏览与播放")
     private Boolean allowGuest;
 
     @Schema(description = "游客视角账号 ID（仅 alist）：匿名请求以该账号身份只读")

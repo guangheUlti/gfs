@@ -54,7 +54,7 @@ public class AlistAuthFilter implements Filter {
             "mkdir", "rename", "move", "copy", "remove", "put", "form");
 
     /**
-     * 游客只读放行的读操作（/api/fs/{op}）。
+     * 游客访问放行的读操作（/api/fs/{op}）。
      * <p>
      * 只放读、绝不放写：TVBox/影视仓 等客户端不登录，靠这几个接口列目录、取直链。
      */
@@ -118,10 +118,10 @@ public class AlistAuthFilter implements Filter {
 
         String userId = tokenService.resolveToken(req.getHeader("Authorization"));
         if (userId == null) {
-            // 游客只读：仅「没带凭证 + 读操作」才放行；带了错 token 仍按认证失败处理，
+            // 游客访问：仅「没带凭证 + 读操作」才放行；带了错 token 仍按认证失败处理，
             // 免得客户端误以为自己的凭证有效
             if (guestUserId != null && StrUtil.isBlank(req.getHeader("Authorization")) && isGuestReadOp(path)) {
-                log.debug("AList 游客只读: path={}, ip={}", path, req.getRemoteAddr());
+                log.debug("AList 游客访问: path={}, ip={}", path, req.getRemoteAddr());
                 authenticator.bridgeSaToken(guestUserId);
                 chain.doFilter(request, response);
                 return;

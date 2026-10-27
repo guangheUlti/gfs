@@ -94,7 +94,7 @@ public class ServiceSettingController {
             setting.setConfigData(ServiceSettingService.mergeReadOnly(
                     setting.getConfigData(), Boolean.TRUE.equals(cmd.getReadOnly())));
         }
-        // 游客只读只对 AList 有意义：TVBox/影视仓这类客户端不登录，匿名请求以「公开账号」身份只读
+        // 游客访问只对 AList 有意义：TVBox/影视仓这类客户端不登录，匿名请求以「公开账号」身份只读
         if (ServiceSettingService.TYPE_ALIST.equals(type)) {
             if (cmd.getGuestUserId() != null) {
                 setting.setConfigData(ServiceSettingService.mergeGuestUser(

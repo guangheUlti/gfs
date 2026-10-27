@@ -17,7 +17,7 @@ import static com.guanghe.fs.service.domain.table.ServiceSettingTableDef.SERVICE
  * AList 游客身份解析。
  * <p>
  * 文件接口一律按「当前登录用户」过滤（{@code StpUtil.getLoginIdAsString()}），
- * 匿名请求没有身份就查不了任何文件；因此游客只读必须绑定一个公开账号，
+ * 匿名请求没有身份就查不了任何文件；因此游客访问必须绑定一个公开账号，
  * 匿名请求在过滤器里桥接成该账号后再进业务层。
  * <p>
  * 绑定账号被禁用/删除时按「游客关闭」处理，避免匿名请求带着一个无效身份进入业务层。
@@ -62,7 +62,7 @@ public class AlistGuestResolver {
         return user.getId();
     }
 
-    /** 游客只读是否真正可用（开关 + 账号都有效） */
+    /** 游客访问是否真正可用（开关 + 账号都有效） */
     public boolean isAvailable(ServiceSetting setting) {
         return resolve(setting) != null;
     }
