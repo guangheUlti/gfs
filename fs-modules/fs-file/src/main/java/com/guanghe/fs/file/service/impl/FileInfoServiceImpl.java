@@ -25,6 +25,7 @@ import com.guanghe.fs.file.mount.MountManager;
 import com.guanghe.fs.file.mount.MountPathResolver;
 import com.guanghe.fs.file.mount.MountPointService;
 import com.guanghe.fs.file.mount.MountScanService;
+import com.guanghe.fs.file.mount.RemoteMountService;
 import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.file.service.FileObjectReferenceService;
 import com.guanghe.fs.framework.common.constant.RedisKey;
@@ -98,6 +99,10 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     @Autowired
     private MountScanService mountScanService;
 
+    // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）虚拟路径服务
+    @Autowired
+    private RemoteMountService remoteMountService;
+
     @Autowired
     private com.guanghe.fs.storage.service.StorageSettingService storageSettingService;
 
@@ -130,10 +135,55 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         }
     }
 
+    /** 当前配置是否为无状态远程存储（SFTP/SMB/FTP/WebDAV/内存/本地挂载，不落库） */
+    private boolean isStatelessStorage(String settingId) {
+        return remoteMountService.isStatelessSetting(settingId);
+    }
+
+    @Override
+    public FileInfo resolveFile(String fileId) {
+        if (StrUtil.isBlank(fileId)) {
+            throw new BusinessException(I18nUtils.getMessage("file.not.found"));
+        }
+        if (remoteMountService.isVirtualId(fileId)) {
+            return remoteMountService.resolve(fileId);
+        }
+        FileInfo fileInfo = getById(fileId);
+        if (fileInfo == null) {
+            throw new BusinessException(I18nUtils.getMessage("file.not.found"));
+        }
+        return fileInfo;
+    }
+
+    @Override
+    public boolean isVirtualFileId(String fileId) {
+        return remoteMountService.isVirtualId(fileId);
+    }
+
+    @Override
+    public void deleteRemoteFiles(List<String> fileIds) {
+        if (CollUtil.isEmpty(fileIds)) {
+            return;
+        }
+        for (String fileId : fileIds.stream().filter(remoteMountService::isVirtualId).distinct().toList()) {
+            try {
+                FileInfo file = remoteMountService.resolve(fileId);
+                remoteMountService.delete(file);
+                log.info("远程文件已永久删除: {}", fileId);
+            } catch (BusinessException e) {
+                log.info("远程条目已不存在，跳过删除: {}", fileId);
+            }
+        }
+    }
+
     @Override
     public FileInfo getAuthorizedFile(String fileId) {
         if (StrUtil.isBlank(fileId)) {
             throw new BusinessException(I18nUtils.getMessage("file.not.found"));
+        }
+        // 无状态远程：虚拟 ID 直接解析远端条目，不查 file_info
+        if (remoteMountService.isVirtualId(fileId)) {
+            return remoteMountService.resolve(fileId);
         }
         String userId = StpUtil.getLoginIdAsString();
         FileInfo fileInfo = getOne(new QueryWrapper()
@@ -233,6 +283,9 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         if (fileIds == null || fileIds.isEmpty()) {
             return;
         }
+        if (fileIds.stream().anyMatch(remoteMountService::isVirtualId)) {
+            throw new BusinessException(I18nUtils.getMessage("remote.recycle.unsupported"));
+        }
 
         String userId = StpUtil.getLoginIdAsString();
         List<FileInfo> fileInfoList = list(new QueryWrapper()
@@ -314,9 +367,28 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     @Override
     @Transactional(rollbackFor = Exception.class)
     public FileInfo createDirectory(CreateDirectoryCmd cmd) {
-        String folderId = IdUtil.fastSimpleUUID();
         String userId = StpUtil.getLoginIdAsString();
         String platformConfigId = StoragePlatformContextHolder.getConfigId();
+        // 无状态远程：直接 mkdir 远端，不产生 file_info
+        if (isStatelessStorage(platformConfigId)) {
+            String parentPath = "";
+            if (StrUtil.isNotBlank(cmd.getParentId())) {
+                FileInfo parent = getAuthorizedFile(cmd.getParentId());
+                if (!Boolean.TRUE.equals(parent.getIsDir())) {
+                    throw new BusinessException(I18nUtils.getMessage("file.target.dir.invalid"));
+                }
+                parentPath = remoteMountService.relativePath(parent);
+            }
+            String baseName = cmd.getFolderName().trim();
+            String finalName = remoteMountService.uniqueName(
+                    platformConfigId, parentPath, baseName, true, null);
+            String dirPath = remoteMountService.childPath(parentPath, finalName);
+            IStorageOperationService storageService = storageServiceFacade.getStorageService(platformConfigId);
+            mountManager.locks().callWithLock(platformConfigId, () -> storageService.mkdirDirectory(dirPath));
+            log.info("远程挂载目录创建完成: settingId={}, path={}", platformConfigId, dirPath);
+            return remoteMountService.buildDir(platformConfigId, dirPath, userId);
+        }
+        String folderId = IdUtil.fastSimpleUUID();
         if (StrUtil.isNotBlank(cmd.getParentId())) {
             FileInfo parent = getAuthorizedFile(cmd.getParentId());
             if (!Boolean.TRUE.equals(parent.getIsDir())) {
@@ -417,6 +489,14 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
             throw new BusinessException(I18nUtils.getMessage("file.text.too.large",
                     new Object[]{FileUtils.formatFileSize(MAX_TEXT_EDIT_SIZE)}));
         }
+        // 无状态远程：原地覆盖远端文件，不落库
+        if (remoteMountService.isVirtualId(fileId)) {
+            IStorageOperationService storageService = storageServiceFacade
+                    .getStorageService(fileInfo.getStoragePlatformSettingId());
+            mountManager.locks().callWithLock(fileInfo.getStoragePlatformSettingId(), () ->
+                    storageService.uploadFile(new ByteArrayInputStream(bytes), fileInfo.getObjectKey()));
+            return;
+        }
         String newMd5 = DigestUtil.md5Hex(bytes);
         if (newMd5.equals(fileInfo.getContentMd5())
                 && fileInfo.getSize() != null && fileInfo.getSize() == bytes.length) {
@@ -494,6 +574,19 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     /** 写入文本物理对象（含内容级复用）并落库文件记录 */
     private FileInfo writeTextObject(String userId, String storagePlatformSettingId,
                                      String parentId, String displayName, String suffix, byte[] bytes) {
+        // 无状态远程：直接写远端文件，不落库
+        if (isStatelessStorage(storagePlatformSettingId)) {
+            String parentPath = "";
+            if (StrUtil.isNotBlank(parentId)) {
+                parentPath = remoteMountService.relativePath(getAuthorizedFile(parentId));
+            }
+            String objectKey = remoteMountService.childPath(parentPath, displayName);
+            IStorageOperationService storageService =
+                    storageServiceFacade.getStorageService(storagePlatformSettingId);
+            storageService.uploadFile(new ByteArrayInputStream(bytes), objectKey);
+            log.info("远程挂载文本文件创建完成: settingId={}, path={}", storagePlatformSettingId, objectKey);
+            return remoteMountService.buildFile(storagePlatformSettingId, objectKey, (long) bytes.length, userId);
+        }
         // 挂载式存储：物理路径即对象键（父键+显示名），与分片上传同一规则；
         // 不做秒传复用（路径由目录位置决定，不可指向他人对象）、md5 恒 NULL（与挂载设计红线一致，
         // 否则对账/扫描会把「md5 非空但目录里真实条目大小不同」的行误判）。同名覆盖交给 generateUniqueName 预防。
@@ -571,6 +664,33 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
             }
         }
         String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
+
+        // 无状态远程：协议端写入直接覆盖远端同名文件，不落库
+        if (isStatelessStorage(storagePlatformSettingId)) {
+            String parentPath = parent == null ? "" : remoteMountService.relativePath(parent);
+            String objectKey = remoteMountService.childPath(parentPath, displayName);
+            IStorageOperationService remoteStorage =
+                    storageServiceFacade.getStorageService(storagePlatformSettingId);
+            java.io.File tempFile = null;
+            try {
+                tempFile = java.nio.file.Files.createTempFile("gfs-remote-", ".upload").toFile();
+                long actualSize = java.nio.file.Files.copy(in, tempFile.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                if (size != null && size >= 0 && size != actualSize) {
+                    throw new StorageOperationException(I18nUtils.getMessage("file.upload.failed"));
+                }
+                try (InputStream upload = java.nio.file.Files.newInputStream(tempFile.toPath())) {
+                    remoteStorage.uploadFile(upload, objectKey);
+                }
+                return remoteMountService.buildFile(storagePlatformSettingId, objectKey, actualSize, userId);
+            } catch (BusinessException | StorageOperationException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new StorageOperationException(I18nUtils.getMessage("file.upload.failed"), e);
+            } finally {
+                cleanupTemp(tempFile);
+            }
+        }
 
         // 同目录同名现有文件 = 覆盖语义；挂载式存储不支持流式直传（物理路径即对象键，覆盖会破坏引用计数），明确拒绝
         boolean mountMode = isMountStorage(storagePlatformSettingId);
@@ -717,6 +837,25 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         if (fileInfo.getDisplayName().equals(cmd.getDisplayName())) {
             return;
         }
+        // 无状态远程：直接重命名远端条目，不落库
+        if (remoteMountService.isVirtualId(fileId)) {
+            RemoteMountService.VirtualPath virtualPath = remoteMountService.parse(fileId);
+            if (virtualPath.path().isEmpty()) {
+                throw new BusinessException(I18nUtils.getMessage("mount.point.protected"));
+            }
+            String newName = cmd.getDisplayName().trim();
+            if (!MountManager.isValidNameSegment(newName)
+                    || ".".equals(newName) || "..".equals(newName)) {
+                throw new BusinessException(I18nUtils.getMessage("file.name.invalid"));
+            }
+            String parentPath = remoteMountService.parentPath(virtualPath.path());
+            String finalName = remoteMountService.uniqueName(virtualPath.settingId(), parentPath,
+                    newName, virtualPath.isDir(), virtualPath.path());
+            String newPath = remoteMountService.childPath(parentPath, finalName);
+            mountManager.locks().callWithLock(virtualPath.settingId(), () ->
+                    remoteMountService.rename(fileInfo, newPath));
+            return;
+        }
         String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
         // 挂载点记录禁止改名（它会破坏挂载点判定）
         if (Boolean.TRUE.equals(fileInfo.getIsDir()) && StrUtil.isEmpty(fileInfo.getParentId())
@@ -779,6 +918,19 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
 
         String targetDirId = StringUtils.isBlank(cmd.getDirId()) ? null : cmd.getDirId();
         String userId = StpUtil.getLoginIdAsString();
+
+        // 无状态远程：同配置内真实 rename，不落库；与普通落库文件不允许混批
+        List<String> requestedIds = cmd.getFileIds().stream().distinct().toList();
+        List<String> virtualIds = requestedIds.stream()
+                .filter(remoteMountService::isVirtualId)
+                .toList();
+        if (!virtualIds.isEmpty()) {
+            if (virtualIds.size() != requestedIds.size()) {
+                throw new BusinessException(I18nUtils.getMessage("mount.move.unsupported"));
+            }
+            moveRemoteFiles(virtualIds, targetDirId);
+            return;
+        }
 
         if (targetDirId != null) {
             FileInfo dirInfo = getAuthorizedFile(targetDirId);
@@ -899,6 +1051,49 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     }
 
     /**
+     * 无状态远程移动：同配置内真实 rename，不落库；跨配置与移动到自身子树拒绝。
+     */
+    private void moveRemoteFiles(List<String> virtualIds, String targetDirId) {
+        FileInfo targetDir = targetDirId == null ? null : getAuthorizedFile(targetDirId);
+        if (targetDir != null && !Boolean.TRUE.equals(targetDir.getIsDir())) {
+            throw new BusinessException(I18nUtils.getMessage("file.target.dir.invalid"));
+        }
+        String targetSettingId = targetDir == null ? null : targetDir.getStoragePlatformSettingId();
+        String targetPath = targetDir == null ? "" : remoteMountService.relativePath(targetDir);
+
+        List<FileInfo> sources = virtualIds.stream()
+                .map(remoteMountService::resolve)
+                .toList();
+        for (FileInfo source : sources) {
+            RemoteMountService.VirtualPath sourcePath = remoteMountService.parse(source.getId());
+            if (targetSettingId != null && !targetSettingId.equals(sourcePath.settingId())) {
+                throw new BusinessException(I18nUtils.getMessage("mount.move.unsupported"));
+            }
+            if (targetDirId != null && (targetDirId.equals(source.getId())
+                    || (Boolean.TRUE.equals(source.getIsDir())
+                    && (targetPath.equals(sourcePath.path())
+                    || targetPath.startsWith(sourcePath.path() + "/"))))) {
+                throw new BusinessException(I18nUtils.getMessage("file.cannot.move.to.self",
+                        new Object[]{source.getDisplayName()}));
+            }
+        }
+        for (FileInfo source : sources) {
+            RemoteMountService.VirtualPath sourcePath = remoteMountService.parse(source.getId());
+            String settingId = sourcePath.settingId();
+            String parentPath = remoteMountService.parentPath(sourcePath.path());
+            String finalName = remoteMountService.uniqueName(settingId, targetPath,
+                    source.getDisplayName(), sourcePath.isDir(), sourcePath.path());
+            String newPath = remoteMountService.childPath(targetPath, finalName);
+            if (sourcePath.path().equals(newPath)) {
+                continue;
+            }
+            mountManager.locks().callWithLock(settingId, () ->
+                    remoteMountService.rename(source, newPath));
+            log.info("远程挂载移动完成: settingId={}, {} -> {}", settingId, sourcePath.path(), newPath);
+        }
+    }
+
+    /**
      * 目录改名/移动后的子树 objectKey 前缀替换。
      * 用 Java 侧 startswith 精确过滤（避开 SQL LIKE 中 _/% 通配符与转义方言差异），
      * 也避免使用 REPLACE() 等数据库方言函数。调用方必须已持 MountLocks。
@@ -946,6 +1141,12 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         }
 
         List<String> requestedIds = cmd.getFileIds().stream().distinct().toList();
+        // 无状态远程（SFTP/SMB）：复制会产生远端入口，当前仅支持移动/重命名，不提供复制
+        if ((targetDirId != null && remoteMountService.isVirtualId(targetDirId))
+                || requestedIds.stream().anyMatch(remoteMountService::isVirtualId)
+                || isStatelessStorage(targetStorageId)) {
+            throw new BusinessException(I18nUtils.getMessage("remote.copy.unsupported"));
+        }
         List<FileInfo> sourceFiles = list(new QueryWrapper()
                 .where(FILE_INFO.ID.in(requestedIds))
                 .and(FILE_INFO.USER_ID.eq(userId))
@@ -1081,6 +1282,23 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
                                      String desiredName, Boolean isDir,
                                      String excludeFileId, String storagePlatformSettingId) {
 
+        // 无状态远程：直接列远端目录查重，不查库
+        String statelessSettingId = null;
+        String statelessParentPath = "";
+        if (StrUtil.isNotBlank(parentId) && remoteMountService.isVirtualId(parentId)) {
+            RemoteMountService.VirtualPath parentPath = remoteMountService.parse(parentId);
+            statelessSettingId = parentPath.settingId();
+            statelessParentPath = parentPath.path();
+        } else if (StrUtil.isBlank(parentId) && isStatelessStorage(storagePlatformSettingId)) {
+            statelessSettingId = storagePlatformSettingId;
+        }
+        if (statelessSettingId != null) {
+            String excludePath = StrUtil.isNotBlank(excludeFileId) && remoteMountService.isVirtualId(excludeFileId)
+                    ? remoteMountService.parse(excludeFileId).path() : null;
+            return remoteMountService.uniqueName(statelessSettingId, statelessParentPath,
+                    desiredName, Boolean.TRUE.equals(isDir), excludePath);
+        }
+
         String nameWithoutExt = desiredName;
         String extension = "";
         if (!isDir && desiredName.contains(".")) {
@@ -1208,6 +1426,32 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         String userId = StpUtil.getLoginIdAsString();
         FileInfo fileInfo = getAuthorizedFile(dirId);
 
+        // 无状态远程：按虚拟路径逐段构造面包屑，不查库
+        if (remoteMountService.isVirtualId(dirId)) {
+            RemoteMountService.VirtualPath virtualPath = remoteMountService.parse(dirId);
+            List<FileVO> pathList = new ArrayList<>();
+            pathList.add(converter.convert(remoteMountService.rootFile(virtualPath.settingId()), FileVO.class));
+            if (!virtualPath.path().isEmpty()) {
+                String[] segments = virtualPath.path().split("/");
+                int ancestorCount = virtualPath.isDir() ? segments.length : segments.length - 1;
+                StringBuilder current = new StringBuilder();
+                for (int i = 0; i < ancestorCount; i++) {
+                    if (i > 0) {
+                        current.append('/');
+                    }
+                    current.append(segments[i]);
+                    FileInfo dir = remoteMountService.buildDir(virtualPath.settingId(), current.toString(), userId);
+                    dir.setUploadTime(null);
+                    dir.setUpdateTime(null);
+                    pathList.add(converter.convert(dir, FileVO.class));
+                }
+                if (!virtualPath.isDir()) {
+                    pathList.add(converter.convert(fileInfo, FileVO.class));
+                }
+            }
+            return pathList;
+        }
+
         List<FileVO> pathList = new ArrayList<>();
         FileInfo current = fileInfo;
 
@@ -1234,6 +1478,11 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     public PageResult<FileVO> getList(FileQry qry) {
         String userId = StpUtil.getLoginIdAsString();
         String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
+
+        // 无状态远程：直接列远端目录，不建挂载点、不落库
+        if (isStatelessStorage(storagePlatformSettingId)) {
+            return listRemoteFiles(qry, storagePlatformSettingId);
+        }
 
         // 根列表入口懒创建挂载点记录（文档 8.3：FileHomeServiceImpl 根列表入口，此处在根视图统一触发）
         if (StrUtil.isNotBlank(storagePlatformSettingId) && qry.getParentId() == null
@@ -1370,6 +1619,145 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     }
 
     /**
+     * 无状态远程列表：远端一层目录 + 本地过滤/排序/分页。
+     * 收藏与最近使用依赖本地索引，无状态平台不提供（返回空页）。
+     */
+    private PageResult<FileVO> listRemoteFiles(FileQry qry, String settingId) {
+        if (Boolean.TRUE.equals(qry.getIsRecents()) || Boolean.TRUE.equals(qry.getIsFavorite())) {
+            return PageResult.success(List.of(), 0L);
+        }
+        String parentPath = "";
+        if (StrUtil.isNotBlank(qry.getParentId())) {
+            FileInfo parent = remoteMountService.resolve(qry.getParentId());
+            if (!Boolean.TRUE.equals(parent.getIsDir())) {
+                throw new BusinessException(I18nUtils.getMessage("file.target.dir.invalid"));
+            }
+            parentPath = remoteMountService.relativePath(parent);
+        }
+
+        String keyword = StrUtil.trimToEmpty(qry.getKeyword()).toLowerCase(Locale.ROOT);
+        List<FileInfo> filtered = new ArrayList<>();
+        for (FileInfo child : remoteMountService.listChildren(settingId, parentPath)) {
+            if (!keyword.isEmpty()
+                    && !StrUtil.nullToEmpty(child.getDisplayName()).toLowerCase(Locale.ROOT).contains(keyword)) {
+                continue;
+            }
+            if (Boolean.TRUE.equals(qry.getIsDir()) && !Boolean.TRUE.equals(child.getIsDir())) {
+                continue;
+            }
+            if (StrUtil.isNotBlank(qry.getFileType()) && !matchesRemoteFileType(child, qry.getFileType())) {
+                continue;
+            }
+            filtered.add(child);
+        }
+        sortRemoteFiles(filtered, qry);
+
+        int pageNum = qry.getPage() == null || qry.getPage() < 1 ? 1 : qry.getPage();
+        int pageSize = qry.getPageSize() == null || qry.getPageSize() < 1 ? 10 : qry.getPageSize();
+        int from = (int) Math.min((long) (pageNum - 1) * pageSize, filtered.size());
+        int to = Math.min(from + pageSize, filtered.size());
+        List<FileVO> records = new ArrayList<>(to - from);
+        for (FileInfo file : filtered.subList(from, to)) {
+            FileVO vo = converter.convert(file, FileVO.class);
+            vo.setIsFavorite(false);
+            if (!Boolean.TRUE.equals(vo.getIsDir())) {
+                vo.setThumbnailUrl(fillThumbnailUrl(vo.getId(), vo.getSuffix()));
+            }
+            records.add(vo);
+        }
+        return PageResult.success(records, (long) filtered.size());
+    }
+
+    private void sortRemoteFiles(List<FileInfo> files, FileQry qry) {
+        Comparator<FileInfo> dirsFirst = Comparator.comparing(file -> !Boolean.TRUE.equals(file.getIsDir()));
+        Comparator<FileInfo> fieldComparator = switch (StrUtil.blankToDefault(qry.getOrderBy(), "update_time")) {
+            case "displayName" -> Comparator.comparing(
+                    (FileInfo file) -> StrUtil.nullToEmpty(file.getDisplayName()), this::compareNatural);
+            case "suffix" -> Comparator.comparing(
+                            (FileInfo file) -> StrUtil.nullToEmpty(file.getSuffix()), String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing((FileInfo file) -> StrUtil.nullToEmpty(file.getDisplayName()),
+                            this::compareNatural);
+            case "size" -> Comparator.comparingLong(
+                    (FileInfo file) -> file.getSize() == null ? 0L : file.getSize());
+            default -> Comparator.comparing(
+                    (FileInfo file) -> file.getUpdateTime() == null ? LocalDateTime.MIN : file.getUpdateTime());
+        };
+        if (!"ASC".equalsIgnoreCase(qry.getOrderDirection())) {
+            fieldComparator = fieldComparator.reversed();
+        }
+        files.sort(dirsFirst.thenComparing(fieldComparator)
+                .thenComparing(file -> StrUtil.nullToEmpty(file.getId())));
+    }
+
+    /** 名称自然排序（数字段按数值比较，避免 1、10、2 的顺序） */
+    private int compareNatural(String left, String right) {
+        String a = StrUtil.nullToEmpty(left);
+        String b = StrUtil.nullToEmpty(right);
+        int i = 0;
+        int j = 0;
+        while (i < a.length() && j < b.length()) {
+            char ca = a.charAt(i);
+            char cb = b.charAt(j);
+            if (Character.isDigit(ca) && Character.isDigit(cb)) {
+                int startA = i;
+                int startB = j;
+                while (i < a.length() && Character.isDigit(a.charAt(i))) {
+                    i++;
+                }
+                while (j < b.length() && Character.isDigit(b.charAt(j))) {
+                    j++;
+                }
+                String numA = a.substring(startA, i).replaceFirst("^0+(?=\\d)", "");
+                String numB = b.substring(startB, j).replaceFirst("^0+(?=\\d)", "");
+                int cmp = Integer.compare(numA.length(), numB.length());
+                if (cmp != 0) {
+                    return cmp;
+                }
+                cmp = numA.compareTo(numB);
+                if (cmp != 0) {
+                    return cmp;
+                }
+            } else {
+                char la = Character.toLowerCase(ca);
+                char lb = Character.toLowerCase(cb);
+                if (la != lb) {
+                    return Character.compare(la, lb);
+                }
+                i++;
+                j++;
+            }
+        }
+        return Integer.compare(a.length() - i, b.length() - j);
+    }
+
+    /** 无状态远程的文件类型过滤（与库内后缀过滤语义一致） */
+    private boolean matchesRemoteFileType(FileInfo file, String fileType) {
+        if (Boolean.TRUE.equals(file.getIsDir())) {
+            return false;
+        }
+        String suffix = StrUtil.nullToEmpty(file.getSuffix()).toLowerCase(Locale.ROOT);
+        FileTypeEnum.FileCategory category = FileTypeEnum.FileCategory.fromCode(fileType);
+        if (category != null) {
+            if (suffix.isEmpty()) {
+                return category == FileTypeEnum.FileCategory.OTHER;
+            }
+            if (category == FileTypeEnum.FileCategory.OTHER) {
+                return !FileTypeEnum.getAllKnownSuffixesExcluding(FileTypeEnum.FileCategory.OTHER).contains(suffix);
+            }
+            return FileTypeEnum.getSuffixesByCategory(category).contains(suffix);
+        }
+        FileTypeEnum type = FileTypeEnum.fromType(fileType);
+        if (type == null) {
+            return true;
+        }
+        if (type.isOther()) {
+            return suffix.isEmpty() || !FileTypeEnum.getAllKnownSuffixes().contains(suffix);
+        }
+        List<String> suffixes = type.getSuffixes();
+        return suffixes != null && suffixes.contains(suffix);
+    }
+
+    /**
      * 填充图片封面链接
      */
     private String fillThumbnailUrl(String fileId, String suffix) {
@@ -1387,6 +1775,10 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     @Override
     public Long calculateUsedStorage() {
         String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
+        // 无状态远程不落库，已用空间无法从索引统计
+        if (isStatelessStorage(storagePlatformSettingId)) {
+            return 0L;
+        }
 
         QueryWrapper query = new QueryWrapper()
                 .where(FILE_INFO.IS_DELETED.eq(false))
@@ -1409,6 +1801,22 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     @Override
     public FileDetailVO getFileDetails(String fileId) {
         FileInfo fileInfo = getAuthorizedFile(fileId);
+        // 无状态远程：统计直接子项，不做全树递归（远端大目录下递归会产生风暴）
+        if (remoteMountService.isVirtualId(fileId)) {
+            RemoteMountService.VirtualPath virtualPath = remoteMountService.parse(fileId);
+            FileDetailVO remoteVo = converter.convert(fileInfo, FileDetailVO.class);
+            if (Boolean.TRUE.equals(remoteVo.getIsDir())) {
+                long[] stats = remoteMountService.countChildren(virtualPath.settingId(), virtualPath.path());
+                remoteVo.setIncludeFiles((int) stats[0]);
+                remoteVo.setIncludeFolders((int) stats[1]);
+                remoteVo.setSize(stats[2]);
+            } else {
+                remoteVo.setIncludeFiles(0);
+                remoteVo.setIncludeFolders(0);
+                remoteVo.setThumbnailUrl(fillThumbnailUrl(fileInfo.getId(), remoteVo.getSuffix()));
+            }
+            return remoteVo;
+        }
         FileDetailVO vo = converter.convert(fileInfo, FileDetailVO.class);
         if (vo.getIsDir()) {
             Map<String, Long> stats = new HashMap<>();
@@ -1468,6 +1876,28 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     public List<FileVO> getDirs(String parentId) {
         String userId = StpUtil.getLoginIdAsString();
         String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
+        // 无状态远程：直接列远端一层子目录
+        if (isStatelessStorage(storagePlatformSettingId)) {
+            String parentPath = "";
+            if (StrUtil.isNotBlank(parentId)) {
+                FileInfo parent = remoteMountService.resolve(parentId);
+                if (!Boolean.TRUE.equals(parent.getIsDir())) {
+                    return List.of();
+                }
+                parentPath = remoteMountService.relativePath(parent);
+            }
+            List<FileVO> dirs = new ArrayList<>();
+            for (FileInfo file : remoteMountService.listChildren(storagePlatformSettingId, parentPath)) {
+                if (Boolean.TRUE.equals(file.getIsDir())) {
+                    FileVO vo = converter.convert(file, FileVO.class);
+                    vo.setIsFavorite(false);
+                    dirs.add(vo);
+                }
+            }
+            dirs.sort(Comparator.comparing(vo -> StrUtil.nullToEmpty(vo.getDisplayName()),
+                    String.CASE_INSENSITIVE_ORDER));
+            return dirs;
+        }
         QueryWrapper wrapper = new QueryWrapper();
         wrapper.where(FILE_INFO.USER_ID.eq(userId)
                 .and(FILE_INFO.IS_DELETED.eq(false))
@@ -1494,10 +1924,26 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         if (CollUtil.isEmpty(fileIds)) {
             return List.of();
         }
-        List<FileInfo> fileInfos = this.list(new QueryWrapper()
-                .where(FILE_INFO.ID.in(fileIds))
-                .and(FILE_INFO.IS_DELETED.eq(false)));
-        return converter.convert(fileInfos, FileVO.class);
+        List<String> distinctIds = fileIds.stream().distinct().toList();
+        List<FileInfo> resolved = new ArrayList<>();
+        List<String> dbIds = new ArrayList<>();
+        for (String fileId : distinctIds) {
+            if (remoteMountService.isVirtualId(fileId)) {
+                try {
+                    resolved.add(remoteMountService.resolve(fileId));
+                } catch (BusinessException e) {
+                    log.debug("虚拟文件已不存在，跳过: {}", fileId);
+                }
+            } else {
+                dbIds.add(fileId);
+            }
+        }
+        if (!dbIds.isEmpty()) {
+            resolved.addAll(this.list(new QueryWrapper()
+                    .where(FILE_INFO.ID.in(dbIds))
+                    .and(FILE_INFO.IS_DELETED.eq(false))));
+        }
+        return converter.convert(resolved, FileVO.class);
     }
 
     /**

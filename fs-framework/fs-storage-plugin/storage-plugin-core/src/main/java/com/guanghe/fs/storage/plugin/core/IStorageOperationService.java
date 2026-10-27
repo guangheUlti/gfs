@@ -222,7 +222,7 @@ public interface IStorageOperationService extends Closeable {
      * 是否为挂载式存储（目录树镜像真实文件系统）。
      * <p>
      * 业务代码一律用能力位判断，勿比较 identifier 字符串。
-     * 仅 {@code LocalMount} 类挂载插件返回 true。
+     * 远端目录树/真实目录即文件位置（SFTP、SMB、FTP、WebDAV、内存挂载、本地挂载）的插件返回 true。
      *
      * @return 是否挂载式
      */
@@ -231,7 +231,7 @@ public interface IStorageOperationService extends Closeable {
     }
 
     /**
-     * 是否为「本地挂载」（LocalDirect，直读式）存储：不建后台扫描索引，
+     * 是否为直读式挂载（本地直读 LocalDirect 等）：不建后台全树扫描索引，
      * 浏览时实时列目录并按层对账索引行，每次增删改查都直接作用于真实文件系统。
      * <p>
      * 业务代码一律用能力位判断，勿比较 identifier 字符串；
@@ -240,6 +240,19 @@ public interface IStorageOperationService extends Closeable {
      * @return 是否直读式访问
      */
     default boolean isDirectAccess() {
+        return false;
+    }
+
+    /**
+     * 是否为无状态远程存储（SFTP、SMB、FTP、WebDAV、内存挂载、本地挂载等）：文件条目完全以
+     * 远端服务器或真实目录为准，不落 file_info、不建索引，浏览/上传/下载/预览/分享均按路径直接操作。
+     * <p>
+     * 无状态平台同时满足 {@link #isMountMode()}=true（保留挂载类能力的删除/清理语义），
+     * 但不应参与挂载点创建、扫描与按层对账。
+     *
+     * @return 是否无状态远程
+     */
+    default boolean isStatelessRemote() {
         return false;
     }
 

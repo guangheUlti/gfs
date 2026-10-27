@@ -32,15 +32,16 @@ public class StorageIntegrationConfig {
 
     /**
      * 注册存储删除占用检查：FILE_INFO 按 STORAGE_PLATFORM_SETTING_ID 计数（不含回收站）。
-     * 本地挂载（直读）存储例外：其索引行只是浏览时的目录快照缓存（真实 FS 为唯一真相源），
-     * 不构成文件占用，删除配置时由挂载卸载回调清理，故放行删除。
+     * 本地挂载（直读）与无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）例外：其索引行只是历史快照，
+     * 真实文件系统/远端才是唯一真相源，不构成文件占用，删除配置时由挂载卸载回调清理，故放行删除。
      */
     @EventListener(ApplicationReadyEvent.class)
     public void registerStorageInUseChecker() {
         if (storageSettingService instanceof com.guanghe.fs.storage.service.impl.StorageSettingServiceImpl impl) {
             impl.setStorageInUseChecker(settingId ->
                     fileInfoService.countByStorageSettingId(settingId) > 0
-                            && !isDirectAccessStorage(settingId));
+                            && !isDirectAccessStorage(settingId)
+                            && !isStatelessStorage(settingId));
             // 删除存储前的文件清理：托管存储删物理对象，直读存储只清索引
             impl.setStorageFilesPurger(fileRecycleService::purgeStorageFiles);
             // 删除存储前的占用提示：文件数量（含回收站）+ 是否只清索引（挂载式存储）
@@ -55,6 +56,15 @@ public class StorageIntegrationConfig {
     private boolean isDirectAccessStorage(String settingId) {
         try {
             return storageServiceFacade.getStorageService(settingId).isDirectAccess();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 是否为无状态远程存储：历史索引行不构成占用（真实文件在远端/真实目录） */
+    private boolean isStatelessStorage(String settingId) {
+        try {
+            return storageServiceFacade.getStorageService(settingId).isStatelessRemote();
         } catch (Exception e) {
             return false;
         }

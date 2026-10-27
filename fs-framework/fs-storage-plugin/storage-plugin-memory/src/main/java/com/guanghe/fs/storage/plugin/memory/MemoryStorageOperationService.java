@@ -23,8 +23,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 /**
  * 内存挂载插件（Memory）
  * <p>
- * 在服务器内存中开辟一块受容量硬上限约束的区域当网盘：文件不入数据库索引
- * （能力位 {@code isDirectAccess=true}，fs-file 侧浏览时按层实时对账）、
+ * 在服务器内存中开辟一块受容量硬上限约束的区域当网盘：文件不落库
+ * （能力位 {@code isStatelessRemote=true}，file_info 不保留任何条目）、
  * 不落盘，每次增删改查都直接作用于内存目录树。
  * <p>
  * 存储介质（堆外，按需增长）：
@@ -281,6 +281,12 @@ public class MemoryStorageOperationService extends AbstractTempChunkStorageServi
 
     @Override
     public boolean isDirectAccess() {
+        return true;
+    }
+
+    @Override
+    public boolean isStatelessRemote() {
+        // 不落库：内存目录树为唯一真相源，实例释放即失效
         return true;
     }
 

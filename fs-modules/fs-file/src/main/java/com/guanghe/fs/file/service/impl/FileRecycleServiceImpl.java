@@ -193,6 +193,16 @@ public class FileRecycleServiceImpl implements FileRecycleService {
         if (CollUtil.isEmpty(fileIds)) {
             return;
         }
+        // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）没有本地索引：虚拟 ID 直接删远端条目
+        List<String> remoteIds = fileIds.stream()
+                .filter(fileInfoService::isVirtualFileId).distinct().toList();
+        List<String> dbIds = fileIds.stream()
+                .filter(id -> !fileInfoService.isVirtualFileId(id)).distinct().toList();
+        if (CollUtil.isEmpty(dbIds)) {
+            fileInfoService.deleteRemoteFiles(remoteIds);
+            return;
+        }
+        fileIds = dbIds;
         Set<String> allFileIds = collectFileIdsRecursively(
                 fileIds,
                 userId,
@@ -201,6 +211,9 @@ public class FileRecycleServiceImpl implements FileRecycleService {
         if (CollUtil.isEmpty(allFileIds)) {
             throw new BusinessException(I18nUtils.getMessage(
                     onlyRecycled ? "recycle.file.not.found.delete" : "file.not.found"));
+        }
+        if (!remoteIds.isEmpty()) {
+            fileInfoService.deleteRemoteFiles(remoteIds);
         }
         List<FileInfo> allFiles = fileInfoService.listByIds(allFileIds);
         List<FileInfo> physicalObjects = allFiles.stream()

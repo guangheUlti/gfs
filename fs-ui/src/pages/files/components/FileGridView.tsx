@@ -18,6 +18,7 @@ import {
 import { cn } from '@/lib/utils'
 import { formatFileListDisplayTime } from '@/utils/format'
 import { isEditableSuffix } from '@/utils/preview-types'
+import { useCurrentStoragePlatform } from '@/hooks/use-current-storage'
 import { usePermission } from '@/hooks/use-permission'
 import { useFeatureStore } from '@/store/feature'
 import { Button } from '@/components/ui/button'
@@ -100,8 +101,10 @@ export function FileGridView({
   scrollRootRef,
 }: FileGridViewProps) {
   const { t } = useTranslation('files')
-  // 收藏功能未开启时，隐藏收藏入口（与侧边栏「收藏」菜单同开关）
-  const favoriteEnabled = useFeatureStore((s) => !!s.toggles.favorite)
+  // 收藏功能未开启、或当前为无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载，不落库）时，隐藏收藏入口
+  const favoriteToggle = useFeatureStore((s) => !!s.toggles.favorite)
+  const { isStateless } = useCurrentStoragePlatform()
+  const favoriteEnabled = favoriteToggle && !isStateless
   const thumbnailsEnabled = useAppearanceStore(
     (state) => state.thumbnailsEnabled
   )

@@ -94,31 +94,35 @@ public class FileController {
     @Operation(summary = "删除文件", description = "回收站开启时移入回收站；关闭时直接物理删除（不可恢复）")
     @SaCheckPermission("file:write")
     public Result<?> deleteFiles(@RequestBody List<String> fileIds) {
-        List<FileInfo> targets = getAuthorizedFiles(fileIds);
+        List<String> distinctIds = fileIds.stream().distinct().toList();
+        List<String> virtualIds = distinctIds.stream()
+                .filter(fileInfoService::isVirtualFileId).toList();
+        List<String> dbIds = distinctIds.stream()
+                .filter(id -> !fileInfoService.isVirtualFileId(id)).toList();
+        List<FileInfo> targets = getAuthorizedFiles(distinctIds);
+        // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）没有回收站，删除即远端永久删除
+        if (!virtualIds.isEmpty()) {
+            fileInfoService.deleteRemoteFiles(virtualIds);
+        }
         boolean recycleEnabled = featureToggleService.listToggles()
                 .getOrDefault(FeatureKeys.RECYCLE_BIN, Boolean.TRUE);
-        if (recycleEnabled) {
-            fileInfoService.moveFilesToRecycleBin(fileIds);
-            operationLogService.recordSuccess(
-                    OperationType.DELETE,
-                    "放入回收站",
-                    targetType(targets),
-                    String.join(",", fileIds),
-                    summarizeNames(targets),
-                    "共 " + targets.size() + " 项"
-            );
-        } else {
-            // 回收站关闭：删除即永久删除，不产生回收站记录
-            fileRecycleService.permanentlyDeleteActiveFiles(fileIds);
-            operationLogService.recordSuccess(
-                    OperationType.PERMANENT_DELETE,
-                    "删除（回收站已关闭，直接物理删除）",
-                    targetType(targets),
-                    String.join(",", fileIds),
-                    summarizeNames(targets),
-                    "共 " + targets.size() + " 项"
-            );
+        if (!dbIds.isEmpty()) {
+            if (recycleEnabled) {
+                fileInfoService.moveFilesToRecycleBin(dbIds);
+            } else {
+                // 回收站关闭：删除即永久删除，不产生回收站记录
+                fileRecycleService.permanentlyDeleteActiveFiles(dbIds);
+            }
         }
+        operationLogService.recordSuccess(
+                recycleEnabled && !dbIds.isEmpty() ? OperationType.DELETE : OperationType.PERMANENT_DELETE,
+                recycleEnabled && !dbIds.isEmpty()
+                        ? "放入回收站" : "删除（回收站已关闭或远程无回收站，直接物理删除）",
+                targetType(targets),
+                String.join(",", distinctIds),
+                summarizeNames(targets),
+                "共 " + targets.size() + " 项"
+        );
         return Result.ok();
     }
 
@@ -126,13 +130,23 @@ public class FileController {
     @Operation(summary = "永久删除文件", description = "不经回收站直接永久删除文件，不可恢复")
     @SaCheckPermission("file:write")
     public Result<?> permanentlyDeleteActiveFiles(@RequestBody List<String> fileIds) {
-        List<FileInfo> targets = getAuthorizedFiles(fileIds);
-        fileRecycleService.permanentlyDeleteActiveFiles(fileIds);
+        List<String> distinctIds = fileIds.stream().distinct().toList();
+        List<String> virtualIds = distinctIds.stream()
+                .filter(fileInfoService::isVirtualFileId).toList();
+        List<String> dbIds = distinctIds.stream()
+                .filter(id -> !fileInfoService.isVirtualFileId(id)).toList();
+        List<FileInfo> targets = getAuthorizedFiles(distinctIds);
+        if (!virtualIds.isEmpty()) {
+            fileInfoService.deleteRemoteFiles(virtualIds);
+        }
+        if (!dbIds.isEmpty()) {
+            fileRecycleService.permanentlyDeleteActiveFiles(dbIds);
+        }
         operationLogService.recordSuccess(
                 OperationType.PERMANENT_DELETE,
                 "永久删除",
                 targetType(targets),
-                String.join(",", fileIds),
+                String.join(",", distinctIds),
                 summarizeNames(targets),
                 "共 " + targets.size() + " 项"
         );
@@ -202,14 +216,17 @@ public class FileController {
         FileInfo before = fileInfoService.getAuthorizedFile(fileId);
         String oldName = before.getDisplayName();
         fileInfoService.renameFile(fileId, cmd);
-        FileInfo after = fileInfoService.getAuthorizedFile(fileId);
+        // 无状态远程的虚拟 ID 在改名后失效，日志沿用请求的新名称
+        boolean virtual = fileInfoService.isVirtualFileId(fileId);
+        FileInfo after = virtual ? before : fileInfoService.getAuthorizedFile(fileId);
+        String newName = virtual ? cmd.getDisplayName().trim() : after.getDisplayName();
         operationLogService.recordSuccess(
                 OperationType.RENAME,
                 "重命名",
                 Boolean.TRUE.equals(after.getIsDir()) ? "DIRECTORY" : "FILE",
                 fileId,
-                after.getDisplayName(),
-                oldName + " -> " + after.getDisplayName()
+                newName,
+                oldName + " -> " + newName
         );
         return Result.ok();
     }

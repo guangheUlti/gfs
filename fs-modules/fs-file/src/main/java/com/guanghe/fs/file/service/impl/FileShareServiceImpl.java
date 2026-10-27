@@ -23,6 +23,7 @@ import com.guanghe.fs.file.domain.vo.FileShareVO;
 import com.guanghe.fs.file.domain.vo.FileVO;
 import com.guanghe.fs.file.domain.vo.FolderDownloadTaskVO;
 import com.guanghe.fs.file.mapper.FileShareMapper;
+import com.guanghe.fs.file.mount.RemoteMountService;
 import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.file.service.FileShareItemService;
 import com.guanghe.fs.file.service.FileShareService;
@@ -37,6 +38,7 @@ import com.guanghe.fs.storage.facade.StorageServiceFacade;
 import com.guanghe.fs.storage.plugin.core.IStorageOperationService;
 import io.github.linpeilie.Converter;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.io.InputStreamResource;
@@ -46,6 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -61,6 +64,7 @@ import static com.guanghe.fs.file.domain.table.FileShareTableDef.FILE_SHARE;
  * @Author: guangheUlti
  * @Date: 2025/10/30 10:02
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare> implements FileShareService {
@@ -70,6 +74,8 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
     private final FileShareItemService fileShareItemService;
 
     private final FileTransferTaskService fileTransferTaskService;
+
+    private final RemoteMountService remoteMountService;
 
     private final Converter converter;
 
@@ -197,20 +203,19 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
         String userId = StpUtil.getLoginIdAsString();
         String fileId = cmd.getFileId();
 
-        FileInfo fileInfo = fileInfoService.getOne(new QueryWrapper()
-                .where(FILE_INFO.ID.eq(fileId))
-                .and(FILE_INFO.USER_ID.eq(userId))
-                .and(FILE_INFO.IS_DELETED.eq(false)));
-        if (fileInfo == null) {
-            throw new BusinessException(I18nUtils.getMessage("file.not.exist", new Object[]{fileId}));
-        }
+        FileInfo fileInfo = fileInfoService.getAuthorizedFile(fileId);
         if (Boolean.TRUE.equals(fileInfo.getIsDir())) {
             throw new BusinessException(I18nUtils.getMessage("file.not.file"));
         }
 
         // 祖先文件 id 链（含自身），覆盖「文件直接被分享」与「文件位于被分享文件夹内」两种情况
         Set<String> candidateIds = new HashSet<>();
-        collectAncestorIds(fileInfo, candidateIds);
+        if (fileInfoService.isVirtualFileId(fileId)) {
+            // 无状态远程：按远端路径推导祖先虚拟 ID
+            candidateIds.addAll(remoteMountService.selfAndAncestorIds(fileId));
+        } else {
+            collectAncestorIds(fileInfo, candidateIds);
+        }
 
         String shareId = findReusableShareId(userId, candidateIds);
         if (shareId == null) {
@@ -285,6 +290,10 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
         }
         LocalDateTime now = LocalDateTime.now();
         fileIds.forEach(fileId -> {
+            // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）不落库，没有可更新的访问时间
+            if (fileInfoService.isVirtualFileId(fileId)) {
+                return;
+            }
             FileInfo fileInfo = new FileInfo();
             fileInfo.setId(fileId);
             fileInfo.setLastAccessTime(now);
@@ -390,19 +399,44 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
                 throw new BusinessException(I18nUtils.getMessage("file.not.directory"));
             }
 
-            fileInfos = fileInfoService.list(new QueryWrapper()
-                    .where(FILE_INFO.PARENT_ID.eq(parentId))
-                    .and(FILE_INFO.USER_ID.eq(fileShare.getUserId()))
-                    .and(FILE_INFO.IS_DELETED.eq(false))
-                    .orderBy(FILE_INFO.IS_DIR.desc(), FILE_INFO.UPDATE_TIME.desc()));
+            // 无状态远程：直接列远端目录，不查 file_info
+            if (fileInfoService.isVirtualFileId(parentId)) {
+                fileInfos = remoteMountService.listChildren(parent.getStoragePlatformSettingId(),
+                        remoteMountService.relativePath(parent));
+            } else {
+                fileInfos = fileInfoService.list(new QueryWrapper()
+                        .where(FILE_INFO.PARENT_ID.eq(parentId))
+                        .and(FILE_INFO.USER_ID.eq(fileShare.getUserId()))
+                        .and(FILE_INFO.IS_DELETED.eq(false))
+                        .orderBy(FILE_INFO.IS_DIR.desc(), FILE_INFO.UPDATE_TIME.desc()));
+            }
         } else {
             if (CollUtil.isEmpty(shareFileIds)) {
                 fileInfos = List.of();
             } else {
-                fileInfos = fileInfoService.list(new QueryWrapper()
-                        .where(FILE_INFO.ID.in(shareFileIds))
-                        .and(FILE_INFO.USER_ID.eq(fileShare.getUserId()))
-                        .and(FILE_INFO.IS_DELETED.eq(false)));
+                List<FileInfo> items = new ArrayList<>(shareFileIds.size());
+                for (String shareFileId : shareFileIds) {
+                    if (fileInfoService.isVirtualFileId(shareFileId)) {
+                        try {
+                            items.add(remoteMountService.resolve(shareFileId, fileShare.getUserId()));
+                        } catch (Exception e) {
+                            log.warn("分享的远端条目已不存在，跳过: shareId={}, fileId={}", shareId, shareFileId);
+                        }
+                    } else {
+                        FileInfo item = fileInfoService.getOne(new QueryWrapper()
+                                .where(FILE_INFO.ID.eq(shareFileId))
+                                .and(FILE_INFO.USER_ID.eq(fileShare.getUserId()))
+                                .and(FILE_INFO.IS_DELETED.eq(false)));
+                        if (item != null) {
+                            items.add(item);
+                        }
+                    }
+                }
+                items.sort(Comparator
+                        .comparing((FileInfo file) -> !Boolean.TRUE.equals(file.getIsDir()))
+                        .thenComparing(file -> StrUtil.nullToEmpty(file.getDisplayName()),
+                                String.CASE_INSENSITIVE_ORDER));
+                fileInfos = items;
             }
         }
 
@@ -514,6 +548,17 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
     }
 
     private FileInfo getShareAccessibleFile(FileShare share, List<String> shareFileIds, String fileId) {
+        // 无状态远程：按虚拟路径推导祖先链，命中分享项即放行
+        if (fileInfoService.isVirtualFileId(fileId)) {
+            FileInfo target = remoteMountService.resolve(fileId, share.getUserId());
+            Set<String> candidateIds = remoteMountService.selfAndAncestorIds(fileId);
+            for (String candidateId : candidateIds) {
+                if (shareFileIds.contains(candidateId)) {
+                    return target;
+                }
+            }
+            throw new BusinessException(I18nUtils.getMessage("share.file.not.in.share"));
+        }
         FileInfo target = fileInfoService.getOne(new QueryWrapper()
                 .where(FILE_INFO.ID.eq(fileId))
                 .and(FILE_INFO.USER_ID.eq(share.getUserId()))

@@ -4,6 +4,7 @@ import com.guanghe.fs.file.domain.FileInfo;
 import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.framework.common.constant.RedisKey;
 import com.guanghe.fs.framework.common.enums.FileTypeEnum;
+import com.guanghe.fs.framework.common.exception.BusinessException;
 import com.guanghe.fs.framework.common.utils.I18nUtils;
 import com.guanghe.fs.framework.preview.config.FilePreviewConfig;
 import com.guanghe.fs.framework.preview.core.PreviewContext;
@@ -64,7 +65,12 @@ public class ArchiveFilePreviewService {
 
         byte[] archiveBytes = getCachedInnerFile(archiveFileId);
         if (archiveBytes == null) {
-            FileInfo archiveFile = fileInfoService.getById(archiveFileId);
+            FileInfo archiveFile;
+            try {
+                archiveFile = fileInfoService.resolveFile(archiveFileId);
+            } catch (BusinessException e) {
+                archiveFile = null;
+            }
             if (archiveFile == null) {
                 return buildErrorPage(model, I18nUtils.getMessage("archive.not.exist"), 
                         I18nUtils.getMessage("archive.file.not.exist.or.deleted"));

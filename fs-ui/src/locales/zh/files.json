@@ -318,6 +318,7 @@
     "unfavOk": "取消收藏成功",
     "favFail": "收藏失败",
     "unfavFail": "取消收藏失败",
+    "favUnsupported": "远程存储不支持收藏",
     "copyDirectLinkOk": "直链已复制，粘贴到浏览器即可免登录下载",
     "copyDirectLinkFail": "直链生成/复制失败",
     "uploadFileAdded": "文件已添加到传输列表",

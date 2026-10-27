@@ -1,9 +1,12 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { Check, ChevronDown, Database } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { getActiveStoragePlatforms } from '@/api/storage'
 import type { ActiveStoragePlatform } from '@/types/storage'
+import {
+  notifyStoragePlatformChanged,
+  STORAGE_PLATFORM_KEY,
+  useActiveStoragePlatforms,
+} from '@/hooks/use-current-storage'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -12,12 +15,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-const STORAGE_KEY = 'current-storage-platform'
-
 /** 未写入 localStorage = 内置本地存储（请求头不携带 configId） */
 const readCurrent = (): { settingId: string; platformName?: string } => {
   try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null')
+    const stored = JSON.parse(
+      localStorage.getItem(STORAGE_PLATFORM_KEY) || 'null'
+    )
     if (stored?.settingId) {
       return { settingId: stored.settingId, platformName: stored.platformName }
     }
@@ -35,11 +38,7 @@ export function StorageSwitcher({ onChanged }: StorageSwitcherProps) {
   const { t } = useTranslation('files')
   const [current, setCurrent] = useState(readCurrent)
 
-  const { data: platforms = [] } = useQuery({
-    queryKey: ['activeStoragePlatforms'],
-    queryFn: getActiveStoragePlatforms,
-    staleTime: 30_000,
-  })
+  const { data: platforms = [] } = useActiveStoragePlatforms()
 
   // 仅一个可用存储时切换器没有意义
   if (platforms.length <= 1) {
@@ -54,10 +53,10 @@ export function StorageSwitcher({ onChanged }: StorageSwitcherProps) {
   const handleSelect = (platform: ActiveStoragePlatform) => {
     if (platform.settingId === current.settingId) return
     if (platform.settingId === 'Local') {
-      localStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(STORAGE_PLATFORM_KEY)
     } else {
       localStorage.setItem(
-        STORAGE_KEY,
+        STORAGE_PLATFORM_KEY,
         JSON.stringify({
           settingId: platform.settingId,
           platformName: platform.platformName,
@@ -65,6 +64,7 @@ export function StorageSwitcher({ onChanged }: StorageSwitcherProps) {
       )
     }
     setCurrent({ settingId: platform.settingId, platformName: platform.platformName })
+    notifyStoragePlatformChanged()
     onChanged()
   }
 

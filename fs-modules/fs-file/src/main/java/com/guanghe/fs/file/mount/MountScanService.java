@@ -137,8 +137,9 @@ public class MountScanService {
         for (StorageSetting setting : settings) {
             try {
                 IStorageOperationService instance = storageServiceFacade.getStorageService(setting.getId());
-                if (!instance.isMountMode() || instance.isDirectAccess()) {
-                    // 本地挂载（直读）无后台扫描：浏览时由 reconcileDirectLevel 按层对账
+                if (!instance.isMountMode() || instance.isDirectAccess() || instance.isStatelessRemote()) {
+                    // 本地挂载（直读）无后台扫描：浏览时由 reconcileDirectLevel 按层对账；
+                    // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）不落库，完全不参与扫描
                     continue;
                 }
                 long intervalMillis = resolveIntervalMillis(instance);
@@ -181,7 +182,7 @@ public class MountScanService {
         for (StorageSetting setting : settings) {
             try {
                 IStorageOperationService instance = storageServiceFacade.getStorageService(setting.getId());
-                if (!instance.isMountMode() || instance.isDirectAccess()) {
+                if (!instance.isMountMode() || instance.isDirectAccess() || instance.isStatelessRemote()) {
                     continue;
                 }
                 scanSetting(setting);
@@ -238,6 +239,10 @@ public class MountScanService {
             }
             if (instance.isDirectAccess()) {
                 // 本地挂载（直读）：无后台扫描，浏览时按层实时对账
+                return;
+            }
+            if (instance.isStatelessRemote()) {
+                // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）：不落库，远端即唯一真相源，无需扫描
                 return;
             }
             if (userId != null) {

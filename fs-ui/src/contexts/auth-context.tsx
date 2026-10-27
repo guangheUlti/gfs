@@ -10,6 +10,7 @@ import {
 import type { UserInfo } from '@/types/user'
 import { mergeUserInfo } from '@/utils/merge-user-info'
 import { getActiveStoragePlatforms } from '@/api/storage'
+import { notifyStoragePlatformChanged } from '@/hooks/use-current-storage'
 import {
   setToken as saveToken,
   clearToken as removeToken,
@@ -71,6 +72,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         } else {
           localStorage.removeItem('current-storage-platform')
         }
+        notifyStoragePlatformChanged()
       }
     } catch (error) {
       console.error('获取存储平台配置失败:', error)

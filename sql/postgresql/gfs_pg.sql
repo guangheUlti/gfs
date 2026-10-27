@@ -100,7 +100,7 @@ COMMENT ON TABLE "file_share_access_record" IS '分享页面访问记录表';
 DROP TABLE IF EXISTS "file_share_items";
 CREATE TABLE "file_share_items" (
     "share_id" varchar(128) NOT NULL,
-    "file_id" varchar(128) NOT NULL,
+    "file_id" varchar(512) NOT NULL,
     "created_at" timestamp NOT NULL,
     PRIMARY KEY ("share_id", "file_id")
 );
@@ -132,13 +132,13 @@ CREATE TABLE "file_transfer_task" (
     "id" BIGSERIAL PRIMARY KEY,
     "task_id" varchar(64) NOT NULL,
     "upload_id" varchar(255) DEFAULT NULL,
-    "parent_id" varchar(128) DEFAULT NULL,
+    "parent_id" varchar(512) DEFAULT NULL,
     "user_id" varchar(128) NOT NULL,
     "collection_id" varchar(128) DEFAULT NULL,
     "collection_submission_id" varchar(128) DEFAULT NULL,
     "storage_platform_setting_id" varchar(255) DEFAULT NULL,
     "object_key" varchar(512) NOT NULL,
-    "file_id" varchar(128) DEFAULT NULL,
+    "file_id" varchar(512) DEFAULT NULL,
     "file_name" varchar(255) NOT NULL,
     "file_size" bigint NOT NULL,
     "file_md5" varchar(64) DEFAULT NULL,
@@ -169,7 +169,7 @@ CREATE INDEX "idx_transfer_collection" ON "file_transfer_task" ("collection_id")
 DROP TABLE IF EXISTS "file_user_favorites";
 CREATE TABLE "file_user_favorites" (
     "user_id" varchar(128) NOT NULL,
-    "file_id" varchar(128) NOT NULL,
+    "file_id" varchar(512) NOT NULL,
     "favorite_time" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY ("user_id", "file_id")
 );

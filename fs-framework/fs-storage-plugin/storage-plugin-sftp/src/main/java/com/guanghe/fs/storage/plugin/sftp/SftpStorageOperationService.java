@@ -392,7 +392,19 @@ public class SftpStorageOperationService extends AbstractTempChunkStorageService
 
     @Override
     public boolean isMountMode() {
-        // 远程目录树镜像：文件页通过挂载点 + 扫描索引浏览服务器已有文件，与 SMB/本地挂载一致
+        // 远程目录树镜像：文件页通过挂载点 + 目录索引浏览服务器已有文件，与 SMB/本地挂载一致
+        return true;
+    }
+
+    @Override
+    public boolean isDirectAccess() {
+        // SFTP 为无状态远程：浏览与操作全部直连服务器，不在本地索引任何条目
+        return false;
+    }
+
+    @Override
+    public boolean isStatelessRemote() {
+        // 不落库：目录与文件全部以远端服务器为唯一真相源，支持根路径 "/" 即时浏览
         return true;
     }
 

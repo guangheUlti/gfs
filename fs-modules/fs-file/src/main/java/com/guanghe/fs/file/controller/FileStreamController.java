@@ -5,6 +5,7 @@ import com.guanghe.fs.file.preview.ArchiveFilePreviewService;
 import com.guanghe.fs.file.serving.FileServingPipeline;
 import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.framework.common.enums.FileTypeEnum;
+import com.guanghe.fs.framework.common.exception.BusinessException;
 import com.guanghe.fs.framework.preview.config.FilePreviewConfig;
 import com.guanghe.fs.framework.preview.core.PreviewStrategy;
 import com.guanghe.fs.framework.preview.factory.PreviewStrategyManager;
@@ -47,8 +48,11 @@ public class FileStreamController {
             @PathVariable String fileId,
             @RequestHeader(value = "Range", required = false) String rangeHeader) {
 
-        FileInfo fileInfo = fileInfoService.getById(fileId);
-        if (fileInfo == null) {
+        FileInfo fileInfo;
+        try {
+            // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）虚拟 ID 在此解析为远端真实条目
+            fileInfo = fileInfoService.resolveFile(fileId);
+        } catch (BusinessException e) {
             return ResponseEntity.notFound().build();
         }
 

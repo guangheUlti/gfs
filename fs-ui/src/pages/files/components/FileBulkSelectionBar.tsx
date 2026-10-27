@@ -14,6 +14,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { RequirePermission } from '@/components/require-permission'
+import { useCurrentStoragePlatform } from '@/hooks/use-current-storage'
 import { useFeatureStore } from '@/store/feature'
 
 interface FileBulkSelectionBarProps {
@@ -38,8 +39,14 @@ export function FileBulkSelectionBar({
   onClear,
 }: FileBulkSelectionBarProps) {
   const { t } = useTranslation('files')
-  // 收藏功能未开启时，隐藏收藏按钮（与侧边栏「收藏」菜单同开关）
-  const favoriteEnabled = useFeatureStore((s) => !!s.toggles.favorite)
+  // 收藏功能未开启、或当前为无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载，不落库）时，隐藏收藏按钮
+  const favoriteToggle = useFeatureStore((s) => !!s.toggles.favorite)
+  const { isStateless } = useCurrentStoragePlatform()
+  const favoriteEnabled = favoriteToggle && !isStateless
+  // 无状态远程没有回收站，删除即永久删除
+  const deleteLabel = isStateless
+    ? t('rowMenu.deleteForever')
+    : t('rowMenu.trash')
   // 分享功能未开启（或缺省）时，隐藏分享按钮
   const shareEnabled = useFeatureStore((s) => !!s.toggles.share)
   // 单选不出批量工具条：单文件操作都在右键/卡片菜单里
@@ -144,13 +151,13 @@ export function FileBulkSelectionBar({
               size='icon'
               className='size-8 shrink-0'
               onClick={onDelete}
-              aria-label={t('bulk.ariaTrash')}
+              aria-label={deleteLabel}
             >
               <Trash2 />
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>{t('rowMenu.trash')}</p>
+            <p>{deleteLabel}</p>
           </TooltipContent>
         </Tooltip>
       </RequirePermission>

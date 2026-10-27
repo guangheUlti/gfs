@@ -7,11 +7,11 @@ import com.guanghe.fs.storage.plugin.core.config.StorageConfig;
  * 本地挂载（LocalDirect，直读）存储插件
  * <p>
  * 与 LocalMount 共用同一套本地文件读写实现（根路径归一化、防逃逸、写穿透、回收站物理删除），
- * 但不建立后台扫描索引：浏览某目录时由 fs-file 侧按层实时对账索引行（真实 FS 为唯一真相源），
- * 每次增删改查都直接作用于真实文件系统，外部改动刷新即可见。
+ * 但完全无状态：不建索引、不落 file_info，真实文件系统为唯一真相源，
+ * 浏览与增删改都直接作用于真实目录，外部改动刷新即可见。
  * <p>
- * 能力位：{@code isMountMode=true}（复用挂载写穿透链路）+ {@code isDirectAccess=true}
- * （扫描/监听跳过该设置，改为浏览对账）。不含实时监听、扫描间隔、落盘加密配置项。
+ * 能力位：{@code isMountMode=true}（复用挂载写穿透/清理语义）+ {@code isDirectAccess=true}
+ * + {@code isStatelessRemote=true}。不含实时监听、扫描间隔、落盘加密配置项。
  *
  * @Author: guangheUlti
  * @Date: 2026/09/25
@@ -35,6 +35,12 @@ public class LocalDirectStorageOperationService extends LocalMountStorageOperati
 
     @Override
     public boolean isDirectAccess() {
+        return true;
+    }
+
+    @Override
+    public boolean isStatelessRemote() {
+        // 不落库：真实文件系统为唯一真相源，浏览与增删改都直接作用于本地目录
         return true;
     }
 

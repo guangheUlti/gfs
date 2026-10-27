@@ -87,7 +87,8 @@ export function StorageSettingCard({
   const [isUsageLoading, setIsUsageLoading] = useState(false)
   const queryClient = useQueryClient()
 
-  const isMountPlatform = ['LocalMount', 'SFTP'].includes(
+  // 仅后台扫描类挂载显示「重新扫描」；SFTP 是逐层直读，无全树扫描
+  const isMountPlatform = ['LocalMount'].includes(
     setting.storagePlatform?.identifier
   )
   // 内置本地存储：固定 id=Local（恒启用，支持查看/编辑根目录，不支持禁用与删除）。

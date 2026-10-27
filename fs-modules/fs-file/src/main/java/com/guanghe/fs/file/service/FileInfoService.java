@@ -30,6 +30,24 @@ public interface FileInfoService extends IService<FileInfo> {
     FileInfo getAuthorizedFile(String fileId);
 
     /**
+     * 解析文件记录（不校验用户）：支持无状态远程虚拟 ID 与普通落库记录。
+     *
+     * @param fileId 文件ID（普通 ID 或 vfs: 虚拟 ID）
+     * @return 文件记录（虚拟记录为远端实时解析结果）
+     */
+    FileInfo resolveFile(String fileId);
+
+    /**
+     * 是否为无状态远程虚拟文件 ID
+     */
+    boolean isVirtualFileId(String fileId);
+
+    /**
+     * 永久删除无状态远程文件/目录（直接作用于远端服务器，不涉及 file_info）
+     */
+    void deleteRemoteFiles(List<String> fileIds);
+
+    /**
      * 统计指定存储配置下的文件数量（含各级目录），用于删除存储配置前的占用检查
      */
     long countByStorageSettingId(String settingId);

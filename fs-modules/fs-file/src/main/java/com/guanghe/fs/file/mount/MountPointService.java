@@ -106,7 +106,7 @@ public class MountPointService {
                             && MountManager.isValidNameSegment(String.valueOf(share).trim())) {
                         return String.valueOf(share).trim();
                     }
-                    // 3) SFTP：未配挂载名时取根路径最后一段（/data/yunshu → yunshu）
+                    // 3) SFTP：未配挂载名时取根路径最后一段（/data → data；根目录 / 无末段时用固定名）
                     Object sftpRoot = config.get("sftpRootPath");
                     if (sftpRoot != null) {
                         String path = String.valueOf(sftpRoot).trim().replace('\\', '/');
@@ -116,6 +116,9 @@ public class MountPointService {
                         String base = path.substring(path.lastIndexOf('/') + 1);
                         if (StrUtil.isNotEmpty(base) && MountManager.isValidNameSegment(base)) {
                             return base;
+                        }
+                        if (path.isEmpty()) {
+                            return "SFTP 根目录";
                         }
                     }
                 }

@@ -23,7 +23,8 @@ import java.util.Map;
 /**
  * WebDAV 存储插件（基于 sardine）
  * <p>
- * 纯对象式存储（同 Local/Minio 模式）：分片先落本地 temp，complete 时合并写远程。
+ * 无状态远程存储：服务端目录树即对象路径，条目完全以服务端为准，不落 file_info，
+ * 浏览与增删改直接作用于远端。分片先落本地 temp，complete 时合并写远程。
  * Sardine 实例线程安全，可复用单实例。
  *
  * @Author: guangheUlti
@@ -41,6 +42,8 @@ public class WebdavStorageOperationService extends AbstractTempChunkStorageServi
 
     private Sardine sardine;
     private String baseUrl;
+    /** 基础路径（已去首尾 '/'），用于把服务端返回的绝对 href 还原为相对对象键 */
+    private String basePathPrefix;
 
     public WebdavStorageOperationService() {
         super();
@@ -75,6 +78,9 @@ public class WebdavStorageOperationService extends AbstractTempChunkStorageServi
         String endpoint = trimSlashes(cfg.getWebdavEndpoint());
         String basePath = trimSlashes(cfg.getWebdavBasePath());
         this.baseUrl = endpoint + (basePath.isEmpty() ? "" : "/" + basePath);
+        String endpointPath = endpointPath(endpoint);
+        this.basePathPrefix = endpointPath.isEmpty() ? basePath
+                : (basePath.isEmpty() ? endpointPath : endpointPath + "/" + basePath);
 
         this.sardine = cfg.getWebdavUsername() == null || cfg.getWebdavUsername().isBlank()
                 ? SardineFactory.begin()
@@ -199,6 +205,18 @@ public class WebdavStorageOperationService extends AbstractTempChunkStorageServi
     }
 
     @Override
+    public boolean isMountMode() {
+        // 远端目录树为唯一真相源：文件页按远端路径直接浏览与读写
+        return true;
+    }
+
+    @Override
+    public boolean isStatelessRemote() {
+        // 不落库：目录与文件全部以 WebDAV 服务端为准，增删改直接作用于远端
+        return true;
+    }
+
+    @Override
     public void mkdirDirectory(String dirKey) {
         ensureNotPrototype();
         try {
@@ -241,18 +259,32 @@ public class WebdavStorageOperationService extends AbstractTempChunkStorageServi
         ensureNotPrototype();
         try {
             String key = normalizeKey(dirKey);
+            String selfPath = basePathPrefix.isEmpty() ? key
+                    : (key.isEmpty() ? basePathPrefix : basePathPrefix + "/" + key);
             List<StorageObjectEntry> entries = new ArrayList<>();
-            // list(url, 1) 取一层；第一个元素是目录自身，跳过
+            // list(url, 1) 取一层；服务端 href 是绝对路径，需去掉基础路径还原为相对对象键
             List<DavResource> resources = sardine.list(url(key), 1);
             for (DavResource resource : resources) {
                 String href = resource.getPath();
                 if (href == null) {
                     continue;
                 }
-                String decoded = decode(href);
-                String childKey = trimSlashes(decoded);
+                String path = trimSlashes(decode(href));
                 // 跳过目录自身
-                if (childKey.equals(key)) {
+                if (path.equals(selfPath) || path.equals(key)) {
+                    continue;
+                }
+                String childKey;
+                if (basePathPrefix.isEmpty()) {
+                    childKey = path;
+                } else if (path.startsWith(basePathPrefix + "/")) {
+                    childKey = path.substring(basePathPrefix.length() + 1);
+                } else {
+                    // 少数服务端返回相对路径或代理前缀不一致：退回按条目名拼接当前目录
+                    String name = path.isEmpty() ? "" : path.substring(path.lastIndexOf('/') + 1);
+                    childKey = key.isEmpty() ? name : key + "/" + name;
+                }
+                if (childKey.isEmpty()) {
                     continue;
                 }
                 entries.add(new StorageObjectEntry(
@@ -332,6 +364,13 @@ public class WebdavStorageOperationService extends AbstractTempChunkStorageServi
             t = t.substring(0, t.length() - 1);
         }
         return t;
+    }
+
+    /** 提取端点 URL 的路径部分（不含 scheme://host），去首尾 '/' */
+    private static String endpointPath(String endpoint) {
+        int schemeIdx = endpoint.indexOf("://");
+        int pathIdx = endpoint.indexOf('/', schemeIdx < 0 ? 0 : schemeIdx + 3);
+        return pathIdx < 0 ? "" : trimSlashes(endpoint.substring(pathIdx));
     }
 
     /** 服务端返回的 href 是 URL 编码路径，还原后再比较 */

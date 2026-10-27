@@ -27,7 +27,8 @@ import java.util.List;
 /**
  * FTP/FTPS 存储插件（基于 commons-net）
  * <p>
- * 纯对象式存储（同 Local/Minio 模式）：分片先落本地 temp，complete 时合并写远程。
+ * 无状态远程存储：远端目录树即对象路径，条目完全以服务器为准，不落 file_info，
+ * 浏览与增删改直接作用于远端。分片先落本地 temp，complete 时合并写远程。
  * FTPClient 非线程安全：每次操作 connect+login，用完 logout+disconnect。
  * <p>
  * FTP 无原生"目录存在"判断，isFileExist 对目录用 listNames 命中判断。
@@ -444,6 +445,18 @@ public class FtpStorageOperationService extends AbstractTempChunkStorageService 
         } catch (Exception e) {
             return null;
         }
+    }
+
+    @Override
+    public boolean isMountMode() {
+        // 远端目录树为唯一真相源：文件页按远端路径直接浏览与读写
+        return true;
+    }
+
+    @Override
+    public boolean isStatelessRemote() {
+        // 不落库：目录与文件全部以 FTP 服务器为准，增删改直接作用于远端
+        return true;
     }
 
     @Override

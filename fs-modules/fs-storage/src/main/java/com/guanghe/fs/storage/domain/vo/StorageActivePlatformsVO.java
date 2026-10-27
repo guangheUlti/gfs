@@ -31,4 +31,10 @@ public class StorageActivePlatformsVO implements Serializable {
     private LocalDateTime updatedAt;
 
     private Boolean isEnabled;
+
+    /**
+     * 是否为无状态远程存储（SFTP/SMB/FTP/WebDAV/内存/本地挂载）：浏览与文件操作直连远端，不落 file_info，
+     * 前端据此隐藏收藏/最近/回收站等依赖本地索引的入口。
+     */
+    private Boolean statelessRemote;
 }

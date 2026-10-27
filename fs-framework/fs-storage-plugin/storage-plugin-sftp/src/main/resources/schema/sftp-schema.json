@@ -1,10 +1,10 @@
 [
-  {"label":"挂载显示名","dataType":"string","identifier":"mountName","validation":{"required":false},"description":"在文件页显示的目录名，留空默认取根路径最后一段","placeholder":"如 yunshu"},
+  {"label":"挂载显示名","dataType":"string","identifier":"mountName","validation":{"required":false},"description":"在文件页显示的目录名，留空默认取根路径最后一段（根目录时用默认名）","placeholder":"如 data"},
   {"label":"服务器地址","dataType":"string","identifier":"sftpHost","validation":{"required":true}},
   {"label":"端口","dataType":"string","identifier":"sftpPort","validation":{"required":false}},
   {"label":"用户名","dataType":"string","identifier":"sftpUsername","validation":{"required":true}},
   {"label":"认证方式","dataType":"radio","identifier":"sftpAuthType","options":[{"label":"用户名密码","value":"password"},{"label":"私钥","value":"key"}],"defaultValue":"password","validation":{"required":true}},
   {"label":"密码","dataType":"string","identifier":"sftpPassword","validation":{"required":true},"showIf":{"identifier":"sftpAuthType","value":"password"}},
   {"label":"私钥路径","dataType":"string","identifier":"sftpPrivateKeyPath","validation":{"required":true},"showIf":{"identifier":"sftpAuthType","value":"key"},"description":"运行 GFS 的服务器上可访问的私钥文件绝对路径，需与用户名匹配"},
-  {"label":"根路径","dataType":"string","identifier":"sftpRootPath","validation":{"required":true},"description":"该目录作为网盘根目录被扫描和浏览；相对路径按登录用户主目录解析","placeholder":"如 /data/yunshu"}
+  {"label":"根路径","dataType":"string","identifier":"sftpRootPath","validation":{"required":true},"description":"该目录作为网盘根目录直接浏览；可填 / 挂载整机根目录，相对路径按登录用户主目录解析","placeholder":"如 /data 或 /"}
 ]

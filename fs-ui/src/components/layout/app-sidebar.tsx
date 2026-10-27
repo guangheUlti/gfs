@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { RiSettings3Fill, RiSettings3Line } from '@remixicon/react'
 import { useAuth } from '@/contexts/auth-context'
+import { useCurrentStoragePlatform } from '@/hooks/use-current-storage'
 import { usePermission } from '@/hooks/use-permission'
 import { useFeatureStore } from '@/store/feature'
 import {
@@ -19,6 +20,8 @@ export function AppSidebar() {
   const { user: authUser } = useAuth()
   const { hasPermission } = usePermission()
   const featureToggles = useFeatureStore((s) => s.toggles)
+  // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）不落库，收藏/历史/回收站没有意义
+  const { isStateless } = useCurrentStoragePlatform()
 
   // 使用真实用户信息，如果未登录则使用占位符
   const user = authUser
@@ -34,7 +37,8 @@ export function AppSidebar() {
       items: group.items.filter(
         (item) =>
           (!item.permission || hasPermission(item.permission)) &&
-          (!item.featureKey || !!featureToggles[item.featureKey])
+          (!item.featureKey || !!featureToggles[item.featureKey]) &&
+          !(isStateless && item.statelessHidden)
       ),
     }))
     // 系统分组末尾注入「设置」：独立路由页面，人人可用，不参与权限过滤

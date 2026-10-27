@@ -46,12 +46,14 @@ export const sidebarData: SidebarData = {
           url: '/files?view=favorites',
           icon: { line: RiStarLine, fill: RiStarFill },
           featureKey: 'favorite',
+          statelessHidden: true,
         },
         {
           titleKey: 'sidebar.nav.recents',
           url: '/files?view=recents',
           icon: { line: RiHistoryLine, fill: RiHistoryFill },
           featureKey: 'history',
+          statelessHidden: true,
         },
         {
           titleKey: 'sidebar.nav.shares',
@@ -66,6 +68,7 @@ export const sidebarData: SidebarData = {
           icon: { line: RiDeleteBinLine, fill: RiDeleteBinFill },
           permission: 'file:write',
           featureKey: 'recycleBin',
+          statelessHidden: true,
         },
       ],
     },

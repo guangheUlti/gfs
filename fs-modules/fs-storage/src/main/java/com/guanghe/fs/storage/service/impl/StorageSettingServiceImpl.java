@@ -239,6 +239,7 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
                 : "icon-bendicunchu1");
         localInstance.setPlatformName(I18nUtils.getMessage("storage.local.name"));
         localInstance.setIsEnabled(true);
+        localInstance.setStatelessRemote(false);
         localInstance.setRemark(I18nUtils.getMessage("storage.system.default"));
         result.add(localInstance);
 
@@ -262,12 +263,25 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
             vo.setCreatedAt(storageSetting.getCreatedAt());
             vo.setUpdatedAt(storageSetting.getUpdatedAt());
             vo.setIsEnabled(true);
+            vo.setStatelessRemote(isStatelessRemoteSetting(storageSetting.getId()));
             result.add(vo);
         }
         // 统一展示顺序（内置 Local 权重最小，恒为首位）
         result.sort(Comparator.comparingInt(
                 (StorageActivePlatformsVO vo) -> platformDisplayOrder(vo.getPlatformIdentifier())));
         return result;
+    }
+
+    /** 是否为无状态远程配置（能力位判断，拿不到实例时按普通存储处理） */
+    private boolean isStatelessRemoteSetting(String settingId) {
+        if (settingId == null || settingId.isBlank()) {
+            return false;
+        }
+        try {
+            return storageServiceFacade.getStorageService(settingId).isStatelessRemote();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @Override

@@ -359,8 +359,13 @@ public class SmbStorageOperationService extends AbstractTempChunkStorageService 
 
     @Override
     public boolean isMountMode() {
-        // SMB 共享是目录树镜像（共享名即挂载根），与 LocalMount 同为挂载式存储：
-        // 文件列表走挂载点懒创建 + MountScanService 同步，而非上传式 object_key 索引
+        // SMB 共享是目录树镜像（共享名即挂载根）：保留挂载式语义，便于删除/清理链路复用
+        return true;
+    }
+
+    @Override
+    public boolean isStatelessRemote() {
+        // 不落库：目录与文件全部以共享服务器为唯一真相源，浏览与操作均直连远端
         return true;
     }
 

@@ -24,6 +24,7 @@ import com.guanghe.fs.file.handler.DownloadTaskExceptionHandler;
 import com.guanghe.fs.file.mapper.FileTransferTaskMapper;
 import com.guanghe.fs.file.mount.MountManager;
 import com.guanghe.fs.file.mount.MountPathResolver;
+import com.guanghe.fs.file.mount.RemoteMountService;
 import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.file.service.FileObjectReferenceService;
 import com.guanghe.fs.file.service.FileTransferTaskService;
@@ -103,6 +104,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     private final StorageServiceFacade storageServiceFacade;
     private final MountPathResolver mountPathResolver;
     private final MountManager mountManager;
+    private final RemoteMountService remoteMountService;
     private final SysUserService sysUserService;
     private final SysUserTransferSettingService userTransferSettingService;
     private final SysOperationLogService operationLogService;
@@ -272,9 +274,19 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                     null,
                     storagePlatformSettingId
             );
-            // 挂载式：objectKey 不走 generateObjectKey，按挂载相对路径预占（8.4-⑯ 平台一致性校验）
+            // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）：objectKey 即远端相对路径，不落 file_info
             String objectKey;
-            if (isMountStorage(storagePlatformSettingId)) {
+            if (remoteMountService.isStatelessSetting(storagePlatformSettingId)) {
+                String parentPath = "";
+                if (StringUtils.isNotBlank(cmd.getParentId())) {
+                    FileInfo parent = fileInfoService.getAuthorizedFile(cmd.getParentId());
+                    if (!storagePlatformSettingId.equals(parent.getStoragePlatformSettingId())) {
+                        throw new BusinessException(I18nUtils.getMessage("mount.platform.mismatch"));
+                    }
+                    parentPath = remoteMountService.relativePath(parent);
+                }
+                objectKey = remoteMountService.childPath(parentPath, displayName);
+            } else if (isMountStorage(storagePlatformSettingId)) {
                 if (StringUtils.isNotBlank(cmd.getParentId())) {
                     FileInfo parent = fileInfoService.getAuthorizedFile(cmd.getParentId());
                     if (!storagePlatformSettingId.equals(parent.getStoragePlatformSettingId())) {
@@ -442,26 +454,35 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     private CheckUploadResultVO handleMountEmptyFileUpload(FileTransferTask task, String storagePlatformSettingId) {
         String taskId = task.getTaskId();
         IStorageOperationService storageService = storageServiceFacade.getStorageService(storagePlatformSettingId);
+        // 无状态远程：远端路径是唯一真相源，空文件也不落 file_info
+        boolean stateless = remoteMountService.isStatelessSetting(storagePlatformSettingId);
+        FileInfo[] completedFile = new FileInfo[1];
         try {
             mountManager.locks().callWithLock(storagePlatformSettingId, () -> {
                 storageService.uploadFile(new ByteArrayInputStream(new byte[0]), task.getObjectKey());
                 LocalDateTime now = LocalDateTime.now();
-                FileInfo fileInfo = new FileInfo();
-                fileInfo.setId(IdUtil.fastSimpleUUID());
-                fileInfo.setObjectKey(task.getObjectKey());
-                fileInfo.setOriginalName(task.getFileName());
-                fileInfo.setDisplayName(task.getFileName());
-                fileInfo.setSuffix(task.getSuffix());
-                fileInfo.setSize(task.getFileSize());
-                fileInfo.setMimeType(task.getMimeType());
-                fileInfo.setIsDir(false);
-                fileInfo.setParentId(task.getParentId());
-                fileInfo.setUserId(task.getUserId());
-                fileInfo.setStoragePlatformSettingId(storagePlatformSettingId);
-                fileInfo.setUploadTime(now);
-                fileInfo.setUpdateTime(now);
-                fileInfo.setIsDeleted(false);
-                fileInfoService.save(fileInfo);
+                if (stateless) {
+                    completedFile[0] = remoteMountService.buildFile(storagePlatformSettingId,
+                            task.getObjectKey(), task.getFileSize(), task.getUserId());
+                } else {
+                    FileInfo fileInfo = new FileInfo();
+                    fileInfo.setId(IdUtil.fastSimpleUUID());
+                    fileInfo.setObjectKey(task.getObjectKey());
+                    fileInfo.setOriginalName(task.getFileName());
+                    fileInfo.setDisplayName(task.getFileName());
+                    fileInfo.setSuffix(task.getSuffix());
+                    fileInfo.setSize(task.getFileSize());
+                    fileInfo.setMimeType(task.getMimeType());
+                    fileInfo.setIsDir(false);
+                    fileInfo.setParentId(task.getParentId());
+                    fileInfo.setUserId(task.getUserId());
+                    fileInfo.setStoragePlatformSettingId(storagePlatformSettingId);
+                    fileInfo.setUploadTime(now);
+                    fileInfo.setUpdateTime(now);
+                    fileInfo.setIsDeleted(false);
+                    fileInfoService.save(fileInfo);
+                    completedFile[0] = fileInfo;
+                }
 
                 task.setStatus(TransferTaskStatus.completed);
                 task.setUploadedChunks(task.getTotalChunks());
@@ -470,9 +491,10 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                 return null;
             });
             cacheManager.cleanTask(taskId);
-            transferSseService.sendCompleteEvent(task.getUserId(), taskId, taskId,
+            transferSseService.sendCompleteEvent(task.getUserId(), taskId, completedFile[0].getId(),
                     task.getFileName(), task.getFileSize());
-            log.info("挂载式空文件上传完成: taskId={}, objectKey={}", taskId, task.getObjectKey());
+            log.info("挂载式空文件上传完成: taskId={}, objectKey={}, stateless={}",
+                    taskId, task.getObjectKey(), stateless);
             return CheckUploadResultVO.builder()
                     .isQuickUpload(false)
                     .taskId(taskId)
@@ -952,7 +974,11 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             final FileTransferTask mergedTask = task;
             FileInfo fileInfo;
 
-            if (isMountStorage(task.getStoragePlatformSettingId())) {
+            if (remoteMountService.isStatelessSetting(task.getStoragePlatformSettingId())) {
+                // 无状态远程：合并产物就是远端路径上的文件，直接构造虚拟文件记录，不落库
+                fileInfo = remoteMountService.buildFile(task.getStoragePlatformSettingId(),
+                        uploadedObjectKey, task.getFileSize(), task.getUserId());
+            } else if (isMountStorage(task.getStoragePlatformSettingId())) {
                 // 挂载式安全底线：跳过合并后二次去重（引用计数按 platform+objectKey 记账，
                 // 复用 uuid 对象会摧毁路径映射）。合并写真实文件与 file_info 落库都在 MountLocks 内，
                 // 与扫描器串行化（8.4-②）。
@@ -1260,11 +1286,9 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     @Override
     public FileDownloadVO downloadFile(String fileId) {
         String userId = StpUtil.getLoginIdAsString();
-        FileInfo fileInfo = fileInfoService.getById(fileId);
-        if (fileInfo == null) {
-            throw new BusinessException(I18nUtils.getMessage("file.download.failed.not.exist"));
-        }
-        if (!userId.equals(fileInfo.getUserId())) {
+        FileInfo fileInfo = fileInfoService.resolveFile(fileId);
+        boolean virtual = fileInfoService.isVirtualFileId(fileId);
+        if (!virtual && !userId.equals(fileInfo.getUserId())) {
             throw new BusinessException(I18nUtils.getMessage("file.no.permission.download"));
         }
         if (Boolean.TRUE.equals(fileInfo.getIsDir())) {
@@ -1295,11 +1319,11 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             return toFolderDownloadTaskVO(existingTask);
         }
 
-        FileInfo folderInfo = fileInfoService.getById(folderId);
-        if (folderInfo == null || !Boolean.TRUE.equals(folderInfo.getIsDir()) || Boolean.TRUE.equals(folderInfo.getIsDeleted())) {
+        FileInfo folderInfo = fileInfoService.resolveFile(folderId);
+        if (!Boolean.TRUE.equals(folderInfo.getIsDir())) {
             throw new BusinessException("文件夹不存在");
         }
-        if (!userId.equals(folderInfo.getUserId())) {
+        if (!fileInfoService.isVirtualFileId(folderId) && !userId.equals(folderInfo.getUserId())) {
             throw new BusinessException(I18nUtils.getMessage("file.no.permission.download"));
         }
 
@@ -1346,11 +1370,8 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
 
         List<FileInfo> sources = new ArrayList<>(ids.size());
         for (String id : ids) {
-            FileInfo source = fileInfoService.getById(id);
-            if (source == null || Boolean.TRUE.equals(source.getIsDeleted())) {
-                throw new BusinessException("文件或文件夹不存在");
-            }
-            if (!userId.equals(source.getUserId())) {
+            FileInfo source = fileInfoService.resolveFile(id);
+            if (!fileInfoService.isVirtualFileId(id) && !userId.equals(source.getUserId())) {
                 throw new BusinessException(I18nUtils.getMessage("file.no.permission.download"));
             }
             sources.add(source);
@@ -2143,6 +2164,11 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     }
 
     private List<FileInfo> listDirectoryChildren(FileInfo dirInfo) {
+        // 无状态远程：直接列远端一层目录（虚拟 ID 不是 file_info 主键）
+        if (fileInfoService.isVirtualFileId(dirInfo.getId())) {
+            return remoteMountService.listChildren(dirInfo.getStoragePlatformSettingId(),
+                    remoteMountService.relativePath(dirInfo));
+        }
         QueryWrapper queryWrapper = new QueryWrapper();
         queryWrapper.where(FILE_INFO.PARENT_ID.eq(dirInfo.getId())
                 .and(FILE_INFO.USER_ID.eq(dirInfo.getUserId()))

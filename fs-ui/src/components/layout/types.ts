@@ -25,6 +25,8 @@ type BaseNavItem = {
   permission?: PermissionCodeType
   /** 受全局功能开关控制的项（如收藏/历史），开关关闭时从侧边栏隐藏 */
   featureKey?: string
+  /** 无状态远程存储（SFTP/SMB/FTP/WebDAV/内存/本地挂载）不落库，依赖本地索引的项（收藏/历史/回收站）需隐藏 */
+  statelessHidden?: boolean
 }
 
 type NavLink = BaseNavItem & {

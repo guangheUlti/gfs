@@ -18,6 +18,9 @@ import { usePreviewStore } from '@/store/preview'
 import { useTransferStore } from '@/store/transfer'
 import { useFeatureStore } from '@/store/feature'
 
+/** 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）虚拟 ID：vfs:<settingId>:...，不落库 */
+const isVirtualFileId = (id: string) => id.startsWith('vfs:')
+
 export function useFileOperations(
   refreshCallback: () => void,
   clearSelectionCallback?: () => void,
@@ -224,7 +227,9 @@ export function useFileOperations(
    */
   const handleDelete = useCallback(async () => {
     const fileIds = deletingFiles.map((f) => f.id)
-    const recycleEnabled = isRecycleEnabled()
+    // 无状态远程文件不落库，没有回收站，直接永久删除
+    const recycleEnabled =
+      isRecycleEnabled() && !deletingFiles.some((f) => isVirtualFileId(f.id))
     try {
       if (recycleEnabled) {
         await deleteFiles(fileIds)
@@ -254,7 +259,7 @@ export function useFileOperations(
    */
   const openDeleteConfirm = useCallback(
     (file: FileItem) => {
-      if (isRecycleEnabled()) {
+      if (!isVirtualFileId(file.id) && isRecycleEnabled()) {
         setDeletingFiles([file])
         setDeleteDialogVisible(true)
       } else {
@@ -270,7 +275,8 @@ export function useFileOperations(
    */
   const openBatchDeleteConfirm = useCallback(
     (files: FileItem[]) => {
-      if (isRecycleEnabled()) {
+      const hasVirtual = files.some((f) => isVirtualFileId(f.id))
+      if (!hasVirtual && isRecycleEnabled()) {
         setDeletingFiles(files)
         setDeleteDialogVisible(true)
       } else {
@@ -317,6 +323,11 @@ export function useFileOperations(
   const handleFavorite = useCallback(
     async (files: FileItem | FileItem[]) => {
       const fileArray = Array.isArray(files) ? files : [files]
+      // 无状态远程文件不落库，收藏无意义
+      if (fileArray.some((f) => isVirtualFileId(f.id))) {
+        toast.error(t('operations.favUnsupported'))
+        return
+      }
       const fileIds = fileArray.map((f) => f.id)
 
       // 判断是收藏还是取消收藏（如果有任何一个未收藏，就执行收藏操作）
