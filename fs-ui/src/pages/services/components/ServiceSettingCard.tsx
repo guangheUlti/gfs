@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Cloud, Globe, HardDrive, SquareTerminal, Tv } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
+  listAlistGuestUsers,
   serviceAction,
   updateServiceConfig,
   type ServiceSettingVO,
@@ -12,6 +13,13 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { useServiceSettings } from '../hooks/useServiceSettings'
@@ -28,12 +36,22 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
   const queryClient = useQueryClient()
   // socket 型服务（sftp/ftp）才有端口/地址表单与「保存」按钮；webdav 仅开关语义
   const socketBased = setting.port != null
+  // 游客只读只对 AList 有意义：影视仓/TVBox 这类客户端不登录
+  const isAlist = setting.serviceType === 'alist'
 
   const [port, setPort] = useState(String(setting.port ?? 9022))
   const [bindAddress, setBindAddress] = useState(setting.bindAddress || '0.0.0.0')
+  const [guestUserId, setGuestUserId] = useState(setting.guestUserId ?? '')
   const [portError, setPortError] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [pendingEnabled, setPendingEnabled] = useState(false)
+
+  const guestUsersQuery = useQuery({
+    queryKey: ['alistGuestUsers'],
+    queryFn: listAlistGuestUsers,
+    enabled: isAlist,
+  })
+  const guestUsers = guestUsersQuery.data ?? []
 
   // 后端热生效后状态经轮询返回；配置变更时同步本地表单
   useEffect(() => {
@@ -41,15 +59,30 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
     setBindAddress(setting.bindAddress || '0.0.0.0')
   }, [setting.port, setting.bindAddress])
 
+  useEffect(() => {
+    setGuestUserId(setting.guestUserId ?? '')
+  }, [setting.guestUserId])
+
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['serviceSettings'] })
   }
 
   const configMutation = useMutation({
-    mutationFn: (params: { enabled: boolean; readOnly: boolean }) =>
+    mutationFn: (params: {
+      enabled: boolean
+      readOnly: boolean
+      allowGuest?: boolean
+      guestUserId?: string
+    }) =>
       updateServiceConfig(setting.serviceType, {
         enabled: params.enabled,
         readOnly: params.readOnly,
+        ...(isAlist
+          ? {
+              allowGuest: params.allowGuest ?? setting.allowGuest,
+              guestUserId: params.guestUserId ?? guestUserId,
+            }
+          : {}),
         ...(socketBased ? { port: Number(port), bindAddress: bindAddress.trim() } : {}),
       }),
     onSuccess: () => {
@@ -113,11 +146,41 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
     configMutation.mutate({ enabled: setting.enabled, readOnly: next })
   }
 
+  /** 游客只读开关即时保存：未选公开账号时先提示，避免后端拒绝 */
+  const handleGuestToggle = (next: boolean) => {
+    if (next && !guestUserId) {
+      toast.error(t('form.guestUserRequired'))
+      return
+    }
+    configMutation.mutate({
+      enabled: setting.enabled,
+      readOnly: setting.readOnly,
+      allowGuest: next,
+      guestUserId,
+    })
+  }
+
+  /** 公开账号变更即时保存：游客已开启时切换账号立即生效 */
+  const handleGuestUserChange = (id: string) => {
+    setGuestUserId(id)
+    configMutation.mutate({
+      enabled: setting.enabled,
+      readOnly: setting.readOnly,
+      guestUserId: id,
+    })
+  }
+
   const handleAction = (action: ServiceAction) => actionMutation.mutate(action)
 
   const isRunning = setting.status === 'running'
   const isBusyAction = actionMutation.isPending
   const toggling = configMutation.isPending
+  // 已绑定账号但不在可选列表（被禁用/删除）时给出显式警告，避免游客模式静默失效
+  const guestUserMissing = Boolean(
+    setting.guestUserId &&
+      guestUsersQuery.isSuccess &&
+      !guestUsers.some((user) => user.id === setting.guestUserId)
+  )
 
   return (
     <div className='flex flex-col rounded-lg border bg-card text-card-foreground shadow-sm'>
@@ -177,6 +240,54 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
           </div>
           <p className='text-xs text-muted-foreground'>{t('form.readOnlyHint')}</p>
         </div>
+
+        {isAlist && (
+          <div className='space-y-3 rounded-md border border-dashed px-3 py-3'>
+            <div className='flex items-center justify-between'>
+              <Label htmlFor='alist-allow-guest' className='cursor-pointer'>
+                {t('form.allowGuest')}
+              </Label>
+              <Switch
+                id='alist-allow-guest'
+                checked={setting.allowGuest}
+                disabled={toggling || isBusyAction || !guestUserId}
+                onCheckedChange={handleGuestToggle}
+              />
+            </div>
+            <p className='text-xs text-muted-foreground'>
+              {t('form.allowGuestHint')}
+            </p>
+            <div className='space-y-1.5'>
+              <Label>{t('form.guestUser')}</Label>
+              <Select
+                value={guestUserId || undefined}
+                onValueChange={handleGuestUserChange}
+                disabled={toggling || isBusyAction || guestUsersQuery.isLoading}
+              >
+                <SelectTrigger className='w-full'>
+                  <SelectValue placeholder={t('form.guestUserPh')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {guestUsers.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.username}
+                      {user.nickname ? ` (${user.nickname})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {guestUserMissing ? (
+                <p className='text-xs text-destructive'>
+                  {t('form.guestUserInvalid')}
+                </p>
+              ) : (
+                <p className='text-xs text-muted-foreground'>
+                  {t('form.guestUserHint')}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {socketBased && (
           <>

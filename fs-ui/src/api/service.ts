@@ -5,6 +5,12 @@ export interface ServiceSettingVO {
   enabled: boolean
   /** 只读模式（四条 HTTP/协议端均支持）：开启后拒绝一切写操作 */
   readOnly: boolean
+  /** 游客只读（仅 alist）：未登录的播放器可匿名浏览/播放 */
+  allowGuest: boolean
+  /** 游客视角账号 ID（仅 alist）：匿名请求以该账号身份只读 */
+  guestUserId: string | null
+  /** 游客视角账号用户名（仅 alist） */
+  guestUsername: string | null
   /** socket 型服务（sftp/ftp）有值；webdav/alist/oss 复用主 HTTP 端口为 null */
   port: number | null
   bindAddress: string
@@ -17,12 +23,27 @@ export interface ServiceSettingVO {
 
 export interface UpdateServiceSettingParams {
   enabled: boolean
-  /** 仅 WebDAV，缺省表示不修改 */
+  /** 全部协议，缺省表示不修改 */
   readOnly?: boolean
+  /** 仅 AList，缺省表示不修改 */
+  allowGuest?: boolean
+  /** 仅 AList，传空串表示清除绑定 */
+  guestUserId?: string
   /** 仅 SFTP，1024-65535 */
   port?: number
   /** 仅 SFTP */
   bindAddress?: string
+}
+
+export interface ServiceGuestUserVO {
+  id: string
+  username: string
+  nickname: string | null
+}
+
+/** 可被选为游客视角的账号（仅正常状态用户） */
+export function listAlistGuestUsers() {
+  return request.get<ServiceGuestUserVO[]>('/apis/service/alist/users')
 }
 
 export type ServiceAction = 'start' | 'stop' | 'restart'
