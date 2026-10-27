@@ -36,7 +36,7 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
   const queryClient = useQueryClient()
   // socket 型服务（sftp/ftp）才有端口/地址表单与「保存」按钮；webdav 仅开关语义
   const socketBased = setting.port != null
-  // 游客只读只对 AList 有意义：影视仓/TVBox 这类客户端不登录
+  // 游客访问只对 AList 有意义：影视仓/TVBox 这类客户端不登录
   const isAlist = setting.serviceType === 'alist'
 
   const [port, setPort] = useState(String(setting.port ?? 9022))
@@ -146,7 +146,7 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
     configMutation.mutate({ enabled: setting.enabled, readOnly: next })
   }
 
-  /** 游客只读开关即时保存：未选公开账号时先提示，避免后端拒绝 */
+  /** 游客访问开关即时保存：未选公开账号时先提示，避免后端拒绝 */
   const handleGuestToggle = (next: boolean) => {
     if (next && !guestUserId) {
       toast.error(t('form.guestUserRequired'))

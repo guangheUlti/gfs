@@ -5,7 +5,7 @@ export interface ServiceSettingVO {
   enabled: boolean
   /** 只读模式（四条 HTTP/协议端均支持）：开启后拒绝一切写操作 */
   readOnly: boolean
-  /** 游客只读（仅 alist）：未登录的播放器可匿名浏览/播放 */
+  /** 游客访问（仅 alist）：未登录的播放器可匿名浏览/播放 */
   allowGuest: boolean
   /** 游客视角账号 ID（仅 alist）：匿名请求以该账号身份只读 */
   guestUserId: string | null

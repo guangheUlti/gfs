@@ -7,7 +7,7 @@
     "sftpDesc": "Standalone SFTP endpoint; works with sshfs mounts and clients like WinSCP",
     "ftpDesc": "Standalone FTP endpoint; works with clients like FileZilla and resumable downloads",
     "ossDesc": "Reuses the main HTTP port (80) under /oss; S3-compatible API for rclone and S3 SDKs",
-    "alistDesc": "Reuses the main HTTP port (80) with an AList v3 compatible API (/api + /d raw links); token clients log in, TVBox-style players need guest read-only"
+    "alistDesc": "Reuses the main HTTP port (80) with an AList v3 compatible API (/api + /d raw links); token clients log in, TVBox-style players need guest access"
   },
   "status": {
     "running": "Running",
@@ -20,8 +20,8 @@
     "enabled": "Enable service",
     "readOnly": "Read-only mode",
     "readOnlyHint": "When on, only reading is allowed (browse, download, stream); upload, mkdir, rename, move and delete are rejected. Takes effect immediately",
-    "allowGuest": "Guest read-only",
-    "allowGuestHint": "Lets players that never log in (TVBox-style) browse and stream anonymously; writes still require login, and only files under the public account below are visible",
+    "allowGuest": "Guest access",
+    "allowGuestHint": "Lets players that never log in (TVBox-style) browse and stream as the public account below; this is an identity switch, unrelated to read-only mode — anonymous writes are always rejected",
     "guestUser": "Public account",
     "guestUserPh": "Select a public account",
     "guestUserHint": "Guests browse as this account: every file under it becomes publicly readable, so keep only shareable media there",
@@ -81,9 +81,9 @@
       "security": "FTP is a plaintext protocol for LAN use only; prefer SFTP or WebDAV over HTTPS when exposed"
     },
     "alist": {
-      "client": "TV box players: choose AList as the drive type, set the URL to http://<host>:{{port}} (no path) and the initial path to /; leave the password blank (that field is AList's folder password, and this service has no folder encryption). These clients never log in, so enable guest read-only and pick a public account",
+      "client": "TV box players: choose AList as the drive type, set the URL to http://<host>:{{port}} (no path) and the initial path to /; leave the password blank (that field is AList's folder password, and this service has no folder encryption). These clients never log in, so enable guest access and pick a public account",
       "playback": "Logged-in clients play via signed /d links (12h); guests play unsigned /d links authorized as the public account. Range requests avoid re-downloading on seek",
-      "clients": "rclone / AList desktop: exchange your drive credentials for a token via POST /api/auth/login (standard AList v3); guest mode is not needed",
+      "clients": "rclone / AList desktop: exchange your drive credentials for a token via POST /api/auth/login (standard AList v3); guest access is not needed",
       "readonly": "Read-only mode is recommended: a TV box only needs read access; when on, mkdir/rename/move/copy/remove/put return 403"
     },
     "oss": {

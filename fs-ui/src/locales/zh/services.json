@@ -7,7 +7,7 @@
     "sftpDesc": "独立端口提供 SFTP 文件服务，支持 sshfs 挂载与 WinSCP 等客户端",
     "ftpDesc": "独立端口提供 FTP 文件服务，支持 FileZilla 等客户端与断点续传下载",
     "ossDesc": "复用主服务 HTTP 端口（80），路径前缀 /oss，S3 兼容 API，支持 rclone 与各类 S3 SDK",
-    "alistDesc": "复用主服务 HTTP 端口（80），实现 AList v3 开放 API（/api + /d 直链）；登录客户端用 token，影视仓/TVBox 需开启游客只读"
+    "alistDesc": "复用主服务 HTTP 端口（80），实现 AList v3 开放 API（/api + /d 直链）；登录客户端用 token，影视仓/TVBox 需开启游客访问"
   },
   "status": {
     "running": "运行中",
@@ -20,8 +20,8 @@
     "enabled": "启用服务",
     "readOnly": "只读模式",
     "readOnlyHint": "开启后仅允许读取（浏览目录、下载、在线播放），上传、新建目录、改名、移动、删除等写操作会被拒绝；切换即时生效",
-    "allowGuest": "游客只读",
-    "allowGuestHint": "开启后未登录的播放器（影视仓/TVBox）可匿名浏览与播放；写操作仍需登录，且只能看到下方公开账号的文件",
+    "allowGuest": "游客访问",
+    "allowGuestHint": "开启后未登录的播放器（影视仓/TVBox）以公开账号身份匿名浏览与播放；这是身份开关，与「只读模式」无关——匿名请求本来就不能写",
     "guestUser": "公开账号",
     "guestUserPh": "选择公开账号",
     "guestUserHint": "匿名访客以该账号身份只读访问：该账号名下的全部文件都会公开可见，请只放媒体库等可公开内容",
@@ -81,9 +81,9 @@
       "security": "FTP 为明文协议，仅建议内网使用；对外暴露请改用 SFTP 或 WebDAV + HTTPS"
     },
     "alist": {
-      "client": "影视仓 / TVBox：网盘类型选 AList，地址填 http://<主机>:{{port}}（不加任何路径），初始路径填 /；密码字段留空（那是 AList 目录密码，本服务不启用目录加密）。这类客户端不登录，必须开启「游客只读」并选择公开账号",
+      "client": "影视仓 / TVBox：网盘类型选 AList，地址填 http://<主机>:{{port}}（不加任何路径），初始路径填 /；密码字段留空（那是 AList 目录密码，本服务不启用目录加密）。这类客户端不登录，必须开启「游客访问」并选择公开账号",
       "playback": "登录客户端播放走 /d 签名直链（12 小时有效）；游客播放走裸 /d 直链，按公开账号授权。Range 分片按需拉取，拖动进度不会重新下载整个文件",
-      "clients": "rclone / AList 桌面端：POST /api/auth/login 用网盘账号密码换 token 后接入（接口为标准 AList v3），不需要游客模式",
+      "clients": "rclone / AList 桌面端：POST /api/auth/login 用网盘账号密码换 token 后接入（接口为标准 AList v3），不需要游客访问",
       "readonly": "建议保持只读：客厅盒子只需要读权限；开启后 mkdir/rename/move/copy/remove/put 一律返回 403"
     },
     "oss": {
