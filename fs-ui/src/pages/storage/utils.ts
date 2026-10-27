@@ -23,6 +23,13 @@ export function isBooleanField(field: ConfigScheme): boolean {
 }
 
 /**
+ * 是否为单选项字段（渲染为 RadioGroup）
+ */
+export function isRadioField(field: ConfigScheme): boolean {
+  return field.dataType === 'radio'
+}
+
+/**
  * 条件显隐：showIf 引用的开关当前值等于目标值时才展示
  * formData 值统一为字符串（开关存 "true"/"false"，后端可能回填布尔 true）
  */
@@ -38,25 +45,29 @@ export function isFieldVisible(
 }
 
 /**
- * 表单初始值：布尔字段默认 "false"，其余为空字符串
+ * 表单初始值：布尔字段默认 "false"，单选项取 defaultValue，其余为空字符串
  */
 export function buildInitialFormData(schemes: ConfigScheme[]): Record<string, string> {
   const initialData: Record<string, string> = {}
   schemes.forEach((field) => {
-    initialData[field.identifier] = isBooleanField(field) ? 'false' : ''
+    initialData[field.identifier] = isBooleanField(field)
+      ? 'false'
+      : (field.defaultValue ?? '')
   })
   return initialData
 }
 
 /**
- * 已保存配置回填归一化：布尔值（boolean/"true"）统一为 "true"/"false" 字符串
+ * 已保存配置回填归一化：布尔值（boolean/"true"）统一为 "true"/"false" 字符串，
+ * 单选项缺省回落到 defaultValue
  */
 export function normalizeConfigValue(
   field: ConfigScheme,
   raw: unknown
 ): string {
-  if (raw === null || raw === undefined) {
-    return isBooleanField(field) ? 'false' : ''
+  if (raw === null || raw === undefined || raw === '') {
+    if (isBooleanField(field)) return 'false'
+    return field.defaultValue ?? ''
   }
   if (isBooleanField(field)) {
     return raw === true || String(raw).toLowerCase() === 'true' ? 'true' : 'false'

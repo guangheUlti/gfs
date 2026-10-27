@@ -86,4 +86,20 @@ export interface ConfigScheme {
     identifier: string
     value: string
   }
+  /** 单选项（dataType 为 radio 时使用） */
+  options?: Array<{ label: string; value: string }>
+  /** 默认值（新增配置时预填） */
+  defaultValue?: string
+}
+
+/**
+ * 存储服务器主机密钥信息（SFTP 指纹信任）
+ */
+export interface HostKeyInfo {
+  host: string
+  port: number
+  keyType: string
+  fingerprint: string
+  knownHostsPath: string
+  trusted: boolean
 }

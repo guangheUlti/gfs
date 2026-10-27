@@ -2,17 +2,26 @@ package com.guanghe.fs.storage.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.guanghe.fs.framework.common.domain.Result;
+import com.guanghe.fs.framework.common.exception.BusinessException;
+import com.guanghe.fs.framework.common.utils.ErrorMessageUtils;
+import com.guanghe.fs.framework.common.utils.I18nUtils;
+import com.guanghe.fs.framework.common.utils.JsonUtils;
 import com.guanghe.fs.log.constant.OperationType;
 import com.guanghe.fs.log.service.SysOperationLogService;
 import com.guanghe.fs.storage.plugin.boot.StoragePluginManager;
 import com.guanghe.fs.storage.domain.StoragePlatform;
 import com.guanghe.fs.storage.domain.StorageSetting;
+import com.guanghe.fs.storage.domain.cmd.StorageHostKeyCmd;
 import com.guanghe.fs.storage.domain.cmd.StorageSettingAddCmd;
 import com.guanghe.fs.storage.domain.cmd.StorageSettingEditCmd;
 import com.guanghe.fs.storage.domain.vo.StorageActivePlatformsVO;
 import com.guanghe.fs.storage.domain.vo.StorageFileUsageVO;
 import com.guanghe.fs.storage.domain.vo.StoragePlatformVO;
 import com.guanghe.fs.storage.domain.vo.StorageSettingUserVO;
+import com.guanghe.fs.storage.plugin.core.IHostKeyTrustService;
+import com.guanghe.fs.storage.plugin.core.IStorageOperationService;
+import com.guanghe.fs.storage.plugin.core.config.StorageConfig;
+import com.guanghe.fs.storage.plugin.core.dto.HostKeyInfo;
 import com.guanghe.fs.storage.service.StoragePlatformService;
 import com.guanghe.fs.storage.service.StorageSettingService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,8 +29,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import tools.jackson.core.type.TypeReference;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Validated
 @RestController
@@ -150,5 +162,54 @@ public class StorageController {
     public Result<List<StorageActivePlatformsVO>> getActiveStoragePlatforms() {
         List<StorageActivePlatformsVO> settings = storageSettingService.getActiveStoragePlatforms();
         return Result.ok(settings);
+    }
+
+    @Operation(summary = "探测存储服务器主机密钥指纹", description = "仅完成 SSH 握手，不进行认证；用于界面核对指纹后再信任")
+    @PostMapping("/host-key/probe")
+    @SaCheckPermission("storage:manage")
+    public Result<HostKeyInfo> probeHostKey(@Validated @RequestBody StorageHostKeyCmd cmd) {
+        return Result.ok(hostKeyService(cmd.getPlatformIdentifier()).probeHostKey(toStorageConfig(cmd)));
+    }
+
+    @Operation(summary = "信任存储服务器主机密钥", description = "复核指纹后写入 known_hosts，后续连接将严格校验服务器身份")
+    @PostMapping("/host-key/trust")
+    @SaCheckPermission("storage:manage")
+    public Result<HostKeyInfo> trustHostKey(@Validated @RequestBody StorageHostKeyCmd cmd) {
+        HostKeyInfo info = hostKeyService(cmd.getPlatformIdentifier())
+                .trustHostKey(toStorageConfig(cmd), cmd.getFingerprint());
+        operationLogService.recordSuccess(
+                OperationType.UPDATE_STORAGE,
+                "信任存储主机密钥",
+                "STORAGE",
+                null,
+                info.getHost() + ":" + info.getPort(),
+                "密钥类型: " + info.getKeyType() + ", 指纹: " + info.getFingerprint()
+        );
+        return Result.ok(info);
+    }
+
+    private IHostKeyTrustService hostKeyService(String platformIdentifier) {
+        IStorageOperationService prototype = storagePluginManager.getPrototype(platformIdentifier);
+        if (!(prototype instanceof IHostKeyTrustService service)) {
+            throw new BusinessException(I18nUtils.getMessage("storage.hostkey.unsupported"));
+        }
+        return service;
+    }
+
+    private StorageConfig toStorageConfig(StorageHostKeyCmd cmd) {
+        try {
+            Map<String, Object> properties = JsonUtils.parseObject(
+                    cmd.getConfigData(),
+                    new TypeReference<LinkedHashMap<String, Object>>() { }
+            );
+            return StorageConfig.builder()
+                    .configId(null)
+                    .platformIdentifier(cmd.getPlatformIdentifier())
+                    .properties(properties == null ? new LinkedHashMap<>() : properties)
+                    .build();
+        } catch (Exception e) {
+            throw new BusinessException(I18nUtils.getMessage("storage.hostkey.failed",
+                    new Object[]{ErrorMessageUtils.extractUserFriendlyMessage(e)}));
+        }
     }
 }

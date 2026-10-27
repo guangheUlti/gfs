@@ -5,6 +5,7 @@ import type {
   AddStorageSettingParams,
   StorageFileUsage,
   UpdateStorageSettingParams,
+  HostKeyInfo,
 } from '@/types/storage'
 import { request } from './request'
 
@@ -94,6 +95,34 @@ export function getActiveStoragePlatforms() {
  */
 export function scanMountStorage(settingId: number | string) {
   return request.post(`/apis/file/mount/scan/${settingId}`)
+}
+
+/**
+ * 探测存储服务器主机密钥（仅握手，不认证）
+ */
+export function probeStorageHostKey(
+  platformIdentifier: string,
+  configData: string
+) {
+  return request.post<HostKeyInfo>('/apis/storage/host-key/probe', {
+    platformIdentifier,
+    configData,
+  })
+}
+
+/**
+ * 信任存储服务器主机密钥（复核指纹后写入 known_hosts）
+ */
+export function trustStorageHostKey(
+  platformIdentifier: string,
+  configData: string,
+  fingerprint: string
+) {
+  return request.post<HostKeyInfo>('/apis/storage/host-key/trust', {
+    platformIdentifier,
+    configData,
+    fingerprint,
+  })
 }
 
 /**

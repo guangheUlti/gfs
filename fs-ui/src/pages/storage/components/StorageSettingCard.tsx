@@ -55,8 +55,11 @@ import {
   buildInitialFormData,
   isBooleanField,
   isFieldVisible,
+  isRadioField,
   normalizeConfigValue,
 } from '../utils'
+import { ConfigRadioField } from './ConfigRadioField'
+import { SftpHostKeyTrust } from './SftpHostKeyTrust'
 import { copyToClipboard } from '@/utils/clipboard'
 
 interface StorageSettingCardProps {
@@ -84,7 +87,9 @@ export function StorageSettingCard({
   const [isUsageLoading, setIsUsageLoading] = useState(false)
   const queryClient = useQueryClient()
 
-  const isMountPlatform = setting.storagePlatform?.identifier === 'LocalMount'
+  const isMountPlatform = ['LocalMount', 'SFTP'].includes(
+    setting.storagePlatform?.identifier
+  )
   // 内置本地存储：固定 id=Local（恒启用，支持查看/编辑根目录，不支持禁用与删除）。
   // 注意不能用 identifier 判定：附加的本地存储实例 identifier 同样是 Local，但 id 是 UUID，必须有删除/启停
   const isBuiltinLocal = setting.id === 'Local'
@@ -135,6 +140,24 @@ export function StorageSettingCard({
     return value || emptyLabel
   }
 
+  // 展示值：单选项换算成选项文案；旧 SFTP 配置未存认证方式时按私钥路径回推
+  const formatFieldValue = (field: ConfigScheme, raw: unknown): string => {
+    const stored =
+      field.identifier === 'sftpAuthType' && !raw
+        ? configData.sftpPrivateKeyPath
+          ? 'key'
+          : 'password'
+        : raw
+    const value = stored ?? ''
+    if (isRadioField(field)) {
+      return (
+        field.options?.find((option) => option.value === value)?.label ??
+        String(value)
+      )
+    }
+    return String(value)
+  }
+
   // 复制配置
   const handleCopyConfig = async () => {
     const configText: string[] = []
@@ -143,7 +166,9 @@ export function StorageSettingCard({
     )
     configText.push('='.repeat(30))
     schemes.forEach((field) => {
-      const value = configData[field.identifier] || t('card.notConfigured')
+      const value =
+        formatFieldValue(field, configData[field.identifier]) ||
+        t('card.notConfigured')
       configText.push(`${field.label}: ${value}`)
     })
     configText.push(
@@ -183,6 +208,14 @@ export function StorageSettingCard({
         configData[field.identifier]
       )
     })
+    // 旧配置未记录认证方式：按已保存的私钥路径回推，避免编辑时默认切到密码
+    if (
+      setting.storagePlatform.identifier === 'SFTP' &&
+      initialData.sftpAuthType !== undefined &&
+      !configData.sftpAuthType
+    ) {
+      initialData.sftpAuthType = configData.sftpPrivateKeyPath ? 'key' : 'password'
+    }
     setEditFormData(initialData)
     setEditRemark(setting.remark || '')
     setEditErrors({})
@@ -467,7 +500,7 @@ export function StorageSettingCard({
                     <DescriptionFieldValue className='min-w-0 flex-1' breakAll>
                       {maskValue(
                         field.identifier,
-                        configData[field.identifier]
+                        formatFieldValue(field, configData[field.identifier])
                       )}
                     </DescriptionFieldValue>
                     <Button
@@ -477,7 +510,7 @@ export function StorageSettingCard({
                       onClick={() =>
                         handleCopyField(
                           field.identifier,
-                          configData[field.identifier]
+                          formatFieldValue(field, configData[field.identifier])
                         )
                       }
                     >
@@ -562,6 +595,20 @@ export function StorageSettingCard({
                       }}
                     />
                   </div>
+                ) : isRadioField(field) ? (
+                  <ConfigRadioField
+                    field={field}
+                    value={editFormData[field.identifier] || ''}
+                    onChange={(value) => {
+                      setEditFormData({
+                        ...editFormData,
+                        [field.identifier]: value,
+                      })
+                      clearEditFieldError(field.identifier)
+                    }}
+                    error={editErrors[field.identifier]}
+                    idPrefix='edit-'
+                  />
                 ) : (
                   <>
                     <Label htmlFor={`edit-${field.identifier}`}>
@@ -611,6 +658,12 @@ export function StorageSettingCard({
                 )}
               </div>
               )
+            )}
+            {setting.storagePlatform.identifier === 'SFTP' && (
+              <SftpHostKeyTrust
+                platformIdentifier={setting.storagePlatform.identifier}
+                configData={editFormData}
+              />
             )}
             <div className='space-y-3'>
               <Label htmlFor='edit-remark'>{t('card.remarkField')}</Label>

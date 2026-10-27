@@ -34,9 +34,12 @@ import {
   buildInitialFormData,
   isBooleanField,
   isFieldVisible,
+  isRadioField,
   isSensitiveField,
   normalizeConfigValue,
 } from '../utils'
+import { ConfigRadioField } from './ConfigRadioField'
+import { SftpHostKeyTrust } from './SftpHostKeyTrust'
 
 interface AddStorageModalProps {
   open: boolean
@@ -270,6 +273,19 @@ export function AddStorageModal({
                         }}
                       />
                     </div>
+                  ) : isRadioField(field) ? (
+                    <ConfigRadioField
+                      field={field}
+                      value={formData[field.identifier] || ''}
+                      onChange={(value) => {
+                        setFormData({
+                          ...formData,
+                          [field.identifier]: value,
+                        })
+                        clearFieldError(field.identifier)
+                      }}
+                      error={errors[field.identifier]}
+                    />
                   ) : (
                     <>
                       <Label htmlFor={field.identifier}>
@@ -323,6 +339,13 @@ export function AddStorageModal({
                   )}
                 </div>
                 )
+              )}
+
+              {selectedPlatform?.identifier === 'SFTP' && (
+                <SftpHostKeyTrust
+                  platformIdentifier={selectedPlatform.identifier}
+                  configData={formData}
+                />
               )}
 
               {/* 备注 */}

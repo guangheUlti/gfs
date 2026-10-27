@@ -73,5 +73,24 @@
     "lastScanJustNow": "刚刚",
     "lastScanMinutesAgo": "{{n}} 分钟前",
     "lastScanHoursAgo": "{{n}} 小时前"
+  },
+  "hostKey": {
+    "title": "主机密钥校验",
+    "desc": "首次连接前请获取服务器主机指纹并核对，确认后写入 known_hosts，后续连接将严格校验服务器身份。",
+    "probe": "获取主机指纹",
+    "probing": "获取中...",
+    "alreadyTrusted": "该主机密钥已在信任列表中",
+    "trustedHint": "已信任该主机密钥：{{fingerprint}}",
+    "confirmTitle": "确认信任该主机？",
+    "confirmDesc": "请通过服务器管理员等可信渠道核对下面的指纹，一致后再确认。",
+    "hostLabel": "服务器",
+    "typeLabel": "密钥类型",
+    "fingerprintLabel": "SHA256 指纹",
+    "pathLabel": "保存位置",
+    "warning": "信任后将以该密钥校验服务器身份；指纹不一致可能意味着中间人攻击，或服务器重装过系统。",
+    "cancel": "取消",
+    "trust": "确认信任",
+    "trusting": "写入中...",
+    "trustOk": "主机密钥已写入 {{path}}"
   }
 }

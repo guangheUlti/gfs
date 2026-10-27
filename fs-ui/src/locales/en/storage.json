@@ -73,5 +73,24 @@
     "lastScanJustNow": "just now",
     "lastScanMinutesAgo": "{{n}} min ago",
     "lastScanHoursAgo": "{{n}} h ago"
+  },
+  "hostKey": {
+    "title": "Host key verification",
+    "desc": "Fetch and verify the server host key fingerprint before connecting. Once confirmed it is written to known_hosts and every later connection is strictly verified.",
+    "probe": "Fetch fingerprint",
+    "probing": "Fetching...",
+    "alreadyTrusted": "This host key is already trusted",
+    "trustedHint": "Host key trusted: {{fingerprint}}",
+    "confirmTitle": "Trust this host?",
+    "confirmDesc": "Verify the fingerprint below through a trusted channel (e.g. the server administrator) before confirming.",
+    "hostLabel": "Server",
+    "typeLabel": "Key type",
+    "fingerprintLabel": "SHA256 fingerprint",
+    "pathLabel": "Saved to",
+    "warning": "After trusting, this key is used to verify the server identity. A mismatch may indicate a man-in-the-middle attack or an OS reinstall.",
+    "cancel": "Cancel",
+    "trust": "Trust key",
+    "trusting": "Saving...",
+    "trustOk": "Host key written to {{path}}"
   }
 }

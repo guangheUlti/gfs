@@ -106,6 +106,18 @@ public class MountPointService {
                             && MountManager.isValidNameSegment(String.valueOf(share).trim())) {
                         return String.valueOf(share).trim();
                     }
+                    // 3) SFTP：未配挂载名时取根路径最后一段（/data/yunshu → yunshu）
+                    Object sftpRoot = config.get("sftpRootPath");
+                    if (sftpRoot != null) {
+                        String path = String.valueOf(sftpRoot).trim().replace('\\', '/');
+                        while (path.endsWith("/")) {
+                            path = path.substring(0, path.length() - 1);
+                        }
+                        String base = path.substring(path.lastIndexOf('/') + 1);
+                        if (StrUtil.isNotEmpty(base) && MountManager.isValidNameSegment(base)) {
+                            return base;
+                        }
+                    }
                 }
             } catch (Exception e) {
                 log.warn("解析挂载配置失败，使用默认挂载名: setting={}", setting.get("id"), e);

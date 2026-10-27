@@ -376,6 +376,8 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
             throw new BusinessException(I18nUtils.getMessage("storage.config.not.exist"));
         }
         String mergedConfigData = mergeSensitiveConfig(storageSetting.getConfigData(), cmd.getConfigData());
+        mergedConfigData = preserveLegacyKnownHostsPath(
+                storageSetting.getPlatformIdentifier(), mergedConfigData, storageSetting.getConfigData());
         boolean exists = this.checkDuplicateConfigForUpdate(
                 storageSetting.getPlatformIdentifier(),
                 mergedConfigData,
@@ -599,6 +601,28 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
             }
         });
         return JsonUtils.toJsonString(incoming);
+    }
+
+    /**
+     * SFTP 的 known_hosts 路径字段已从表单移除（改为界面内获取指纹后自动写入）。
+     * 编辑旧配置时保留 DB 中的自定义路径，避免已有主机校验配置被静默丢弃。
+     */
+    private String preserveLegacyKnownHostsPath(String platformIdentifier,
+                                                String mergedConfigData,
+                                                String existingConfigData) {
+        if (!"SFTP".equals(platformIdentifier)) {
+            return mergedConfigData;
+        }
+        Map<String, Object> merged = parseConfig(mergedConfigData);
+        if (merged.containsKey("sftpKnownHostsPath")) {
+            return mergedConfigData;
+        }
+        Object legacyPath = parseConfig(existingConfigData).get("sftpKnownHostsPath");
+        if (legacyPath == null || String.valueOf(legacyPath).isBlank()) {
+            return mergedConfigData;
+        }
+        merged.put("sftpKnownHostsPath", legacyPath);
+        return JsonUtils.toJsonString(merged);
     }
 
     private Map<String, Object> parseConfig(String configData) {
