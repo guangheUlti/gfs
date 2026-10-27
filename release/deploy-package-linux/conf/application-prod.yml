@@ -80,5 +80,6 @@ fs:
       base-path: ${GFS_STORAGE_DIR:./storage}
 
 mybatis-flex:
-  audit_enable: true
+  # 两项都会往 stdout 刷 SQL（审计用框架自带的定时控制台收集器），下载量大时刷屏
+  audit_enable: false
   sql_print: false
