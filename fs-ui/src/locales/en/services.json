@@ -25,6 +25,8 @@
     "guestUser": "Public account",
     "guestUserPh": "Select a public account",
     "guestUserHint": "Guests browse as this account: every file under it becomes publicly readable, so keep only shareable media there",
+    "guestPassword": "Folder password",
+    "guestPasswordHint": "When on, the client's password field must be this account's login password — blank or wrong means no listing. When off, guests browse anonymously as before",
     "guestUserRequired": "Select a public account first",
     "guestUserInvalid": "The current public account no longer exists or is disabled; select another one",
     "port": "Port",
@@ -81,10 +83,11 @@
       "security": "FTP is a plaintext protocol for LAN use only; prefer SFTP or WebDAV over HTTPS when exposed"
     },
     "alist": {
-      "client": "TV box players: choose AList as the drive type, set the URL to http://<host>:{{port}} (no path) and the initial path to /; leave the password blank (that field is AList's folder password, and this service has no folder encryption). These clients never log in, so enable guest access and pick a public account",
+      "client": "TV box players: choose AList as the drive type, set the URL to http://<host>:{{port}} (no path) and the initial path to /; put the public account's login password in the password field (required when folder password is on, otherwise leave it blank) — these clients never log in and use it to gain anonymous browsing. Guest access with a public account must be enabled",
       "playback": "Logged-in clients play via signed /d links (12h); guests play unsigned /d links authorized as the public account. Range requests avoid re-downloading on seek",
       "clients": "rclone / AList desktop: exchange your drive credentials for a token via POST /api/auth/login (standard AList v3); guest access is not needed",
-      "readonly": "Read-only mode is recommended: a TV box only needs read access; when on, mkdir/rename/move/copy/remove/put return 403"
+      "readonly": "Read-only mode is recommended: a TV box only needs read access; when on, mkdir/rename/move/copy/remove/put return 403",
+      "guestPassword": "With folder password on, it is checked on list, search and get only; wrong attempts count toward the shared account+IP brute-force lockout. Playback links carry no password, so anyone with a full path can still stream — keep sensitive files out of the public account"
     },
     "oss": {
       "client": "rclone: create an S3 remote with rclone config, set the endpoint to http://<host>/oss, region us-east-1, and use the key pair below",

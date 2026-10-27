@@ -13,6 +13,8 @@ import com.guanghe.fs.framework.common.exception.BusinessException;
 import com.guanghe.fs.service.manager.ProtocolReadOnlyService;
 import com.guanghe.fs.service.service.ServiceSettingService;
 import com.guanghe.fs.service.webdav.DavPathResolver;
+import com.guanghe.fs.service.webdav.DavUserAuthenticator;
+import com.guanghe.fs.system.domain.SysUser;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -58,14 +60,18 @@ public class AlistFsController {
     private final DavPathResolver pathResolver;
     private final ProtocolReadOnlyService protocolReadOnlyService;
     private final AlistTokenService tokenService;
+    private final DavUserAuthenticator authenticator;
 
     // ---------- 读 ----------
 
     /** 列目录：{path, page, per_page（0=全部）} → {content:[], total} */
     @PostMapping("/list")
     public void list(@RequestBody(required = false) String body,
-                     HttpServletResponse response) throws IOException {
+                     HttpServletRequest request, HttpServletResponse response) throws IOException {
         Dict form = AlistAuthController.parseBody(body);
+        if (!guestPasswordOk(request, response, form)) {
+            return;
+        }
         String rel = resolveRelative(strOf(form, "path", "/"));
         if (rel == null) {
             AlistResponse.error(response, AlistResponse.BAD_REQUEST, "invalid path");
@@ -103,6 +109,9 @@ public class AlistFsController {
     public void get(@RequestBody(required = false) String body,
                     HttpServletRequest request, HttpServletResponse response) throws IOException {
         Dict form = AlistAuthController.parseBody(body);
+        if (!guestPasswordOk(request, response, form)) {
+            return;
+        }
         String rel = resolveRelative(strOf(form, "path", "/"));
         if (rel == null || rel.isEmpty()) {
             AlistResponse.error(response, AlistResponse.NOT_FOUND, "object not found");
@@ -133,8 +142,11 @@ public class AlistFsController {
     /** 子目录树：{path} → [{name, path}] */
     @PostMapping("/dirs")
     public void dirs(@RequestBody(required = false) String body,
-                     HttpServletResponse response) throws IOException {
+                     HttpServletRequest request, HttpServletResponse response) throws IOException {
         Dict form = AlistAuthController.parseBody(body);
+        if (!guestPasswordOk(request, response, form)) {
+            return;
+        }
         String rel = resolveRelative(strOf(form, "path", "/"));
         if (rel == null) {
             AlistResponse.error(response, AlistResponse.BAD_REQUEST, "invalid path");
@@ -155,8 +167,11 @@ public class AlistFsController {
     /** 递归搜索：{parent, keywords, page, per_page} → {content:[], total} */
     @PostMapping("/search")
     public void search(@RequestBody(required = false) String body,
-                       HttpServletResponse response) throws IOException {
+                       HttpServletRequest request, HttpServletResponse response) throws IOException {
         Dict form = AlistAuthController.parseBody(body);
+        if (!guestPasswordOk(request, response, form)) {
+            return;
+        }
         String keyword = StrUtil.trim(strOf(form, "keywords", ""));
         if (StrUtil.isEmpty(keyword)) {
             Map<String, Object> empty = new LinkedHashMap<>();
@@ -613,6 +628,33 @@ public class AlistFsController {
     private static String strOf(Dict form, String key, String def) {
         Object v = form.get(key);
         return v == null ? def : String.valueOf(v);
+    }
+
+    /**
+     * 游客目录密码校验：开启「目录密码」时，请求体里的 password 必须是公开账号的登录密码。
+     * <p>
+     * 只在过滤器按游客放行且开启了目录密码时生效（attribute 由 {@link AlistAuthFilter} 写入）：
+     * token 登录的请求、以及 /d/ 裸直链都不受这里约束——影视仓播放时直接拼 {@code /d/路径}，无法带密码。
+     * 校验走 {@link DavUserAuthenticator}，与 WebDAV/登录共用「账号+IP」防暴力计数。
+     * 失败回 403 + AList 原文案（AList 对目录密码错误也是 403，客户端按此判定重输密码）。
+     *
+     * @return true 放行；false 已写入错误信封，调用方直接 return
+     */
+    private boolean guestPasswordOk(HttpServletRequest request, HttpServletResponse response, Dict form)
+            throws IOException {
+        SysUser guest = (SysUser) request.getAttribute(AlistAuthFilter.GUEST_PASSWORD_USER_ATTR);
+        if (guest == null) {
+            return true;
+        }
+        String password = strOf(form, "password", "");
+        if (StrUtil.isNotEmpty(password)
+                && authenticator.authenticate(guest.getUsername(), password, request.getRemoteAddr()) != null) {
+            return true;
+        }
+        log.debug("AList 游客密码校验失败: user={}, ip={}, 客户端携带密码={}",
+                guest.getUsername(), request.getRemoteAddr(), StrUtil.isNotEmpty(password));
+        AlistResponse.passwordIncorrect(response);
+        return false;
     }
 
     private static int intOf(Dict form, String key, int def) {

@@ -25,6 +25,8 @@
     "guestUser": "公开账号",
     "guestUserPh": "选择公开账号",
     "guestUserHint": "匿名访客以该账号身份只读访问：该账号名下的全部文件都会公开可见，请只放媒体库等可公开内容",
+    "guestPassword": "目录密码",
+    "guestPasswordHint": "开启后客户端「密码」必须填公开账号的登录密码，留空或填错都列不出目录；关闭则匿名直接可浏览（旧版行为）",
     "guestUserRequired": "请先选择公开账号",
     "guestUserInvalid": "当前公开账号不存在或已被禁用，请重新选择",
     "port": "监听端口",
@@ -81,10 +83,11 @@
       "security": "FTP 为明文协议，仅建议内网使用；对外暴露请改用 SFTP 或 WebDAV + HTTPS"
     },
     "alist": {
-      "client": "影视仓 / TVBox：网盘类型选 AList，地址填 http://<主机>:{{port}}（不加任何路径），初始路径填 /；密码字段留空（那是 AList 目录密码，本服务不启用目录加密）。这类客户端不登录，必须开启「游客访问」并选择公开账号",
+      "client": "影视仓 / TVBox：网盘类型选 AList，地址填 http://<主机>:{{port}}（不加任何路径），初始路径填 /；「密码」填公开账号的登录密码（开启「目录密码」时必填，未开启可留空）——这类客户端不登录，靠这个密码换取匿名浏览权限。必须开启「游客访问」并选择公开账号",
       "playback": "登录客户端播放走 /d 签名直链（12 小时有效）；游客播放走裸 /d 直链，按公开账号授权。Range 分片按需拉取，拖动进度不会重新下载整个文件",
       "clients": "rclone / AList 桌面端：POST /api/auth/login 用网盘账号密码换 token 后接入（接口为标准 AList v3），不需要游客访问",
-      "readonly": "建议保持只读：客厅盒子只需要读权限；开启后 mkdir/rename/move/copy/remove/put 一律返回 403"
+      "readonly": "建议保持只读：客厅盒子只需要读权限；开启后 mkdir/rename/move/copy/remove/put 一律返回 403",
+      "guestPassword": "「目录密码」开启时，密码只在列目录、搜索、取文件信息时校验，错误会计入「账号+IP」防暴力锁定（与网页登录共用）；播放直链不带密码，拿到完整路径的人仍可直接播放，敏感内容不要放进公开账号目录"
     },
     "oss": {
       "client": "rclone：rclone config 新建 S3 类型 remote，端点 http://<主机>/oss，区域 us-east-1，凭证使用下方密钥对",

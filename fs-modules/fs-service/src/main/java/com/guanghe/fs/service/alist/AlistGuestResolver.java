@@ -42,12 +42,12 @@ public class AlistGuestResolver {
     }
 
     /**
-     * 解析可用于匿名访问的账号 ID。
+     * 解析可用于匿名访问的账号。
      *
      * @param setting AList 配置
-     * @return 账号 ID；开关关闭、未绑定或账号不可用时返回 null
+     * @return 公开账号；开关关闭、未绑定或账号不可用时返回 null
      */
-    public String resolve(ServiceSetting setting) {
+    public SysUser resolveUser(ServiceSetting setting) {
         if (setting == null || !ServiceSettingService.isGuestAllowed(setting)) {
             return null;
         }
@@ -59,7 +59,18 @@ public class AlistGuestResolver {
         if (user == null || user.getStatus() == null || user.getStatus() != UserStatus.NORMAL) {
             return null;
         }
-        return user.getId();
+        return user;
+    }
+
+    /**
+     * 解析可用于匿名访问的账号 ID。
+     *
+     * @param setting AList 配置
+     * @return 账号 ID；开关关闭、未绑定或账号不可用时返回 null
+     */
+    public String resolve(ServiceSetting setting) {
+        SysUser user = resolveUser(setting);
+        return user == null ? null : user.getId();
     }
 
     /** 游客访问是否真正可用（开关 + 账号都有效） */

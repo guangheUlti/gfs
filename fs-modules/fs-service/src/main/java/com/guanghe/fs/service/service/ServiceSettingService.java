@@ -35,6 +35,9 @@ public interface ServiceSettingService extends IService<ServiceSetting> {
     /** `config_data` 里的游客视角账号键（仅 AList：匿名请求以该账号身份只读） */
     String CONFIG_GUEST_USER_ID = "guestUserId";
 
+    /** `config_data` 里的游客目录密码标记键（仅 AList：游客请求必须带公开账号的登录密码） */
+    String CONFIG_GUEST_PASSWORD = "guestPassword";
+
     /**
      * 校验服务类型是否合法（以 SPI 注册表为准动态校验；静态兜底覆盖内置协议）
      *
@@ -83,6 +86,19 @@ public interface ServiceSettingService extends IService<ServiceSetting> {
      */
     static String guestUserId(ServiceSetting setting) {
         return strValue(setting, CONFIG_GUEST_USER_ID);
+    }
+
+    /**
+     * 解析游客目录密码开关：开启时匿名读请求必须携带公开账号的登录密码。
+     * <p>
+     * 旧配置没有这个键，按「关闭」处理——升级后客厅盒子不会突然列不出目录；
+     * 管理员在界面显式打开后才要求输入密码。
+     *
+     * @param setting 服务配置
+     * @return 是否要求游客输入密码
+     */
+    static boolean isGuestPasswordRequired(ServiceSetting setting) {
+        return isFlag(setting, CONFIG_GUEST_PASSWORD);
     }
 
     private static boolean isFlag(ServiceSetting setting, String key) {
@@ -136,6 +152,13 @@ public interface ServiceSettingService extends IService<ServiceSetting> {
             config.set(CONFIG_GUEST_USER_ID, userId.trim());
         }
         return JsonUtils.toJsonString(config);
+    }
+
+    /**
+     * 在既有 `config_data` JSON 上合并游客目录密码开关（仅 AList 使用）。
+     */
+    static String mergeGuestPassword(String rawConfig, boolean required) {
+        return mergeFlag(rawConfig, CONFIG_GUEST_PASSWORD, required);
     }
 
     private static String mergeFlag(String rawConfig, String key, boolean value) {

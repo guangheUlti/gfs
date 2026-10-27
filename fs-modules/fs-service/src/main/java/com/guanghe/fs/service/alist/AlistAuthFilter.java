@@ -5,6 +5,7 @@ import com.guanghe.fs.service.domain.ServiceSetting;
 import com.guanghe.fs.service.manager.ProtocolReadOnlyService;
 import com.guanghe.fs.service.service.ServiceSettingService;
 import com.guanghe.fs.service.webdav.DavUserAuthenticator;
+import com.guanghe.fs.system.domain.SysUser;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -64,6 +65,14 @@ public class AlistAuthFilter implements Filter {
     /** 无需 token 的路径：登录自身与公开信息 */
     private static final Set<String> PUBLIC_PATHS = Set.of("/api/auth/login", "/api/public/settings");
 
+    /**
+     * 开启「目录密码」时，以游客身份放行的请求会把这个公开账号塞进 request，供 controller 校验请求体里的密码。
+     * <p>
+     * 过滤器读不到 JSON 请求体（下游还要再读一次），所以密码校验放在读接口入口；
+     * 开关关闭时不写入该属性，controller 也就不校验密码。
+     */
+    public static final String GUEST_PASSWORD_USER_ATTR = "gfs.alist.guestPasswordUser";
+
     private final AlistGuestResolver guestResolver;
     private final ProtocolReadOnlyService protocolReadOnlyService;
     private final AlistTokenService tokenService;
@@ -85,8 +94,11 @@ public class AlistAuthFilter implements Filter {
         }
 
         String path = relativePath(req);
-        // 游客可用的账号 ID；null = 开关关闭 / 未绑定 / 账号已禁用
-        String guestUserId = guestResolver.resolve(setting);
+        // 游客可用的账号；null = 开关关闭 / 未绑定 / 账号已禁用
+        SysUser guestUser = guestResolver.resolveUser(setting);
+        String guestUserId = guestUser == null ? null : guestUser.getId();
+        // 「目录密码」开启时，读接口还要校验请求体里的密码
+        boolean guestPasswordRequired = ServiceSettingService.isGuestPasswordRequired(setting);
 
         // 播放直链：带签名先验签（登录用户生成的直链绑定其本人，不能被游客身份覆盖）；
         // 未带签名时，游客可用就按公开账号放行（TVBox 拼的是裸 /d/路径）
@@ -121,7 +133,10 @@ public class AlistAuthFilter implements Filter {
             // 游客访问：仅「没带凭证 + 读操作」才放行；带了错 token 仍按认证失败处理，
             // 免得客户端误以为自己的凭证有效
             if (guestUserId != null && StrUtil.isBlank(req.getHeader("Authorization")) && isGuestReadOp(path)) {
-                log.debug("AList 游客访问: path={}, ip={}", path, req.getRemoteAddr());
+                log.debug("AList 游客访问: path={}, ip={}, 需要密码={}", path, req.getRemoteAddr(), guestPasswordRequired);
+                if (guestPasswordRequired) {
+                    req.setAttribute(GUEST_PASSWORD_USER_ATTR, guestUser);
+                }
                 authenticator.bridgeSaToken(guestUserId);
                 chain.doFilter(request, response);
                 return;

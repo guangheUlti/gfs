@@ -11,6 +11,8 @@ export interface ServiceSettingVO {
   guestUserId: string | null
   /** 游客视角账号用户名（仅 alist） */
   guestUsername: string | null
+  /** 游客目录密码（仅 alist）：开启后客户端「密码」必须是公开账号的登录密码 */
+  guestPassword: boolean
   /** socket 型服务（sftp/ftp）有值；webdav/alist/oss 复用主 HTTP 端口为 null */
   port: number | null
   bindAddress: string
@@ -29,6 +31,8 @@ export interface UpdateServiceSettingParams {
   allowGuest?: boolean
   /** 仅 AList，传空串表示清除绑定 */
   guestUserId?: string
+  /** 仅 AList：游客请求是否必须携带公开账号的登录密码 */
+  guestPassword?: boolean
   /** 仅 SFTP，1024-65535 */
   port?: number
   /** 仅 SFTP */

@@ -67,4 +67,9 @@ public final class AlistResponse {
     public static void readOnly(HttpServletResponse response) throws IOException {
         error(response, FORBIDDEN, "AList service is in read-only mode");
     }
+
+    /** 密码不正确（AList 原文案：目录密码错时它回 403，而不是 401） */
+    public static void passwordIncorrect(HttpServletResponse response) throws IOException {
+        error(response, FORBIDDEN, "password is incorrect or you have no permission");
+    }
 }
