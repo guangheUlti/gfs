@@ -222,7 +222,7 @@ CREATE TABLE "service_settings" (
 );
 CREATE UNIQUE INDEX "uk_service_settings_type" ON "service_settings" ("service_type");
 COMMENT ON TABLE "service_settings" IS '对外文件服务配置';
-COMMENT ON COLUMN "service_settings"."service_type" IS '服务类型：webdav / sftp';
+COMMENT ON COLUMN "service_settings"."service_type" IS '服务类型：webdav / alist / sftp / ftp / oss';
 COMMENT ON COLUMN "service_settings"."enabled" IS '是否启用';
 COMMENT ON COLUMN "service_settings"."port" IS '监听端口（webdav 复用 HTTP 80 端口，此列为空）';
 COMMENT ON COLUMN "service_settings"."bind_address" IS '监听地址，默认 0.0.0.0';
@@ -231,7 +231,10 @@ COMMENT ON COLUMN "service_settings"."deleted" IS '逻辑删除 0未删除 1已�
 
 INSERT INTO "service_settings" ("id","service_type","enabled","port","bind_address") VALUES
 ('svc-webdav','webdav',FALSE,NULL,'0.0.0.0'),
-('svc-sftp','sftp',FALSE,9022,'0.0.0.0');
+('svc-sftp','sftp',FALSE,9022,'0.0.0.0'),
+('svc-ftp','ftp',FALSE,9021,'0.0.0.0'),
+('svc-oss','oss',FALSE,NULL,'0.0.0.0'),
+('svc-alist','alist',FALSE,NULL,'0.0.0.0');
 
 -- 11. sys_login_log
 DROP TABLE IF EXISTS "sys_login_log";
