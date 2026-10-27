@@ -32,7 +32,7 @@
 - **秒传功能** - 基于 MD5 双重校验，相同文件秒级完成
 - **插件化存储** - SPI 机制热插拔，5 分钟接入一个新存储平台
 - **本地挂载** - 把服务器真实目录挂进网盘，写操作穿透真实文件系统，外部改动定时/手动扫描同步
-- **对外文件服务** - 系统自身对外充当 WebDAV / SFTP / S3 兼容 OSS 服务端，客户端可把网盘直接挂载为本地磁盘或 S3 桶
+- **对外文件服务** - 系统自身对外充当 WebDAV / SFTP / FTP / AList / S3 兼容 OSS 服务端，客户端可把网盘直接挂载为本地磁盘、按 AList v3 协议接入影视仓/TVBox，或以 S3 桶方式访问
 - **国际化支持** - 中英文双语支持，轻松扩展更多语言
 - **虚拟线程** - 全面启用 Java 虚拟线程，异步任务、定时任务与预览队列高并发下更稳
 - **模块化架构** - 清晰的分层设计，易于维护和扩展
@@ -80,11 +80,13 @@
 - **对外文件服务**（管理员可配，实时运行状态）
     - **WebDAV 服务端**：复用主服务 HTTP 端口（部署默认 80），路径前缀 `/dav`，支持 Windows 网络驱动器映射（`net use Z: http://<主机>/dav`）、rclone、davfs2 等客户端
     - **SFTP 服务端**：独立端口（默认 9022，Apache MINA SSHD），支持 sshfs 挂载与 WinSCP / FileZilla / OpenSSH 客户端
+    - **FTP 服务端**：独立端口（默认 9021，Apache FtpServer），支持 FileZilla 等客户端与断点续传下载（被动端口 50000-50100）
+    - **AList（v3 兼容）**：复用主服务 HTTP 端口，路径前缀 `/api`（登录、列举、取直链、增删改）与 `/d`（直链播放），rclone / AList 桌面端用网盘账号密码换 token 接入；影视仓/TVBox 这类从不登录的播放器可开启「游客访问」，匿名请求以管理员指定的公开账号身份浏览与播放，写操作仍需登录
     - **OSS（S3 兼容网关）**：复用主服务 HTTP 端口，路径前缀 `/oss`，整个网盘暴露为 S3 虚拟桶 `gfs`（path-style）；自实现 AWS SigV4 验签（无 AWS SDK），支持 rclone、AWS SDK、Cyberduck、WinSCP S3 等客户端；每用户可签发/吊销 SigV4 密钥对（SK 明文仅创建时返回一次，AES-256-GCM 加密存储）；支持分片上传三件套
-    - 认证复用网盘账号（WebDAV/SFTP 走 BCrypt 校验，OSS 走 SigV4 密钥对），删除进回收站与 Web 端语义一致，内容级去重秒传
+    - 认证复用网盘账号（WebDAV/SFTP/FTP/AList 走 BCrypt 校验，OSS 走 SigV4 密钥对），删除进回收站与 Web 端语义一致，内容级去重秒传
     - 协议端密码认证与 Web 登录**共用防暴力锁定**（账号+IP 连续失败 3 次锁 30 分钟，可配置），换协议不会拿到额外尝试次数
     - 启用/停用热生效，服务重启后自动拉起；SFTP 主机密钥持久化，重启后客户端无指纹告警
-    - 已知限制：防暴力计数按「账号+IP」，不防多 IP 撞库（FTP 拿不到客户端 IP，只按账号维度）；WebDAV 的 LOCK/UNLOCK 为最小内存实现（锁不持久化，重启/多实例失效，单实例够用）；SFTP 仅支持顺序写；OSS 固定单桶 gfs、不支持桶管理/ACL/匿名访问，`oss.aes-key` 需在配置中固化（缺失时随机生成，重启后已签发密钥失效）
+    - 已知限制：防暴力计数按「账号+IP」，不防多 IP 撞库（FTP 拿不到客户端 IP，只按账号维度）；WebDAV 的 LOCK/UNLOCK 为最小内存实现（锁不持久化，重启/多实例失效，单实例够用）；SFTP 仅支持顺序写；OSS 固定单桶 gfs、不支持桶管理/ACL/匿名访问，`oss.aes-key` 需在配置中固化（缺失时随机生成，重启后已签发密钥失效）；AList 不做目录密码（客户端密码框留空），游客访问只暴露公开账号这一个命名空间
 
 ### 预览支持
 
@@ -214,9 +216,11 @@ bin\uninstall-service.bat :: 移除开机自启（不影响运行中的服务与
 
 | 文档 | 内容 |
 |------|------|
-| [`doc/login-auth-design.md`](doc/login-auth-design.md) | 登录认证链路设计、多端登录互不影响的原理、Sa-Token / security 配置项逐条含义 |
-| [`doc/storage-plugin-expansion-guide.md`](doc/storage-plugin-expansion-guide.md) | 存储插件扩展实施指南：SPI 接口与注册方式、插件配置 Schema、挂载扫描设计与孤儿平台清理 |
-| [`doc/webdav-sftp-service-guide.md`](doc/webdav-sftp-service-guide.md) | 对外文件服务实施指南：WebDAV / SFTP 服务端架构、S3 兼容 OSS 网关（SigV4 验签与密钥管理）、Sa-Token 上下文桥接、流式直传与生命周期管理 |
+| [`doc/README.md`](doc/README.md) | 设计文档总览：全貌、模块地图、推荐阅读路径（共 13 篇） |
+| [`doc/01-总体架构与技术选型.md`](doc/01-总体架构与技术选型.md) | 分层架构、模块职责与技术选型 |
+| [`doc/03-认证与用户模块设计.md`](doc/03-认证与用户模块设计.md) | 登录认证链路、多端登录互不影响的原理、Sa-Token 配置项逐条含义 |
+| [`doc/09-存储插件体系设计.md`](doc/09-存储插件体系设计.md) | 存储插件扩展指南：SPI 接口与注册方式、插件配置 Schema、挂载扫描设计 |
+| [`doc/11-对外文件服务设计.md`](doc/11-对外文件服务设计.md) | WebDAV / SFTP / FTP / AList 服务端与 S3 兼容 OSS 网关、Sa-Token 上下文桥接、游客访问与流式直传 |
 
 ---
 
@@ -236,7 +240,7 @@ flowchart TB
     subgraph MODULES["业务模块 fs-modules"]
         FILE["fs-file<br/>文件 / 分片上传 / 转码预览"]
         STORAGE["fs-storage<br/>存储平台管理"]
-        SERVICE["fs-service<br/>WebDAV / SFTP / FTP / OSS 服务端"]
+        SERVICE["fs-service<br/>WebDAV / SFTP / FTP / AList / OSS 服务端"]
         SYSTEM["fs-system<br/>用户 / 注册审核 / 登录管理"]
         LOG["fs-log<br/>操作日志"]
     end
@@ -297,7 +301,7 @@ gfs/
 │       └── storage-plugin-ftp/         # FTP/FTPS 插件
 └── fs-modules/                  # 业务模块
     ├── fs-file/                 # 文件管理模块
-    ├── fs-service/              # 对外文件服务模块（WebDAV / SFTP / FTP / OSS 服务端）
+    ├── fs-service/              # 对外文件服务模块（WebDAV / SFTP / FTP / AList / OSS 服务端）
     ├── fs-storage/              # 存储平台管理模块
     ├── fs-system/               # 系统管理模块（用户、注册审核、登录管理）
     └── fs-log/                  # 日志模块
