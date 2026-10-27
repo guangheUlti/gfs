@@ -35,10 +35,13 @@ import java.util.Set;
  * 放行顺序：
  * <ol>
  *   <li>服务停用 → 503（不卸载 controller 映射）</li>
- *   <li>{@code /d/**} 播放直链：验 {@code ?sign=} 签名（绑定用户+路径+12 小时有效期）</li>
+ *   <li>{@code /d/**} 播放直链：带 {@code ?sign=} 先验签；未带签名且游客可用时按公开账号放行</li>
  *   <li>{@code /api/auth/login}、{@code /api/public/settings}：无需 token</li>
- *   <li>其余：验 token → 只读模式拒绝写操作 → 桥接 Sa-Token 供 service 层使用</li>
+ *   <li>其余：验 token；游客模式下无凭证的读操作（list/get/dirs/search）按公开账号放行；
+ *       只读模式拒绝写操作 → 桥接 Sa-Token 供 service 层使用</li>
  * </ol>
+ * 游客不是「绕过身份」，而是「以公开账号的身份只读」：业务层全部按登录用户过滤，
+ * 匿名请求不桥接就查不到文件。公开账号由 {@link AlistGuestResolver} 解析与校验。
  * 注意：请求 URI 里的 {@code +} 先转义再解码，否则文件名含加号时与签名时的路径不一致。
  */
 @Slf4j
@@ -50,10 +53,18 @@ public class AlistAuthFilter implements Filter {
     private static final Set<String> WRITE_OPS = Set.of(
             "mkdir", "rename", "move", "copy", "remove", "put", "form");
 
+    /**
+     * 游客只读放行的读操作（/api/fs/{op}）。
+     * <p>
+     * 只放读、绝不放写：TVBox/影视仓 等客户端不登录，靠这几个接口列目录、取直链。
+     */
+    private static final Set<String> GUEST_READ_OPS = Set.of(
+            "list", "get", "dirs", "search");
+
     /** 无需 token 的路径：登录自身与公开信息 */
     private static final Set<String> PUBLIC_PATHS = Set.of("/api/auth/login", "/api/public/settings");
 
-    private final ServiceSettingService serviceSettingService;
+    private final AlistGuestResolver guestResolver;
     private final ProtocolReadOnlyService protocolReadOnlyService;
     private final AlistTokenService tokenService;
     private final DavUserAuthenticator authenticator;
@@ -64,7 +75,7 @@ public class AlistAuthFilter implements Filter {
         HttpServletRequest req = (HttpServletRequest) request;
         HttpServletResponse resp = (HttpServletResponse) response;
 
-        ServiceSetting setting = getByType(ServiceSettingService.TYPE_ALIST);
+        ServiceSetting setting = guestResolver.current();
         boolean enabled = setting != null && setting.getEnabled() != null && setting.getEnabled() == 1;
         if (!enabled) {
             resp.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
@@ -74,17 +85,29 @@ public class AlistAuthFilter implements Filter {
         }
 
         String path = relativePath(req);
+        // 游客可用的账号 ID；null = 开关关闭 / 未绑定 / 账号已禁用
+        String guestUserId = guestResolver.resolve(setting);
 
-        // 播放直链：签名里带用户身份与路径，验过即可桥接上下文
+        // 播放直链：带签名先验签（登录用户生成的直链绑定其本人，不能被游客身份覆盖）；
+        // 未带签名时，游客可用就按公开账号放行（TVBox 拼的是裸 /d/路径）
         if (path.startsWith("/d/")) {
-            String alistPath = "/" + decode(path.substring(3));
-            String userId = tokenService.verifySign(req.getParameter("sign"), alistPath);
-            if (userId == null) {
-                AlistResponse.unauthorized(resp);
+            String sign = req.getParameter("sign");
+            if (StrUtil.isNotBlank(sign)) {
+                String userId = tokenService.verifySign(sign, "/" + decode(path.substring(3)));
+                if (userId == null) {
+                    AlistResponse.unauthorized(resp);
+                    return;
+                }
+                authenticator.bridgeSaToken(userId);
+                chain.doFilter(request, response);
                 return;
             }
-            authenticator.bridgeSaToken(userId);
-            chain.doFilter(request, response);
+            if (guestUserId != null) {
+                authenticator.bridgeSaToken(guestUserId);
+                chain.doFilter(request, response);
+                return;
+            }
+            AlistResponse.unauthorized(resp);
             return;
         }
 
@@ -95,6 +118,14 @@ public class AlistAuthFilter implements Filter {
 
         String userId = tokenService.resolveToken(req.getHeader("Authorization"));
         if (userId == null) {
+            // 游客只读：仅「没带凭证 + 读操作」才放行；带了错 token 仍按认证失败处理，
+            // 免得客户端误以为自己的凭证有效
+            if (guestUserId != null && StrUtil.isBlank(req.getHeader("Authorization")) && isGuestReadOp(path)) {
+                log.debug("AList 游客只读: path={}, ip={}", path, req.getRemoteAddr());
+                authenticator.bridgeSaToken(guestUserId);
+                chain.doFilter(request, response);
+                return;
+            }
             AlistResponse.unauthorized(resp);
             return;
         }
@@ -134,24 +165,26 @@ public class AlistAuthFilter implements Filter {
         return WRITE_OPS.contains(op.toLowerCase(Locale.ROOT));
     }
 
+    /** /api/fs/{op} 且 op 属于游客可读的读操作 */
+    private boolean isGuestReadOp(String path) {
+        String prefix = "/api/fs/";
+        if (!path.startsWith(prefix)) {
+            return false;
+        }
+        String op = path.substring(prefix.length());
+        int slash = op.indexOf('/');
+        if (slash >= 0) {
+            op = op.substring(0, slash);
+        }
+        return GUEST_READ_OPS.contains(op.toLowerCase(Locale.ROOT));
+    }
+
     /** URI 解码：先把 + 转义，避免文件名里的加号被当成空格 */
     static String decode(String raw) {
         try {
             return URLDecoder.decode(raw.replace("+", "%2B"), StandardCharsets.UTF_8);
         } catch (Exception e) {
             return raw;
-        }
-    }
-
-    private ServiceSetting getByType(String type) {
-        try {
-            return serviceSettingService.getOne(
-                    com.mybatisflex.core.query.QueryWrapper.create()
-                            .where(com.guanghe.fs.service.domain.table.ServiceSettingTableDef
-                                    .SERVICE_SETTING.SERVICE_TYPE.eq(type)));
-        } catch (Exception e) {
-            log.warn("读取 AList 服务配置失败，按停用处理", e);
-            return null;
         }
     }
 }

@@ -5,11 +5,15 @@ import cn.hutool.core.util.StrUtil;
 import com.guanghe.fs.framework.common.domain.Result;
 import com.guanghe.fs.framework.common.exception.BusinessException;
 import com.guanghe.fs.framework.common.utils.I18nUtils;
+import com.guanghe.fs.service.domain.ServiceGuestUserVO;
 import com.guanghe.fs.service.domain.ServiceSetting;
 import com.guanghe.fs.service.service.ServiceSettingService;
 import com.guanghe.fs.service.domain.ServiceSettingVO;
 import com.guanghe.fs.service.domain.UpdateServiceSettingCmd;
 import com.guanghe.fs.service.manager.ProtocolServiceManager;
+import com.guanghe.fs.system.constant.UserStatus;
+import com.guanghe.fs.system.domain.SysUser;
+import com.guanghe.fs.system.mapper.SysUserMapper;
 import com.mybatisflex.core.query.QueryWrapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,6 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static com.guanghe.fs.service.domain.table.ServiceSettingTableDef.SERVICE_SETTING;
+import static com.guanghe.fs.system.domain.table.SysUserTableDef.SYS_USER;
 
 /**
  * 对外文件服务管理 API（挂 /apis/service/**，管理员权限 SERVICE_MANAGE）
@@ -41,6 +46,7 @@ import static com.guanghe.fs.service.domain.table.ServiceSettingTableDef.SERVICE
 public class ServiceSettingController {
 
     private final ServiceSettingService serviceSettingService;
+    private final SysUserMapper userMapper;
     private final ProtocolServiceManager protocolServiceManager;
     private final com.guanghe.fs.service.manager.ProtocolReadOnlyService protocolReadOnlyService;
     private final com.guanghe.fs.service.spi.ExternalFileServiceRegistry externalFileServiceRegistry;
@@ -57,6 +63,10 @@ public class ServiceSettingController {
             vo.setServiceType(setting.getServiceType());
             vo.setEnabled(setting.getEnabled() != null && setting.getEnabled() == 1);
             vo.setReadOnly(ServiceSettingService.isReadOnly(setting));
+            vo.setAllowGuest(ServiceSettingService.isGuestAllowed(setting));
+            String guestUserId = ServiceSettingService.guestUserId(setting);
+            vo.setGuestUserId(guestUserId);
+            vo.setGuestUsername(usernameOf(guestUserId));
             vo.setPort(setting.getPort());
             vo.setBindAddress(setting.getBindAddress());
             vo.setUpdatedAt(setting.getUpdatedAt());
@@ -84,6 +94,20 @@ public class ServiceSettingController {
             setting.setConfigData(ServiceSettingService.mergeReadOnly(
                     setting.getConfigData(), Boolean.TRUE.equals(cmd.getReadOnly())));
         }
+        // 游客只读只对 AList 有意义：TVBox/影视仓这类客户端不登录，匿名请求以「公开账号」身份只读
+        if (ServiceSettingService.TYPE_ALIST.equals(type)) {
+            if (cmd.getGuestUserId() != null) {
+                setting.setConfigData(ServiceSettingService.mergeGuestUser(
+                        setting.getConfigData(), StrUtil.trimToNull(cmd.getGuestUserId())));
+            }
+            if (cmd.getAllowGuest() != null) {
+                setting.setConfigData(ServiceSettingService.mergeGuest(
+                        setting.getConfigData(), Boolean.TRUE.equals(cmd.getAllowGuest())));
+            }
+            if (Boolean.TRUE.equals(cmd.getAllowGuest())) {
+                requireNormalUser(ServiceSettingService.guestUserId(setting));
+            }
+        }
         if (cmd.getPort() != null) {
             setting.setPort(cmd.getPort());
         }
@@ -98,9 +122,28 @@ public class ServiceSettingController {
 
         // 热生效：启动失败不抛给保存动作（失败状态经 /list 返回）
         protocolServiceManager.apply(type, setting);
-        log.info("对外文件服务配置已更新: type={}, enabled={}, readOnly={}",
-                type, setting.getEnabled(), ServiceSettingService.isReadOnly(setting));
+        log.info("对外文件服务配置已更新: type={}, enabled={}, readOnly={}, allowGuest={}, guestUserId={}",
+                type, setting.getEnabled(), ServiceSettingService.isReadOnly(setting),
+                ServiceSettingService.isGuestAllowed(setting), ServiceSettingService.guestUserId(setting));
         return Result.ok();
+    }
+
+    @Operation(summary = "游客视角候选账号（仅正常状态用户）")
+    @GetMapping("/alist/users")
+    @SaCheckPermission(com.guanghe.fs.system.constant.UserPermissions.SERVICE_MANAGE)
+    public Result<List<ServiceGuestUserVO>> alistUsers() {
+        List<SysUser> users = userMapper.selectListByQuery(new QueryWrapper()
+                .where(SYS_USER.STATUS.eq(UserStatus.NORMAL))
+                .orderBy(SYS_USER.USERNAME.asc()));
+        List<ServiceGuestUserVO> result = new ArrayList<>(users.size());
+        for (SysUser user : users) {
+            ServiceGuestUserVO vo = new ServiceGuestUserVO();
+            vo.setId(user.getId());
+            vo.setUsername(user.getUsername());
+            vo.setNickname(user.getNickname());
+            result.add(vo);
+        }
+        return Result.ok(result);
     }
 
     @Operation(summary = "start / stop / restart")
@@ -138,6 +181,25 @@ public class ServiceSettingController {
             default -> throw new BusinessException(I18nUtils.getMessage("service.type.invalid"));
         }
         return Result.ok();
+    }
+
+    /** 游客绑定账号必须是存在且状态正常的用户，否则匿名请求会带着无效身份进入业务层 */
+    private void requireNormalUser(String userId) {
+        if (StrUtil.isBlank(userId)) {
+            throw new BusinessException(I18nUtils.getMessage("service.guest.user.required"));
+        }
+        SysUser user = userMapper.selectOneById(userId);
+        if (user == null || user.getStatus() == null || user.getStatus() != UserStatus.NORMAL) {
+            throw new BusinessException(I18nUtils.getMessage("service.guest.user.invalid"));
+        }
+    }
+
+    private String usernameOf(String userId) {
+        if (StrUtil.isBlank(userId)) {
+            return null;
+        }
+        SysUser user = userMapper.selectOneById(userId);
+        return user == null ? null : user.getUsername();
     }
 
     private ServiceSetting requireByType(String type) {

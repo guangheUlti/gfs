@@ -26,8 +26,14 @@ public interface ServiceSettingService extends IService<ServiceSetting> {
     /** 服务类型：AList（v3 开放 API，/api/** + /d/** 直链） */
     String TYPE_ALIST = "alist";
 
-    /** `config_data` 里的只读标记键（WebDAV 只读模式） */
+    /** `config_data` 里的只读标记键（各协议只读模式） */
     String CONFIG_READ_ONLY = "readOnly";
+
+    /** `config_data` 里的游客只读标记键（仅 AList：未登录也可浏览/播放） */
+    String CONFIG_ALLOW_GUEST = "allowGuest";
+
+    /** `config_data` 里的游客视角账号键（仅 AList：匿名请求以该账号身份只读） */
+    String CONFIG_GUEST_USER_ID = "guestUserId";
 
     /**
      * 校验服务类型是否合法（以 SPI 注册表为准动态校验；静态兜底覆盖内置协议）
@@ -50,14 +56,53 @@ public interface ServiceSettingService extends IService<ServiceSetting> {
      * @return 是否只读
      */
     static boolean isReadOnly(ServiceSetting setting) {
+        return isFlag(setting, CONFIG_READ_ONLY);
+    }
+
+    /**
+     * 解析游客只读：`config_data` 中 allowGuest=true 即允许未登录的只读访问（仅 AList）。
+     * <p>
+     * 影视仓/TVBox 的 AList 入口不登录、也不发 token，只按「游客 + 目录密码」模型
+     * 调 /api/fs/list 和 /d 直链；不开这个开关它们一个请求都过不了。
+     *
+     * @param setting 服务配置
+     * @return 是否允许游客只读
+     */
+    static boolean isGuestAllowed(ServiceSetting setting) {
+        return isFlag(setting, CONFIG_ALLOW_GUEST);
+    }
+
+    /**
+     * 解析游客视角账号 ID：匿名请求会以该账号身份只读访问文件。
+     * <p>
+     * 只读接口一律按当前登录用户过滤文件，游客没有身份时无法直接查询；
+     * 因此必须绑定一个具体账号，否则匿名请求会在 {@code StpUtil.getLoginIdAsString()} 处失败。
+     *
+     * @param setting 服务配置
+     * @return 账号 ID；未配置返回 null
+     */
+    static String guestUserId(ServiceSetting setting) {
+        return strValue(setting, CONFIG_GUEST_USER_ID);
+    }
+
+    private static boolean isFlag(ServiceSetting setting, String key) {
+        return Boolean.TRUE.equals(value(setting, key));
+    }
+
+    private static String strValue(ServiceSetting setting, String key) {
+        Object value = value(setting, key);
+        return value == null ? null : StrUtil.trimToNull(String.valueOf(value));
+    }
+
+    private static Object value(ServiceSetting setting, String key) {
         if (setting == null || StrUtil.isBlank(setting.getConfigData())) {
-            return false;
+            return null;
         }
         try {
             Dict config = JsonUtils.parseMap(setting.getConfigData());
-            return config != null && Boolean.TRUE.equals(config.get(CONFIG_READ_ONLY));
+            return config == null ? null : config.get(key);
         } catch (Exception e) {
-            return false;
+            return null;
         }
     }
 
@@ -70,22 +115,50 @@ public interface ServiceSettingService extends IService<ServiceSetting> {
      * @return 合并后的 JSON 字符串
      */
     static String mergeReadOnly(String rawConfig, boolean readOnly) {
-        Dict config = null;
+        return mergeFlag(rawConfig, CONFIG_READ_ONLY, readOnly);
+    }
+
+    /**
+     * 在既有 `config_data` JSON 上合并游客只读标记（仅 AList 使用）。
+     */
+    static String mergeGuest(String rawConfig, boolean allowGuest) {
+        return mergeFlag(rawConfig, CONFIG_ALLOW_GUEST, allowGuest);
+    }
+
+    /**
+     * 在既有 `config_data` JSON 上合并游客视角账号；传空表示清除绑定。
+     */
+    static String mergeGuestUser(String rawConfig, String userId) {
+        Dict config = parseConfig(rawConfig);
+        if (StrUtil.isBlank(userId)) {
+            config.remove(CONFIG_GUEST_USER_ID);
+        } else {
+            config.set(CONFIG_GUEST_USER_ID, userId.trim());
+        }
+        return JsonUtils.toJsonString(config);
+    }
+
+    private static String mergeFlag(String rawConfig, String key, boolean value) {
+        Dict config = parseConfig(rawConfig);
+        if (value) {
+            config.set(key, true);
+        } else {
+            config.remove(key);
+        }
+        return JsonUtils.toJsonString(config);
+    }
+
+    private static Dict parseConfig(String rawConfig) {
         if (StrUtil.isNotBlank(rawConfig)) {
             try {
-                config = JsonUtils.parseMap(rawConfig);
+                Dict config = JsonUtils.parseMap(rawConfig);
+                if (config != null) {
+                    return config;
+                }
             } catch (Exception ignored) {
                 // 原配置是坏 JSON：按空对象重写，避免把坏数据继续往下传
             }
         }
-        if (config == null) {
-            config = Dict.create();
-        }
-        if (readOnly) {
-            config.set(CONFIG_READ_ONLY, true);
-        } else {
-            config.remove(CONFIG_READ_ONLY);
-        }
-        return JsonUtils.toJsonString(config);
+        return Dict.create();
     }
 }

@@ -19,6 +19,12 @@ public class UpdateServiceSettingCmd {
     @Schema(description = "监听地址（仅 sftp）")
     private String bindAddress;
 
-    @Schema(description = "只读模式（仅 webdav）：true 时只允许读访问，写方法返回 403")
+    @Schema(description = "只读模式（全部协议）：true 时只允许读访问，写操作被拒绝")
     private Boolean readOnly;
+
+    @Schema(description = "游客只读（仅 alist）：true 时未登录也可浏览目录与播放，写操作仍需登录")
+    private Boolean allowGuest;
+
+    @Schema(description = "游客视角账号 ID（仅 alist）：匿名请求以该账号身份只读，传空表示清除")
+    private String guestUserId;
 }

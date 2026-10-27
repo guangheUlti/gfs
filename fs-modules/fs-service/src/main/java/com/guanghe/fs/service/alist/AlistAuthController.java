@@ -41,6 +41,7 @@ public class AlistAuthController {
     private final DavUserAuthenticator authenticator;
     private final AlistTokenService tokenService;
     private final SysUserMapper userMapper;
+    private final AlistGuestResolver guestResolver;
 
     /** 登录：{"username":"admin","password":"***"} → {"token":"..."} */
     @PostMapping("/auth/login")
@@ -91,7 +92,9 @@ public class AlistAuthController {
      * <p>
      * 字段取 AList v3 官方 settings 的子集：客户端（尤其页面端）会读
      * {@code version} / {@code default_page_size} 决定分页与功能开关；
-     * 未实现的能力（SSO/LDAP/WebAuthn/游客浏览）一律给 false，免得客户端去调不存在的端点。
+     * 未实现的能力（SSO/LDAP/WebAuthn）一律给 false，免得客户端去调不存在的端点。
+     * {@code allow_guest} 跟随后台「游客只读」开关与公开账号：账号不可用时也回 false，
+     * 免得客户端以为可以匿名浏览、结果每个请求都 401。
      */
     @GetMapping("/public/settings")
     public void settings(HttpServletResponse response) throws IOException {
@@ -99,8 +102,7 @@ public class AlistAuthController {
         data.put("site_title", "GFS");
         data.put("announcement", "");
         data.put("allow_indexed", false);
-        // 不支持匿名浏览：本服务所有文件接口都要求 token
-        data.put("allow_guest", false);
+        data.put("allow_guest", guestResolver.isAvailable(guestResolver.current()));
         data.put("allow_mounted", false);
         data.put("allow_register", false);
         data.put("logo", "");

@@ -18,8 +18,17 @@ public class ServiceSettingVO {
     @Schema(description = "是否启用")
     private Boolean enabled;
 
-    @Schema(description = "只读模式（仅 webdav）：开启后拒绝一切写操作")
+    @Schema(description = "只读模式（全部协议）：开启后拒绝一切写操作")
     private Boolean readOnly;
+
+    @Schema(description = "游客只读（仅 alist）：开启后未登录也可浏览与播放")
+    private Boolean allowGuest;
+
+    @Schema(description = "游客视角账号 ID（仅 alist）：匿名请求以该账号身份只读")
+    private String guestUserId;
+
+    @Schema(description = "游客视角账号用户名（仅 alist，便于界面展示）")
+    private String guestUsername;
 
     @Schema(description = "监听端口（webdav 为空 = 复用 HTTP 80 端口）")
     private Integer port;
