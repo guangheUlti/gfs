@@ -81,6 +81,21 @@ release/deploy-package/data/
 release/deploy-package/lib/*.jar
 release/*.zip
 
+### Release Linux package ###
+# deploy-package-linux doubles as the build output of
+# script/package-release-linux.ps1: lib/ holds the 108 MB jar and the official
+# runtime archives (~310 MB), which are never committed
+release/deploy-package-linux/lib/
+release/deploy-package-linux/data/
+release/deploy-package-linux/logs/
+release/deploy-package-linux/storage/
+# generated on the target host by bin/env.sh
+release/deploy-package-linux/conf/my.cnf
+release/deploy-package-linux/conf/redis.conf
+release/deploy-package-linux/conf/jvm-*
+# tarball output - GitHub Release asset only
+release/*.tar.gz
+
 ### Redis dump ###
 dump.rdb
 

@@ -30,3 +30,15 @@
 
 - zip 输出到 `release\gfs-<版本>-windows-x64.zip`，同一版本重新打包直接覆盖同名文件；zip 只作 GitHub Release 附件，不提交 git。
 - 打包脚本会把 `fs-ui\dist` 同步进 JAR 内嵌静态资源（`BOOT-INF/classes/static/`）并做一致性校验；外部 `frontend\` 目录是运行时热更新覆盖层（`WebMvcConfig` 透传 `spring.web.resources.static-locations`）。
+
+## release\deploy-package-linux（Linux 发行版目录）
+
+- 同时是脚本模板与打包产物目录：`bin\`、`README.md`、`conf\`、`sql\`、`frontend\` 入库；`lib\`（`fs-admin.jar` + `lib\runtime\` 三个官方运行时归档，约 420 MB）被 `.gitignore` 忽略。
+- 打包命令（`-SkipBuild` 复用现有 jar 与前端）：
+
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File script\package-release-linux.ps1 -Version <版本> -MavenCmd D:\devTools\maven\bin\mvn.cmd
+  ```
+
+- 产物 `release\gfs-<版本>-linux-x64.tar.gz` 只作 GitHub Release 附件；tar 必须由脚本经 Git Bash 的 GNU tar 生成（保留 0755 / 0:0）。
+- 打包前若 `data\`、`logs\`、`storage\` 里有内容，脚本会报错退出而不是删除数据。

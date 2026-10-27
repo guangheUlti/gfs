@@ -163,7 +163,7 @@ pnpm dev
 
 - 开发前端：http://localhost:8000（`/apis`、`/dav` 代理到后端 2000）
 - 后端直连：http://localhost:2000（API 文档：http://localhost:2000/swagger-ui.html）
-- 部署版默认入口：http://localhost（见下方「Windows 一键部署」）
+- 部署版默认入口：http://localhost（见下方「一键部署」）
 
 ### 默认账号
 
@@ -209,6 +209,27 @@ bin\uninstall-service.bat :: 移除开机自启（不影响运行中的服务与
 - 备份：`bin\stop.bat` 停止后复制 `data\`、`storage\`、`conf\` 即为完整备份；删除 `data\` 即重置系统。
 
 启用「对外文件服务」后 SFTP 默认额外监听 `9022`（网页管理端可改）。更多细节（脚本参数、开机自启原理、故障排查）见 `release/deploy-package/README.md`。
+
+### Linux 一键部署
+
+仓库内 `release/deploy-package-linux/` 是同一套部署脚本的 Linux 版，自带 JDK 21、MySQL 8.4 与 Valkey 9（Redis 协议兼容的缓存服务，Redis 官方不提供 Linux 预编译包）；运行时以官方归档形式放在 `lib/runtime/`，首次启动自动解压。发布时由 `script/package-release-linux.ps1` 构建，并以 **GitHub Release 附件**（`gfs-<版本>-linux-x64.tar.gz`）提供下载：
+
+```bash
+tar -xzf gfs-<版本>-linux-x64.tar.gz
+cd gfs-<版本>
+
+bin/verify.sh                  # 可选：检查包内容、系统依赖、端口与磁盘
+bin/start.sh                   # 首次运行自动解压运行时并初始化数据库
+bin/stop.sh                    # 全部停止
+bin/status.sh                  # 查看运行状态
+sudo bin/install-service.sh    # 注册 systemd 服务并开机自启
+sudo bin/uninstall-service.sh  # 移除 systemd 服务（不影响数据）
+```
+
+- 要求 **x86_64、glibc ≥ 2.34、OpenSSL 3、systemd**：验证于 Ubuntu 22.04+、Debian 12+、RHEL / Rocky / AlmaLinux 9+；不支持 CentOS 7/8、RHEL 8、Ubuntu 20.04。系统还需 `libaio`、`libnuma`、`xz`（`bin/verify.sh` 会给出安装命令）。
+- 配置集中在 `bin/env.sh`，变量与上表一致（`SERVER_PORT`、`MYSQL_*`、`REDIS_*`、`DATA_DIR`、`LOG_DIR`、`INNODB_POOL`、`JAVA_OPTS`、`FS_FRONTEND_DOMAIN`），另可用 `GFS_SERVICE_NAME` 改 systemd 服务名。
+- 一个 `gfs.service` 管理缓存服务、MySQL 与应用三个进程，`systemctl stop gfs` 会一起优雅关闭；应用崩溃自动重启，后台修改 JVM 内存后由看门狗按新值重启 JVM。
+- 备份与 Windows 版一致：停止后复制 `data/`、`storage/`、`conf/`。更多细节见 `release/deploy-package-linux/README.md`。
 
 ---
 
@@ -307,8 +328,9 @@ gfs/
     └── fs-log/                  # 日志模块
 fs-ui/                           # Web 前端（React 19 + Vite）
 doc/                             # 设计文档（登录认证、存储插件扩展等）
-release/deploy-package/          # 免安装部署包（脚本 + 配置，运行时由脚本重建）
-script/                          # 构建/部署脚本（package-release.ps1、docker）
+release/deploy-package/          # 免安装部署包（Windows：脚本 + 配置，运行时由脚本重建）
+release/deploy-package-linux/    # 免安装部署包（Linux：脚本模板 + 打包产物目录，运行时归档在 lib/ 不入库）
+script/                          # 构建/部署脚本（package-release*.ps1、docker）
 sql/                             # 数据库初始化脚本
 ```
 
