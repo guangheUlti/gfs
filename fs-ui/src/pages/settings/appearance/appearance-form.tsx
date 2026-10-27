@@ -157,12 +157,12 @@ export function AppearanceForm() {
                         <FormControl>
                           <RadioGroupItem value='light' className='sr-only' />
                         </FormControl>
-                        <div className='space-y-2'>
+                        <div className='min-w-0 w-full space-y-2'>
                           <div className='theme-card h-32 items-center rounded-lg border-2 border-muted p-3 transition-colors hover:border-accent'>
                             <div className='flex h-full flex-col justify-center space-y-2 rounded-sm bg-[#ecedef] p-3'>
                               <div className='space-y-2 rounded-md bg-white p-3 shadow-sm'>
-                                <div className='h-2.5 w-[120px] rounded-lg bg-[#ecedef]' />
-                                <div className='h-2.5 w-[150px] rounded-lg bg-[#ecedef]' />
+                                <div className='h-2.5 w-4/5 rounded-lg bg-[#ecedef]' />
+                                <div className='h-2.5 w-full rounded-lg bg-[#ecedef]' />
                               </div>
                             </div>
                           </div>
@@ -177,13 +177,13 @@ export function AppearanceForm() {
                         <FormControl>
                           <RadioGroupItem value='dark' className='sr-only' />
                         </FormControl>
-                        <div className='space-y-2'>
+                        <div className='min-w-0 w-full space-y-2'>
                           <div className='theme-card h-32 items-center rounded-lg border-2 border-muted bg-popover p-3 transition-colors hover:bg-accent hover:text-accent-foreground'>
                             {/* 预览缩略图跟实际暗黑主题保持一致：中性灰黑而非 slate 的蓝调 */}
                             <div className='flex h-full flex-col justify-center space-y-2 rounded-sm bg-neutral-950 p-3'>
                               <div className='space-y-2 rounded-md bg-neutral-800 p-3 shadow-sm'>
-                                <div className='h-2.5 w-[120px] rounded-lg bg-neutral-400' />
-                                <div className='h-2.5 w-[150px] rounded-lg bg-neutral-400' />
+                                <div className='h-2.5 w-4/5 rounded-lg bg-neutral-400' />
+                                <div className='h-2.5 w-full rounded-lg bg-neutral-400' />
                               </div>
                             </div>
                           </div>
