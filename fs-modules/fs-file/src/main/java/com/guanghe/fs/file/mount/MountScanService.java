@@ -47,6 +47,8 @@ import static com.guanghe.fs.file.domain.table.FileInfoTableDef.FILE_INFO;
  * <p>
  * 安全红线：根目录列举失败即放弃本轮（绝不大面积误删）；删除段异常时保留已收集增改、放弃删除；
  * 保险丝限制单轮最大条目数；深度超过 32 停止下钻。全流程持 MountLocks，与写穿透互斥。
+ * 无状态远程（SMB/SFTP/FTP/WebDAV/内存）与本地直读在取实例前即按平台能力位筛除：
+ * 创建其配置实例会真实建连，远端磁盘空闲休眠时不能被每分钟一次的扫描调度唤醒。
  *
  * @Author: guangheUlti
  * @Date: 2026/09/09
@@ -136,10 +138,14 @@ public class MountScanService {
         long now = System.currentTimeMillis();
         for (StorageSetting setting : settings) {
             try {
+                // 平台级预筛必须在 getStorageService 之前：无状态远程（SMB/SFTP/FTP/WebDAV/内存）
+                // 与本地直读不参与扫描，创建其配置实例会真实建连，睡眠中的远端会被每分钟一次唤醒
+                if (!storageServiceFacade.isScannablePlatform(setting.getPlatformIdentifier())) {
+                    continue;
+                }
                 IStorageOperationService instance = storageServiceFacade.getStorageService(setting.getId());
                 if (!instance.isMountMode() || instance.isDirectAccess() || instance.isStatelessRemote()) {
-                    // 本地挂载（直读）无后台扫描：浏览时由 reconcileDirectLevel 按层对账；
-                    // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）不落库，完全不参与扫描
+                    // 实例级再确认：能力位以实际实例为准，原型预筛只用于免建连
                     continue;
                 }
                 long intervalMillis = resolveIntervalMillis(instance);
@@ -173,7 +179,7 @@ public class MountScanService {
         scanExecutor.execute(this::scanAll);
     }
 
-    /** 扫描所有启用的挂载式设置（能力位驱动，覆盖 LocalMount/SMB 等一切 isMountMode 平台） */
+    /** 扫描所有启用的挂载式设置（能力位驱动：无状态远程/本地直读在取实例前即筛除，不建连） */
     public void scanAll() {
         if (!scanEnabled) {
             return;
@@ -181,6 +187,10 @@ public class MountScanService {
         List<StorageSetting> settings = storageSettingService.listEnabledSettings();
         for (StorageSetting setting : settings) {
             try {
+                // 平台级预筛：无状态远程/本地直读不建实例、不建连（启动时同样不能把睡眠中的远端唤醒）
+                if (!storageServiceFacade.isScannablePlatform(setting.getPlatformIdentifier())) {
+                    continue;
+                }
                 IStorageOperationService instance = storageServiceFacade.getStorageService(setting.getId());
                 if (!instance.isMountMode() || instance.isDirectAccess() || instance.isStatelessRemote()) {
                     continue;
