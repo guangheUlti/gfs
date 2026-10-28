@@ -5,6 +5,8 @@ import {
   getStorageCapacity,
   STORAGE_CAPACITY_REFETCH_INTERVAL_MS,
 } from '@/api/home'
+import { cn } from '@/lib/utils'
+import { formatCapacityBytes } from '@/utils/format'
 import {
   Dialog,
   DialogContent,
@@ -13,22 +15,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
-import { formatCapacityBytes } from '@/utils/format'
 
 /** 使用率越高越醒目：与侧栏存储条同一套告警色 */
 function usageColor(percent: number): {
   ring: string
   bar: string
   text: string
-  accent: string
 } {
   if (percent >= 90) {
     return {
       ring: 'stroke-red-500',
       bar: 'bg-red-500',
       text: 'text-red-500',
-      accent: 'bg-red-500',
     }
   }
   if (percent >= 75) {
@@ -36,14 +34,12 @@ function usageColor(percent: number): {
       ring: 'stroke-amber-500',
       bar: 'bg-amber-500',
       text: 'text-amber-500',
-      accent: 'bg-amber-500',
     }
   }
   return {
     ring: 'stroke-primary',
     bar: 'bg-primary',
     text: 'text-primary',
-    accent: 'bg-primary',
   }
 }
 
@@ -121,31 +117,19 @@ function StorageDetailBody({ open }: { open: boolean }) {
   const totalBytes = capacity?.totalBytes ?? null
   const capacityKnown = capacity?.capacityKnown === true && totalBytes !== null
   const percent =
-    capacityKnown && totalBytes ? Math.min(100, (usedBytes / totalBytes) * 100) : 0
+    capacityKnown && totalBytes
+      ? Math.min(100, (usedBytes / totalBytes) * 100)
+      : 0
   const color = usageColor(percent)
   const percentText = capacityKnown ? formatPercent(percent, usedBytes) : '—'
-  const freeBytes = capacityKnown ? Math.max(0, (totalBytes as number) - usedBytes) : null
-  const usedShare = capacityKnown && usedBytes > 0 ? Math.min(100, Math.max(1, Math.round(percent))) : 0
+  const freeBytes = capacityKnown
+    ? Math.max(0, (totalBytes as number) - usedBytes)
+    : null
+  const usedShare =
+    capacityKnown && usedBytes > 0
+      ? Math.min(100, Math.max(1, Math.round(percent)))
+      : 0
   const freeShare = capacityKnown ? 100 - usedShare : 0
-
-  /** 底部三张指标卡：存储类型不再展示，只留容量三维度 */
-  const stats = [
-    {
-      label: t('storageDialog.used'),
-      value: formatCapacityBytes(usedBytes),
-      accent: color.accent,
-    },
-    {
-      label: t('storageDialog.free'),
-      value: freeBytes === null ? '—' : formatCapacityBytes(freeBytes),
-      accent: 'bg-emerald-500',
-    },
-    {
-      label: t('storageDialog.total'),
-      value: capacityKnown ? formatCapacityBytes(totalBytes) : '—',
-      accent: 'bg-slate-400 dark:bg-slate-500',
-    },
-  ]
 
   return (
     <div className='space-y-5'>
@@ -183,22 +167,40 @@ function StorageDetailBody({ open }: { open: boolean }) {
               </div>
             </div>
 
-            {/* 进度条 + 构成占比：占比只给比例不重复字节数（字节数在下方三张卡里） */}
+            {/* 进度条 + 构成占比：只给比例，字节数在上方摘要里 */}
             <div className='flex items-center gap-5'>
               <div className='h-2 flex-1 overflow-hidden rounded-full bg-muted'>
                 <div
-                  className={cn('h-full rounded-full transition-all duration-500', color.bar)}
+                  className={cn(
+                    'h-full rounded-full transition-all duration-500',
+                    color.bar
+                  )}
                   style={{ width: `${capacityKnown ? percent : 0}%` }}
                 />
               </div>
               <div className='hidden shrink-0 items-center gap-5 sm:flex'>
                 {[
-                  { color: color.bar, label: t('storageDialog.used'), share: usedShare },
-                  { color: 'bg-muted-foreground/40', label: t('storageDialog.free'), share: freeShare },
+                  {
+                    color: color.bar,
+                    label: t('storageDialog.used'),
+                    share: usedShare,
+                  },
+                  {
+                    color: 'bg-muted-foreground/40',
+                    label: t('storageDialog.free'),
+                    share: freeShare,
+                  },
                 ].map((item) => (
                   <div key={item.label} className='flex items-center gap-2'>
-                    <span className={cn('size-2.5 shrink-0 rounded-full', item.color)} />
-                    <span className='text-xs text-muted-foreground'>{item.label}</span>
+                    <span
+                      className={cn(
+                        'size-2.5 shrink-0 rounded-full',
+                        item.color
+                      )}
+                    />
+                    <span className='text-xs text-muted-foreground'>
+                      {item.label}
+                    </span>
                     <span className='text-sm font-semibold tabular-nums'>
                       {capacityKnown ? `${item.share}%` : '—'}
                     </span>
@@ -216,22 +218,6 @@ function StorageDetailBody({ open }: { open: boolean }) {
           <span>{t('storageDialog.capacityUnknown')}</span>
         </div>
       )}
-
-      {/* 下方三个关键指标：已用空间 / 剩余空间 / 总容量 */}
-      <div className='grid grid-cols-1 gap-3 sm:grid-cols-3'>
-        {stats.map((item) => (
-          <div
-            key={item.label}
-            className='relative min-w-0 overflow-hidden rounded-lg border bg-card px-4 py-4'
-          >
-            <span className={cn('absolute inset-y-0 left-0 w-1', item.accent)} />
-            <div className='truncate text-xs text-muted-foreground'>{item.label}</div>
-            <div className='mt-1.5 truncate text-lg font-semibold tabular-nums'>
-              {capacityLoading ? <Skeleton className='h-6 w-20' /> : item.value}
-            </div>
-          </div>
-        ))}
-      </div>
 
       {/* 统计口径说明：把「已用/总容量」的计算方式写清楚，省得看到 1% 以为统计错了 */}
       <div className='flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground'>
@@ -256,7 +242,9 @@ export function StorageDetailDialog({
       <DialogContent className='max-h-[85vh] overflow-y-auto sm:max-w-3xl'>
         <DialogHeader>
           <DialogTitle>{t('storageDialog.title')}</DialogTitle>
-          <DialogDescription>{t('storageDialog.description')}</DialogDescription>
+          <DialogDescription>
+            {t('storageDialog.description')}
+          </DialogDescription>
         </DialogHeader>
         <StorageDetailBody open={open} />
       </DialogContent>

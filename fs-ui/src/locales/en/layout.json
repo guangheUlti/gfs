@@ -35,8 +35,6 @@
     "usedPercent": "used",
     "used": "Used",
     "free": "Free",
-    "total": "Total",
-    "files": "Storage type",
     "capacityUnknown": "This storage platform cannot report physical capacity (e.g. object storage); only usage is shown",
     "capacityNote": "How it is measured: total = writable space left on the storage backend + files already stored by GFS, so a very low usage right after setup is normal. Deleted files go to the recycle bin and only free space once emptied.",
     "systemInfo": "System",
