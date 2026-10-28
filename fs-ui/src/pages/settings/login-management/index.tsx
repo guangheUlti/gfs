@@ -1,31 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
-import { RefreshCw, Search } from 'lucide-react'
+import { adminApi } from '@/api'
+import { useAuth } from '@/contexts/auth-context'
+import type { OnlineTerminal, OnlineUser } from '@/types/user'
 import { RiComputerLine } from '@remixicon/react'
 import dayjs from 'dayjs'
-import { adminApi } from '@/api'
-import type { OnlineTerminal, OnlineUser } from '@/types/user'
-import {
-  SettingsPageDescription,
-  SettingsPageTitle,
-} from '../components/settings-page-header'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from '@/components/ui/avatar'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHeader,
-  TableHead,
-  TableRow,
-} from '@/components/ui/table'
+import { ChevronRight, RefreshCw, Search } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,7 +17,30 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { useAuth } from '@/contexts/auth-context'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableHead,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  SettingsPageDescription,
+  SettingsPageTitle,
+} from '../components/settings-page-header'
 
 /** 列表是实时状态，隔一段时间自动刷新，避免管理员对着过期数据踢人 */
 const AUTO_REFRESH_INTERVAL = 30_000
@@ -60,6 +64,11 @@ export function SettingsLoginManagement() {
   const [keyword, setKeyword] = useState('')
   const [actingKey, setActingKey] = useState<string | null>(null)
   const [target, setTarget] = useState<KickTarget | null>(null)
+  // 窄屏只展示设备名，IP/会话/时间等细节点开看
+  const [detail, setDetail] = useState<{
+    user: OnlineUser
+    terminal: OnlineTerminal
+  } | null>(null)
 
   const fetchSessions = useCallback(
     async (kw?: string) => {
@@ -118,7 +127,9 @@ export function SettingsLoginManagement() {
     const parts = [terminal.browser, terminal.os]
       .filter((v) => v && !UNKNOWN_DEVICE_RE.test(v.trim()))
       .map((v) => shortenDevice(v.trim()))
-    return parts.length > 0 ? parts.join(' · ') : t('loginManagement.unknownDevice')
+    return parts.length > 0
+      ? parts.join(' · ')
+      : t('loginManagement.unknownDevice')
   }
 
   const agoLabel = (ms?: number) => {
@@ -221,7 +232,9 @@ export function SettingsLoginManagement() {
     <div className='flex flex-1 flex-col'>
       <header className='flex flex-wrap items-start justify-between gap-4'>
         <div>
-          <SettingsPageTitle>{t('loginManagement.pageTitle')}</SettingsPageTitle>
+          <SettingsPageTitle>
+            {t('loginManagement.pageTitle')}
+          </SettingsPageTitle>
           <SettingsPageDescription>
             {t('loginManagement.pageDescription')}
           </SettingsPageDescription>
@@ -234,7 +247,7 @@ export function SettingsLoginManagement() {
               fetchSessions(keyword)
             }}
           >
-            <Search className='absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground' />
+            <Search className='absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground' />
             <Input
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
@@ -250,16 +263,15 @@ export function SettingsLoginManagement() {
             disabled={loading}
             aria-label={t('loginManagement.refresh')}
           >
-            <RefreshCw
-              className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`}
-            />
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </header>
 
-      <div className='mt-8 flex-1'>
-        {/* 桌面端表格 */}
-        <div className='hidden rounded-md border md:block'>
+      {/* 按内容区宽度切换布局：设置页左侧还有导航，视口够宽不代表表格放得下 */}
+      <div className='@container/list mt-8 flex-1'>
+        {/* 宽容器：完整表格 */}
+        <div className='hidden rounded-md border @4xl/list:block'>
           <Table className='min-w-[760px]'>
             <TableHeader>
               <TableRow>
@@ -314,10 +326,15 @@ export function SettingsLoginManagement() {
                             <div className='min-w-0'>
                               <div className='flex items-center gap-1.5'>
                                 <span className='truncate text-sm font-medium'>
-                                  {user.nickname || user.username || user.loginId}
+                                  {user.nickname ||
+                                    user.username ||
+                                    user.loginId}
                                 </span>
                                 {abnormal && (
-                                  <Badge variant='secondary' className='text-xs'>
+                                  <Badge
+                                    variant='secondary'
+                                    className='text-xs'
+                                  >
                                     {abnormal}
                                   </Badge>
                                 )}
@@ -342,17 +359,20 @@ export function SettingsLoginManagement() {
                           )}
                         </div>
                         <div className='mt-0.5 truncate text-xs text-muted-foreground'>
-                          {[terminal.ip, `${t('loginManagement.tokenTail')} ${terminal.tokenTail}`]
+                          {[
+                            terminal.ip,
+                            `${t('loginManagement.tokenTail')} ${terminal.tokenTail}`,
+                          ]
                             .filter(Boolean)
                             .join(' · ')}
                         </div>
                       </TableCell>
-                      <TableCell className='whitespace-nowrap text-xs text-muted-foreground'>
+                      <TableCell className='text-xs whitespace-nowrap text-muted-foreground'>
                         {terminal.loginTime
                           ? dayjs(terminal.loginTime).format('YYYY-MM-DD HH:mm')
                           : '—'}
                       </TableCell>
-                      <TableCell className='whitespace-nowrap text-xs text-muted-foreground'>
+                      <TableCell className='text-xs whitespace-nowrap text-muted-foreground'>
                         {agoLabel(terminal.lastActiveTime)}
                       </TableCell>
                       <TableCell>
@@ -362,7 +382,9 @@ export function SettingsLoginManagement() {
                             size='sm'
                             className='h-7 px-2.5 text-xs text-destructive hover:text-destructive'
                             disabled={!!actingKey}
-                            onClick={() => setTarget({ type: 'terminal', user, terminal })}
+                            onClick={() =>
+                              setTarget({ type: 'terminal', user, terminal })
+                            }
                           >
                             {t('loginManagement.kickDevice')}
                           </Button>
@@ -387,8 +409,8 @@ export function SettingsLoginManagement() {
           </Table>
         </div>
 
-        {/* 移动端：表格塞不下，按用户分组改为卡片 */}
-        <div className='rounded-md border md:hidden'>
+        {/* 窄容器：每行只放设备名，IP/会话/时间与操作点开详情再展示 */}
+        <div className='rounded-md border @4xl/list:hidden'>
           {loading && users.length === 0 ? (
             <div className='py-8 text-center text-sm text-muted-foreground'>
               {t('loginManagement.loading')}
@@ -401,12 +423,9 @@ export function SettingsLoginManagement() {
             users.map((user) => {
               const abnormal = statusLabel(user.status)
               return (
-                <div
-                  key={user.loginId}
-                  className='border-b p-4 last:border-b-0'
-                >
-                  <div className='flex items-start justify-between gap-2'>
-                    <div className='flex min-w-0 items-center gap-3'>
+                <div key={user.loginId} className='border-b last:border-b-0'>
+                  <div className='flex items-center justify-between gap-2 px-3 pt-3 pb-1'>
+                    <div className='flex min-w-0 items-center gap-2.5'>
                       <Avatar className='h-8 w-8'>
                         {user.avatar && <AvatarImage src={user.avatar} />}
                         <AvatarFallback className='text-xs'>
@@ -441,58 +460,26 @@ export function SettingsLoginManagement() {
                       {t('loginManagement.kickAll')}
                     </Button>
                   </div>
-                  <ul className='mt-3 space-y-2'>
+                  <ul className='px-2 py-2'>
                     {(user.terminals ?? []).map((terminal) => (
-                      <li
-                        key={terminal.tokenTail}
-                        className='rounded-md bg-muted/40 p-3'
-                      >
-                        <div className='flex items-center justify-between gap-2'>
-                          <div className='flex min-w-0 items-center gap-1.5'>
-                            <RiComputerLine className='size-4 shrink-0 text-muted-foreground' />
-                            <span className='truncate text-sm'>
-                              {deviceLabel(terminal)}
-                            </span>
-                            {terminal.current && (
-                              <Badge className='shrink-0 text-xs'>
-                                {t('loginManagement.currentSession')}
-                              </Badge>
-                            )}
-                          </div>
-                          <Button
-                            variant='ghost'
-                            size='sm'
-                            className='h-7 shrink-0 px-2.5 text-xs text-destructive hover:text-destructive'
-                            disabled={!!actingKey}
-                            onClick={() =>
-                              setTarget({ type: 'terminal', user, terminal })
-                            }
-                          >
-                            {t('loginManagement.kickDevice')}
-                          </Button>
-                        </div>
-                        <div className='mt-1 truncate text-xs text-muted-foreground'>
-                          {[
-                            terminal.ip,
-                            `${t('loginManagement.tokenTail')} ${terminal.tokenTail}`,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </div>
-                        <div className='mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground'>
-                          <span>
-                            {t('loginManagement.colLoginAt')}{' '}
-                            {terminal.loginTime
-                              ? dayjs(terminal.loginTime).format(
-                                  'MM-DD HH:mm'
-                                )
-                              : '—'}
+                      <li key={terminal.tokenTail}>
+                        <button
+                          type='button'
+                          className='flex w-full items-center gap-2 rounded-md px-2 py-2.5 text-left transition-colors hover:bg-muted/60 active:bg-muted'
+                          onClick={() => setDetail({ user, terminal })}
+                          aria-label={`${deviceLabel(terminal)} ${t('loginManagement.viewDetails')}`}
+                        >
+                          <RiComputerLine className='size-4 shrink-0 text-muted-foreground' />
+                          <span className='min-w-0 flex-1 truncate text-sm'>
+                            {deviceLabel(terminal)}
                           </span>
-                          <span>
-                            {t('loginManagement.colLastActive')}{' '}
-                            {agoLabel(terminal.lastActiveTime)}
-                          </span>
-                        </div>
+                          {terminal.current && (
+                            <Badge className='shrink-0 text-xs'>
+                              {t('loginManagement.currentSession')}
+                            </Badge>
+                          )}
+                          <ChevronRight className='size-4 shrink-0 text-muted-foreground' />
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -503,7 +490,82 @@ export function SettingsLoginManagement() {
         </div>
       </div>
 
-      <AlertDialog open={!!target} onOpenChange={(open) => !open && setTarget(null)}>
+      <Dialog open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>
+        <DialogContent className='sm:max-w-md'>
+          <DialogHeader>
+            <DialogTitle>{t('loginManagement.detailTitle')}</DialogTitle>
+            <DialogDescription>
+              {detail
+                ? detail.user.nickname ||
+                  detail.user.username ||
+                  detail.user.loginId
+                : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {detail && (
+            <dl className='grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-sm'>
+              <dt className='text-muted-foreground'>
+                {t('loginManagement.colDevice')}
+              </dt>
+              <dd className='flex min-w-0 flex-wrap items-center gap-1.5'>
+                <span className='break-words'>
+                  {deviceLabel(detail.terminal)}
+                </span>
+                {detail.terminal.current && (
+                  <Badge className='text-xs'>
+                    {t('loginManagement.currentSession')}
+                  </Badge>
+                )}
+              </dd>
+              <dt className='text-muted-foreground'>
+                {t('loginManagement.ip')}
+              </dt>
+              <dd className='break-all'>{detail.terminal.ip || '—'}</dd>
+              <dt className='text-muted-foreground'>
+                {t('loginManagement.tokenTail')}
+              </dt>
+              <dd className='break-all'>{detail.terminal.tokenTail}</dd>
+              <dt className='text-muted-foreground'>
+                {t('loginManagement.colLoginAt')}
+              </dt>
+              <dd>
+                {detail.terminal.loginTime
+                  ? dayjs(detail.terminal.loginTime).format('YYYY-MM-DD HH:mm')
+                  : '—'}
+              </dd>
+              <dt className='text-muted-foreground'>
+                {t('loginManagement.colLastActive')}
+              </dt>
+              <dd>{agoLabel(detail.terminal.lastActiveTime)}</dd>
+            </dl>
+          )}
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setDetail(null)}>
+              {t('account.cancel')}
+            </Button>
+            <Button
+              variant='destructive'
+              disabled={!!actingKey}
+              onClick={() => {
+                if (!detail) return
+                setTarget({
+                  type: 'terminal',
+                  user: detail.user,
+                  terminal: detail.terminal,
+                })
+                setDetail(null)
+              }}
+            >
+              {t('loginManagement.kickDevice')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={!!target}
+        onOpenChange={(open) => !open && setTarget(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{confirmTitle()}</AlertDialogTitle>
