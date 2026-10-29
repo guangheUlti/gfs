@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -319,6 +320,9 @@ public class DavController {
              OutputStream out = response.getOutputStream()) {
             in.transferTo(out);
             out.flush();
+        } catch (AsyncRequestNotUsableException e) {
+            // 播放器拖动进度条/切集时会主动断开，属于正常行为，不是服务端故障
+            log.debug("WebDAV 下载中断（客户端断开）: path={}", relativePath);
         } catch (Exception e) {
             log.warn("WebDAV 下载失败: path={}", relativePath, e);
             if (!response.isCommitted()) {

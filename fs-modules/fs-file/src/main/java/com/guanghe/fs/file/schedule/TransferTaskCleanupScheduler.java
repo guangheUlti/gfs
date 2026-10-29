@@ -63,7 +63,7 @@ public class TransferTaskCleanupScheduler {
                         .map(FileTransferTask::getTaskId)
                         .collect(Collectors.toList());
                 
-                fileTransferTaskService.removeByIds(completedOrCanceledTasks);
+                fileTransferTaskService.removeByIds(idsOf(completedOrCanceledTasks));
                 cacheManager.cleanTasks(taskIds);
                 
                 log.info("清理已完成或已取消的任务: count={}", completedOrCanceledTasks.size());
@@ -82,7 +82,7 @@ public class TransferTaskCleanupScheduler {
                         .map(FileTransferTask::getTaskId)
                         .collect(Collectors.toList());
                 
-                fileTransferTaskService.removeByIds(failedTasks);
+                fileTransferTaskService.removeByIds(idsOf(failedTasks));
                 cacheManager.cleanTasks(taskIds);
                 
                 log.info("清理失败的任务: count={}", failedTasks.size());
@@ -107,7 +107,7 @@ public class TransferTaskCleanupScheduler {
                         .map(FileTransferTask::getTaskId)
                         .collect(Collectors.toList());
                 
-                fileTransferTaskService.removeByIds(inactiveTasks);
+                fileTransferTaskService.removeByIds(idsOf(inactiveTasks));
                 cacheManager.cleanTasks(taskIds);
                 
                 log.info("清理长时间未活动的任务: count={}", inactiveTasks.size());
@@ -119,6 +119,11 @@ public class TransferTaskCleanupScheduler {
         } catch (Exception e) {
             log.error("清理过期传输任务失败", e);
         }
+    }
+
+    /** removeByIds 要的是主键，传实体进去会被当成参数序列化后拼进 SQL */
+    private static List<Long> idsOf(List<FileTransferTask> tasks) {
+        return tasks.stream().map(FileTransferTask::getId).collect(Collectors.toList());
     }
 
     private void abortIncompleteMultipartUploads(List<FileTransferTask> tasks) {

@@ -23,6 +23,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -65,7 +66,7 @@ public class GlobalExceptionHandler {
      * 认证失败
      */
     @ExceptionHandler(NotLoginException.class)
-    public Result<?> handlerNotLoginException(NotLoginException nle) {
+    public Result<?> handlerNotLoginException(NotLoginException nle, HttpServletRequest request) {
         ErrorCode errorCode;
         String i18nKey;
         
@@ -100,7 +101,8 @@ public class GlobalExceptionHandler {
             }
         }
         
-        log.error("Token exception [{}]: {}", errorCode.getCode(), nle.getMessage(), nle);
+        // 未登录/已过期/被踢下线都是正常流程（前端随后跳登录页），且异常消息里带 token 原文，不入日志
+        log.warn("认证失败[{}]: type={}, uri={}", errorCode.getCode(), nle.getType(), request.getRequestURI());
         return Result.error(errorCode.getCode(), I18nUtils.getMessage(i18nKey), null);
     }
 
@@ -273,6 +275,18 @@ public class GlobalExceptionHandler {
         }
         // 不是客户端断开异常，按正常异常处理
         return defHandler(I18nUtils.getMessage("system.error"), e);
+    }
+
+    /**
+     * 异步请求超时（SSE 连接到期时容器会重新派发一次该异常）。
+     * <p>
+     * 此时响应头已经按 {@code text/event-stream} 发出：既不能改状态码，也不能再写 JSON 信封，
+     * 交给通用异常处理会额外抛「No converter for Result with preset Content-Type」。
+     * 连接到期本身是正常生命周期（前端会自动重连），这里静默结束。
+     */
+    @ExceptionHandler(AsyncRequestTimeoutException.class)
+    public void handleAsyncRequestTimeout(AsyncRequestTimeoutException e) {
+        log.debug("异步请求超时: {}", e.getMessage());
     }
 
     /**

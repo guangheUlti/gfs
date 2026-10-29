@@ -107,6 +107,7 @@ public class AlistAuthFilter implements Filter {
             if (StrUtil.isNotBlank(sign)) {
                 String userId = tokenService.verifySign(sign, "/" + decode(path.substring(3)));
                 if (userId == null) {
+                    logRejected(req, path, "直链签名无效或已过期");
                     AlistResponse.unauthorized(resp);
                     return;
                 }
@@ -119,6 +120,7 @@ public class AlistAuthFilter implements Filter {
                 chain.doFilter(request, response);
                 return;
             }
+            logRejected(req, path, "直链未带签名且游客访问不可用");
             AlistResponse.unauthorized(resp);
             return;
         }
@@ -141,6 +143,8 @@ public class AlistAuthFilter implements Filter {
                 chain.doFilter(request, response);
                 return;
             }
+            logRejected(req, path, StrUtil.isBlank(req.getHeader("Authorization"))
+                    ? "未带 token 且游客访问不可用" : "token 无效");
             AlistResponse.unauthorized(resp);
             return;
         }
@@ -154,6 +158,15 @@ public class AlistAuthFilter implements Filter {
 
         authenticator.bridgeSaToken(userId);
         chain.doFilter(request, response);
+    }
+
+    /**
+     * 记录被拒绝的 AList 请求：外部客户端（影视仓/TVBox/rclone）连不上时服务端没有任何访问日志，
+     * 只有认证失败这一条线索能区分「没打到这里」和「打到了但凭证不对」。
+     */
+    private void logRejected(HttpServletRequest req, String path, String reason) {
+        log.info("AList 拒绝访问: {} {}, 原因={}, ip={}, ua={}", req.getMethod(), path, reason,
+                req.getRemoteAddr(), StrUtil.blankToDefault(req.getHeader("User-Agent"), "-"));
     }
 
     /** 去掉 contextPath 的请求路径 */
