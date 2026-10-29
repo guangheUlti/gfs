@@ -25,6 +25,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { useServiceSettings } from '../hooks/useServiceSettings'
 import { OssKeyManager } from './OssKeyManager'
 import { ServiceStatusBadge } from './ServiceStatusBadge'
+import { WebDavAccessInfo } from './WebDavAccessInfo'
 
 interface ServiceSettingCardProps {
   setting: ServiceSettingVO
@@ -38,6 +39,8 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
   const socketBased = setting.port != null
   // 游客访问只对 AList 有意义：影视仓/TVBox 这类客户端不登录
   const isAlist = setting.serviceType === 'alist'
+  // WebDAV 是固定 /dav 入口，卡片里给出可复制的地址与当前能力
+  const isWebdav = setting.serviceType === 'webdav'
 
   const [port, setPort] = useState(String(setting.port ?? 9022))
   const [bindAddress, setBindAddress] = useState(setting.bindAddress || '0.0.0.0')
@@ -251,6 +254,8 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
           </div>
           <p className='text-xs text-muted-foreground'>{t('form.readOnlyHint')}</p>
         </div>
+
+        {isWebdav && <WebDavAccessInfo readOnly={setting.readOnly} />}
 
         {isAlist && (
           <div className='space-y-3 rounded-md border border-dashed px-3 py-3'>

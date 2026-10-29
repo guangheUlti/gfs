@@ -2,11 +2,9 @@ import i18n from '@/i18n'
 import { toast } from 'sonner'
 
 /**
- * 默认命名空间下的提示文案（common 命名空间无 copied/copyFailed 键，
- * 调用方各自的文案键分散在 files/settings/storage 等命名空间，
- * 这里统一用 files 命名空间，该命名空间全局加载）
+ * 提示文案取 files 命名空间的 common 分组（该命名空间全局加载）
  */
-const tCommon = (key: 'copied' | 'copyFailed') => i18n.t(`files:${key}`)
+const tCommon = (key: 'copied' | 'copyFailed') => i18n.t(`files:common.${key}`)
 
 /**
  * 降级复制：隐藏 textarea + execCommand('copy')
@@ -43,7 +41,7 @@ function copyViaExecCommand(text: string): boolean {
   textarea.select()
   textarea.setSelectionRange(0, text.length)
 
-  let ok = false
+  let ok: boolean
   try {
     ok = document.execCommand('copy')
   } catch {
