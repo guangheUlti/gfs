@@ -71,4 +71,14 @@ public interface FileRecycleService {
      * @param storageSettingId 存储配置 ID
      */
     void purgeStorageFiles(String storageSettingId);
+
+    /**
+     * 清理指定用户的全部文件（含回收站），并删除无引用的物理对象。
+     * <p>
+     * 供管理员删除账号使用；与永久删除一致，挂载式存储会同时清理真实目录。
+     *
+     * @param userId 用户ID
+     * @return 删除的文件/文件夹记录数
+     */
+    int purgeUserFiles(String userId);
 }

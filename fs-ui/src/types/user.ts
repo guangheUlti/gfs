@@ -27,6 +27,51 @@ export interface PendingUser {
   createdAt: string
 }
 
+/** 管理员账号列表项 */
+export interface AdminUser {
+  id: string
+  username: string
+  nickname: string
+  avatar?: string
+  /** 0 正常 / 1 禁用 / 2 待审核 / 3 已拒绝 */
+  status: number
+  /** 是否为系统管理员（唯一超级管理员） */
+  superAdmin: boolean
+  createdAt?: string
+  lastLoginAt?: string
+  /** 当前在线终端数 */
+  onlineTerminals: number
+  /** 是否被防暴力锁定 */
+  locked: boolean
+  /** 锁定剩余秒数 */
+  lockRemainingSeconds?: number
+}
+
+/** 账号列表查询参数 */
+export interface AdminUserQuery {
+  keyword?: string
+  status?: number
+  page?: number
+  pageSize?: number
+}
+
+/** 修改账号资料 */
+export interface AdminUserUpdateParams {
+  nickname: string
+}
+
+/** 账号残留数据概览 */
+export interface AdminUserDataSummary {
+  fileCount: number
+  recycleCount: number
+  favoriteCount: number
+  shareCount: number
+  collectionCount: number
+  transferTaskCount: number
+  ossKeyCount: number
+  hasData: boolean
+}
+
 /** 被锁定账号（连续登录失败触发防暴力锁定，锁定数据在服务端 Redis） */
 export interface LockedUser {
   username: string

@@ -234,5 +234,9 @@ export const request = {
   },
 }
 
+/** 请求错误是否已由拦截器提示过（业务层用它在 catch 里避免重复弹窗） */
+export const isHandledError = (err: unknown): boolean =>
+  !!(err as { handled?: boolean } | null | undefined)?.handled
+
 export default service
 export { service }

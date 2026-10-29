@@ -201,6 +201,36 @@ public class FileCollectionServiceImpl
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int purgeUserCollections(String userId) {
+        if (StrUtil.isBlank(userId)) {
+            return 0;
+        }
+        List<String> collectionIds = this.list(new QueryWrapper().where(FILE_COLLECTION.USER_ID.eq(userId)))
+                .stream()
+                .map(FileCollection::getId)
+                .toList();
+        if (collectionIds.isEmpty()) {
+            return 0;
+        }
+        submissionMapper.deleteByQuery(new QueryWrapper()
+                .where(FILE_COLLECTION_SUBMISSION.COLLECTION_ID.in(collectionIds)));
+
+        QueryWrapper taskQuery = new QueryWrapper()
+                .where(FILE_TRANSFER_TASK.COLLECTION_ID.in(collectionIds));
+        List<FileTransferTask> tasks = transferTaskMapper.selectListByQuery(taskQuery);
+        if (!tasks.isEmpty()) {
+            transferTaskMapper.deleteByQuery(taskQuery);
+            transferTaskCacheManager.cleanTasks(tasks.stream()
+                    .map(FileTransferTask::getTaskId)
+                    .filter(Objects::nonNull)
+                    .toList());
+        }
+        this.removeByIds(collectionIds);
+        return collectionIds.size();
+    }
+
+    @Override
     public PageResult<FileCollectionSubmissionVO> getSubmissions(
             String collectionId, FileCollectionSubmissionQry qry) {
         getOwnedCollection(collectionId);

@@ -70,6 +70,14 @@ public interface FileShareService extends IService<FileShare> {
     void cancelAllShares();
 
     /**
+     * 删除指定用户的全部分享（含分享项与访问记录），供管理员删除账号使用
+     *
+     * @param userId 用户id
+     * @return 删除的分享数量
+     */
+    int purgeUserShares(String userId);
+
+    /**
      * 校验提取码
      *
      * @param cmd

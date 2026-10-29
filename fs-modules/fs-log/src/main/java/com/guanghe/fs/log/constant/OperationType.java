@@ -32,6 +32,11 @@ public final class OperationType {
     public static final String SWITCH_STORAGE = "SWITCH_STORAGE";
     public static final String DELETE_STORAGE = "DELETE_STORAGE";
     public static final String CREATE_USER = "CREATE_USER";
+    public static final String UPDATE_USER = "UPDATE_USER";
+    public static final String ENABLE_USER = "ENABLE_USER";
+    public static final String DISABLE_USER = "DISABLE_USER";
+    public static final String RESET_USER_PASSWORD = "RESET_USER_PASSWORD";
+    public static final String DELETE_USER = "DELETE_USER";
     public static final String APPROVE_USER = "APPROVE_USER";
     public static final String REJECT_USER = "REJECT_USER";
     public static final String UNLOCK_USER = "UNLOCK_USER";

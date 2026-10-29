@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { adminApi } from '@/api'
+import { adminApi, isHandledError } from '@/api'
 import {
   Dialog,
   DialogContent,
@@ -72,7 +72,7 @@ export function CreateUserDialog({
       onOpenChange(false)
       onCreated()
     } catch (err) {
-      if (!err?.handled) toast.error(t('userManagement.createFailed'))
+      if (!isHandledError(err)) toast.error(t('userManagement.createFailed'))
     } finally {
       setSubmitting(false)
     }

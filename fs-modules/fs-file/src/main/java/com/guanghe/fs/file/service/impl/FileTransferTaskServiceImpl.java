@@ -1259,12 +1259,45 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
         cacheManager.cleanTasks(taskIds);
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int purgeUserTasks(String userId) {
+        if (StringUtils.isEmpty(userId)) {
+            return 0;
+        }
+        // 先处理内存中的文件夹打包任务：标记取消并删除已生成的压缩包，
+        // 避免账号删除后任务线程继续占用带宽或留下临时文件
+        folderDownloadTasks.values().stream()
+                .filter(task -> userId.equals(task.userId))
+                .toList()
+                .forEach(task -> {
+                    task.cancelRequested = true;
+                    if ("completed".equals(task.status)
+                            || "failed".equals(task.status)
+                            || "canceled".equals(task.status)) {
+                        folderDownloadTasks.remove(task.taskId, task);
+                        deleteFolderDownloadZip(task.zipPath);
+                    }
+                });
+
+        List<FileTransferTask> tasks = this.list(new QueryWrapper()
+                .where(FILE_TRANSFER_TASK.USER_ID.eq(userId)));
+        if (tasks.isEmpty()) {
+            return 0;
+        }
+        this.remove(new QueryWrapper().where(FILE_TRANSFER_TASK.USER_ID.eq(userId)));
+        cacheManager.cleanTasks(tasks.stream()
+                .map(FileTransferTask::getTaskId)
+                .filter(Objects::nonNull)
+                .toList());
+        return tasks.size();
+    }
+
     /**
      * 合并任务通常在异步线程完成，不能依赖当前请求线程的 Sa-Token 会话；
      * 因此按任务中的用户 ID 查询稳定的用户名，避免把 ULID 当作操作人名称。
      */
-    private String resolveOperatorName(String userId) {
-        if (StringUtils.isEmpty(userId)) {
+    private String resolveOperatorName(String userId) {        if (StringUtils.isEmpty(userId)) {
             return userId;
         }
         try {

@@ -9,6 +9,7 @@ import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.guanghe.fs.file.domain.FileInfo;
 import com.guanghe.fs.file.domain.FileShare;
+import com.guanghe.fs.file.domain.FileShareAccessRecord;
 import com.guanghe.fs.file.domain.FileShareItem;
 import com.guanghe.fs.file.domain.dto.CreateDirectLinkCmd;
 import com.guanghe.fs.file.domain.dto.CreateFileShareAccessRecordCmd;
@@ -25,6 +26,7 @@ import com.guanghe.fs.file.domain.vo.FolderDownloadTaskVO;
 import com.guanghe.fs.file.mapper.FileShareMapper;
 import com.guanghe.fs.file.mount.RemoteMountService;
 import com.guanghe.fs.file.service.FileInfoService;
+import com.guanghe.fs.file.service.FileShareAccessRecordService;
 import com.guanghe.fs.file.service.FileShareItemService;
 import com.guanghe.fs.file.service.FileShareService;
 import com.guanghe.fs.file.service.FileTransferTaskService;
@@ -72,6 +74,8 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
     private final FileInfoService fileInfoService;
 
     private final FileShareItemService fileShareItemService;
+
+    private final FileShareAccessRecordService fileShareAccessRecordService;
 
     private final FileTransferTaskService fileTransferTaskService;
 
@@ -340,6 +344,26 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
         List<FileShare> shareIds = this.list(new QueryWrapper().where(FILE_SHARE.USER_ID.eq(userId)));
         List<String> shareIdList = shareIds.stream().map(FileShare::getId).toList();
         this.cancelShares(shareIdList);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int purgeUserShares(String userId) {
+        if (StrUtil.isBlank(userId)) {
+            return 0;
+        }
+        List<String> shareIds = this.list(new QueryWrapper().where(FILE_SHARE.USER_ID.eq(userId)))
+                .stream()
+                .map(FileShare::getId)
+                .toList();
+        if (shareIds.isEmpty()) {
+            return 0;
+        }
+        this.removeByIds(shareIds);
+        fileShareItemService.remove(new QueryWrapper().in(FileShareItem::getShareId, shareIds));
+        fileShareAccessRecordService.remove(
+                new QueryWrapper().in(FileShareAccessRecord::getShareId, shareIds));
+        return shareIds.size();
     }
 
     @Override

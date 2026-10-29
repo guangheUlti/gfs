@@ -144,6 +144,20 @@ public class FileUserFavoritesServiceImpl extends ServiceImpl<FileUserFavoritesM
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int removeByUserId(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return 0;
+        }
+        QueryWrapper wrapper = new QueryWrapper().where(FILE_USER_FAVORITES.USER_ID.eq(userId));
+        long count = this.count(wrapper);
+        if (count > 0) {
+            this.remove(wrapper);
+        }
+        return (int) count;
+    }
+
+    @Override
     public Long getFavoritesCount() {
         String userId = StpUtil.getLoginIdAsString();
         String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();

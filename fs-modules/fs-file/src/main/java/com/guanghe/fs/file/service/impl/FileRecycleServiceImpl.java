@@ -216,7 +216,46 @@ public class FileRecycleServiceImpl implements FileRecycleService {
             fileInfoService.deleteRemoteFiles(remoteIds);
         }
         List<FileInfo> allFiles = fileInfoService.listByIds(allFileIds);
-        List<FileInfo> physicalObjects = allFiles.stream()
+        Map<String, List<FileInfo>> mountDirDeletes = resolveMountDirDeletes(allFiles);
+        List<FileInfo> physicalObjects = collectPhysicalObjects(allFiles, mountDirDeletes);
+
+        fileInfoService.removeByIds(allFileIds);
+
+        fileUserFavoritesService.removeByFileIds(allFileIds, userId);
+
+        schedulePhysicalDeletes(physicalObjects, mountDirDeletes);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int purgeUserFiles(String userId) {
+        if (StrUtil.isBlank(userId)) {
+            return 0;
+        }
+        List<FileInfo> allFiles = fileInfoService.list(
+                new QueryWrapper().where(FILE_INFO.USER_ID.eq(userId)));
+        if (CollUtil.isEmpty(allFiles)) {
+            return 0;
+        }
+        List<String> fileIds = allFiles.stream().map(FileInfo::getId).toList();
+        Map<String, List<FileInfo>> mountDirDeletes = resolveMountDirDeletes(allFiles);
+        List<FileInfo> physicalObjects = collectPhysicalObjects(allFiles, mountDirDeletes);
+
+        fileInfoService.removeByIds(fileIds);
+        fileUserFavoritesService.removeByFileIds(fileIds, userId);
+
+        schedulePhysicalDeletes(physicalObjects, mountDirDeletes);
+        log.info("清理用户 {} 的全部文件，共 {} 项", userId, fileIds.size());
+        return fileIds.size();
+    }
+
+    /**
+     * 秒传引用链路按「存储配置 + objectKey」去重，物理对象在事务提交后删除，
+     * 避免误删其他用户仍在引用的对象。
+     */
+    private List<FileInfo> collectPhysicalObjects(List<FileInfo> allFiles,
+                                                  Map<String, List<FileInfo>> mountDirDeletes) {
+        return allFiles.stream()
                 .filter(file -> StrUtil.isNotBlank(file.getObjectKey()))
                 .collect(Collectors.toMap(
                         file -> String.valueOf(file.getStoragePlatformSettingId()) + "|" + file.getObjectKey(),
@@ -224,11 +263,19 @@ public class FileRecycleServiceImpl implements FileRecycleService {
                         (left, right) -> left,
                         LinkedHashMap::new
                 ))
-                .values().stream().toList();
+                .values().stream()
+                .filter(file -> !(Boolean.TRUE.equals(file.getIsDir())
+                        && mountDirDeletes.containsKey(String.valueOf(file.getStoragePlatformSettingId()))
+                        && StrUtil.isNotBlank(file.getObjectKey())))
+                .toList();
+    }
 
-        // 挂载式：目录记录不走秒传引用链路，afterCommit 直接 deleteDirectory 清真实目录（8.4：真实目录随永久删除清理）。
-        // 目录行的 object_key 恒为 NULL（真实键由显示名链推导），必须在删除前的事务内先解析好相对键，
-        // 否则 afterCommit 时行已删、无从解析，目录在真实存储/内存树中残留并被对账导回。
+    /**
+     * 挂载式目录记录不走秒传引用链路，提交后直接 deleteDirectory 清真实目录。
+     * 目录行的 object_key 恒为 NULL（真实键由显示名链推导），必须在删除前的事务内先解析好相对键，
+     * 否则 afterCommit 时行已删、无从解析，目录在真实存储/内存树中残留并被对账导回。
+     */
+    private Map<String, List<FileInfo>> resolveMountDirDeletes(List<FileInfo> allFiles) {
         Map<String, List<FileInfo>> mountDirDeletes = new LinkedHashMap<>();
         for (FileInfo file : allFiles) {
             if (!Boolean.TRUE.equals(file.getIsDir())
@@ -246,18 +293,13 @@ public class FileRecycleServiceImpl implements FileRecycleService {
                 log.warn("挂载目录相对键解析失败，跳过真实目录清理: id={}, error={}", file.getId(), e.getMessage());
             }
         }
-        physicalObjects = physicalObjects.stream()
-                .filter(file -> !(Boolean.TRUE.equals(file.getIsDir())
-                        && mountDirDeletes.containsKey(String.valueOf(file.getStoragePlatformSettingId()))
-                        && StrUtil.isNotBlank(file.getObjectKey())))
-                .toList();
+        return mountDirDeletes;
+    }
+
+    private void schedulePhysicalDeletes(List<FileInfo> physicalObjects,
+                                         Map<String, List<FileInfo>> mountDirDeletes) {
         final Map<String, List<FileInfo>> mountDirDeletesFinal = mountDirDeletes;
         final List<FileInfo> physicalObjectsFinal = physicalObjects;
-
-        fileInfoService.removeByIds(allFileIds);
-
-        fileUserFavoritesService.removeByFileIds(allFileIds, userId);
-
         TransactionSynchronizationManager.registerSynchronization(
                 new TransactionSynchronization() {
                     @Override

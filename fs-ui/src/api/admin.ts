@@ -1,6 +1,11 @@
 import { request } from './request'
+import type { PageRecord } from '@/types/page'
 import type {
+  AdminUser,
   AdminUserCreateParams,
+  AdminUserDataSummary,
+  AdminUserQuery,
+  AdminUserUpdateParams,
   LockedUser,
   OnlineUser,
   PendingUser,
@@ -10,6 +15,36 @@ import type {
  * 系统级管理 API（全局操作，仅系统管理员可用）
  */
 export const adminApi = {
+  /** 账号列表（分页，含在线终端与锁定状态） */
+  listUsers: (params?: AdminUserQuery) => {
+    return request.get<PageRecord<AdminUser>>('/apis/admin/users', { params })
+  },
+
+  /** 修改账号资料（用户名不可改，仅昵称） */
+  updateUser: (userId: string, data: AdminUserUpdateParams) => {
+    return request.put(`/apis/admin/users/${userId}`, data)
+  },
+
+  /** 启用/禁用账号（禁用同时强制下线） */
+  setUserEnabled: (userId: string, enabled: boolean) => {
+    return request.put(`/apis/admin/users/${userId}/status`, { enabled })
+  },
+
+  /** 重置账号密码（重置后该账号全部会话下线） */
+  resetUserPassword: (userId: string, password: string) => {
+    return request.put(`/apis/admin/users/${userId}/password`, { password })
+  },
+
+  /** 账号残留数据概览（删除前确认） */
+  getUserDataSummary: (userId: string) => {
+    return request.get<AdminUserDataSummary>(`/apis/admin/users/${userId}/data`)
+  },
+
+  /** 删除账号并彻底清除其全部数据 */
+  deleteUser: (userId: string) => {
+    return request.delete(`/apis/admin/users/${userId}`)
+  },
+
   /** 手动创建用户（免审核，创建即可登录） */
   createUser: (data: AdminUserCreateParams) => {
     return request.post<void>('/apis/admin/users', data)

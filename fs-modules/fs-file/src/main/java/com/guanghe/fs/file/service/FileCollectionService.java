@@ -27,4 +27,12 @@ public interface FileCollectionService extends IService<FileCollection> {
     void completeSubmission(String collectionId, String submissionId, String uploadToken);
     FileCollectionUploadContext authorizeUpload(String collectionId, String submissionId, String uploadToken);
     void recordUploadedFile(String collectionId, String submissionId, long fileSize);
+
+    /**
+     * 删除指定用户的全部文件收集（含提交记录与已结束的收集任务），供管理员删除账号使用
+     *
+     * @param userId 用户id
+     * @return 删除的收集数量
+     */
+    int purgeUserCollections(String userId);
 }

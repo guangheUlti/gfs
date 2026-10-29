@@ -179,4 +179,12 @@ public interface FileTransferTaskService extends IService<FileTransferTask> {
      * @return 传输任务
      */
     FileTransferTask getTask(String taskId);
+
+    /**
+     * 删除指定用户的全部传输任务记录及缓存，供管理员删除账号使用
+     *
+     * @param userId 用户id
+     * @return 删除的任务数量
+     */
+    int purgeUserTasks(String userId);
 }

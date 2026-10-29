@@ -51,6 +51,18 @@ public class OssAccessKeyService {
                 .orderBy(OSS_ACCESS_KEY.CREATED_AT.desc()));
     }
 
+    /** 用户的密钥数量（管理员账号数据概览） */
+    public long countByUser(String userId) {
+        return mapper.selectCountByQuery(new QueryWrapper()
+                .where(OSS_ACCESS_KEY.USER_ID.eq(userId)));
+    }
+
+    /** 删除用户的全部密钥（含未吊销的），供管理员删除账号使用 */
+    public int deleteByUser(String userId) {
+        return mapper.deleteByQuery(new QueryWrapper()
+                .where(OSS_ACCESS_KEY.USER_ID.eq(userId)));
+    }
+
     /** 吊销密钥 */
     public boolean revoke(String userId, String keyId) {
         OssAccessKey key = mapper.selectOneById(keyId);

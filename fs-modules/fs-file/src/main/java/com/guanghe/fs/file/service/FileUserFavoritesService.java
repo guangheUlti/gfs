@@ -44,6 +44,14 @@ public interface FileUserFavoritesService extends IService<FileUserFavorites> {
     void removeByFileIds(Collection<String> fileIds);
 
     /**
+     * 删除指定用户的全部收藏记录（供管理员删除账号使用）
+     *
+     * @param userId 用户ID
+     * @return 删除的收藏数量
+     */
+    int removeByUserId(String userId);
+
+    /**
      * 获取用户收藏文件数量
      *
      * @return

@@ -1,21 +1,41 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { LockOpen, RefreshCw, UserPlus } from 'lucide-react'
 import dayjs from 'dayjs'
-import { adminApi } from '@/api'
-import type { LockedUser, PendingUser } from '@/types/user'
+import {
+  ChevronLeft,
+  ChevronRight,
+  LockOpen,
+  MoreHorizontal,
+  RefreshCw,
+  Search,
+  UserPlus,
+} from 'lucide-react'
+import { adminApi, isHandledError } from '@/api'
+import { useAuth } from '@/contexts/auth-context'
+import type { AdminUser } from '@/types/user'
 import {
   SettingsPageDescription,
   SettingsPageTitle,
 } from '../components/settings-page-header'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Input } from '@/components/ui/input'
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from '@/components/ui/avatar'
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Table,
   TableBody,
@@ -35,50 +55,80 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { CreateUserDialog } from './create-user-dialog'
+import { EditUserDialog } from './edit-user-dialog'
+import { ResetPasswordDialog } from './reset-password-dialog'
+import { DeleteUserDialog } from './delete-user-dialog'
 
-/** 表格行：待审核用户与被防暴力锁定的账号共用一张表 */
-type Row =
-  | { kind: 'pending'; key: string; user: PendingUser }
-  | { kind: 'locked'; key: string; user: LockedUser }
+const PAGE_SIZE = 10
 
-/** 用户管理：手动创建用户 + 审核新注册用户 + 解除锁定账号 */
+interface QueryState {
+  keyword?: string
+  status?: number
+  page: number
+}
+
+const formatTime = (value?: string) => {
+  if (!value) return null
+  const parsed = dayjs(value)
+  return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm') : null
+}
+
+/** 用户管理：全部账号的增删改查、审核、启用/禁用、重置密码与强制下线 */
 export function SettingsUserManagement() {
   const { t } = useTranslation('settings')
-  const [pending, setPending] = useState<PendingUser[]>([])
-  const [locked, setLocked] = useState<LockedUser[]>([])
+  const { user: currentUser } = useAuth()
+  const [users, setUsers] = useState<AdminUser[]>([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [query, setQuery] = useState<QueryState>({ page: 1 })
+  const [keywordInput, setKeywordInput] = useState('')
   const [actingId, setActingId] = useState<string | null>(null)
-  const [rejectTarget, setRejectTarget] = useState<PendingUser | null>(null)
-  const [createOpen, setCreateOpen] = useState(false)
 
-  const fetchAll = useCallback(async () => {
+  const [createOpen, setCreateOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState<AdminUser | null>(null)
+  const [resetTarget, setResetTarget] = useState<AdminUser | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null)
+  const [rejectTarget, setRejectTarget] = useState<AdminUser | null>(null)
+  const [disableTarget, setDisableTarget] = useState<AdminUser | null>(null)
+  const [kickTarget, setKickTarget] = useState<AdminUser | null>(null)
+
+  const fetchUsers = useCallback(async () => {
     setLoading(true)
     try {
-      const [pendingList, lockedList] = await Promise.all([
-        adminApi.listPendingUsers(),
-        adminApi.listLockedUsers(),
-      ])
-      setPending(pendingList ?? [])
-      setLocked(lockedList ?? [])
+      const res = await adminApi.listUsers({
+        keyword: query.keyword,
+        status: query.status,
+        page: query.page,
+        pageSize: PAGE_SIZE,
+      })
+      setUsers(res?.records ?? [])
+      setTotal(Number(res?.total ?? 0))
     } catch (err) {
-      if (!err?.handled) toast.error(t('userManagement.listFailed'))
+      if (!isHandledError(err)) toast.error(t('userManagement.listFailed'))
     } finally {
       setLoading(false)
     }
-  }, [t])
+  }, [query, t])
 
   useEffect(() => {
-    fetchAll()
-  }, [fetchAll])
+    fetchUsers()
+  }, [fetchUsers])
 
-  const handleApprove = async (user: PendingUser) => {
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  const submitSearch = () => {
+    const keyword = keywordInput.trim()
+    setQuery((prev) => ({ ...prev, keyword: keyword || undefined, page: 1 }))
+  }
+
+  const handleApprove = async (user: AdminUser) => {
     setActingId(user.id)
     try {
       await adminApi.approveUser(user.id)
       toast.success(t('userManagement.approved'))
-      fetchAll()
+      fetchUsers()
     } catch (err) {
-      if (!err?.handled) toast.error(t('userManagement.actionFailed'))
+      if (!isHandledError(err)) toast.error(t('userManagement.actionFailed'))
     } finally {
       setActingId(null)
     }
@@ -91,51 +141,210 @@ export function SettingsUserManagement() {
       await adminApi.rejectUser(rejectTarget.id)
       toast.success(t('userManagement.rejected'))
       setRejectTarget(null)
-      fetchAll()
+      fetchUsers()
     } catch (err) {
-      if (!err?.handled) toast.error(t('userManagement.actionFailed'))
+      if (!isHandledError(err)) toast.error(t('userManagement.actionFailed'))
     } finally {
       setActingId(null)
     }
   }
 
-  const handleUnlock = async (user: LockedUser) => {
-    setActingId(`locked:${user.username}`)
+  const handleUnlock = async (user: AdminUser) => {
+    setActingId(user.id)
     try {
       await adminApi.unlockUser(user.username)
       toast.success(t('userManagement.unlocked'))
-      fetchAll()
+      fetchUsers()
     } catch (err) {
-      if (!err?.handled) toast.error(t('userManagement.actionFailed'))
+      if (!isHandledError(err)) toast.error(t('userManagement.actionFailed'))
     } finally {
       setActingId(null)
     }
   }
 
-  // 待审核在前、锁定在后：两类都待管理员处理
-  const rows: Row[] = [
-    ...pending.map<Row>((user) => ({
-      kind: 'pending',
-      key: `pending:${user.id}`,
-      user,
-    })),
-    ...locked.map<Row>((user) => ({
-      kind: 'locked',
-      key: `locked:${user.username}`,
-      user,
-    })),
-  ]
+  const handleEnable = async (user: AdminUser) => {
+    setActingId(user.id)
+    try {
+      await adminApi.setUserEnabled(user.id, true)
+      toast.success(t('userManagement.enabled'))
+      fetchUsers()
+    } catch (err) {
+      if (!isHandledError(err)) toast.error(t('userManagement.actionFailed'))
+    } finally {
+      setActingId(null)
+    }
+  }
+
+  const handleDisable = async () => {
+    if (!disableTarget) return
+    setActingId(disableTarget.id)
+    try {
+      await adminApi.setUserEnabled(disableTarget.id, false)
+      toast.success(t('userManagement.disabled'))
+      setDisableTarget(null)
+      fetchUsers()
+    } catch (err) {
+      if (!isHandledError(err)) toast.error(t('userManagement.actionFailed'))
+    } finally {
+      setActingId(null)
+    }
+  }
+
+  const handleKick = async () => {
+    if (!kickTarget) return
+    setActingId(kickTarget.id)
+    try {
+      const count = await adminApi.kickoutUser(kickTarget.id)
+      toast.success(
+        t('userManagement.kickDone', {
+          n: count ?? kickTarget.onlineTerminals,
+        })
+      )
+      setKickTarget(null)
+      fetchUsers()
+    } catch (err) {
+      if (!isHandledError(err)) toast.error(t('userManagement.actionFailed'))
+    } finally {
+      setActingId(null)
+    }
+  }
+
+  const handleDeleted = (result: 'disabled' | 'deleted') => {
+    // 删掉当前页最后一行时回退一页，避免停在空白页
+    if (result === 'deleted' && users.length === 1 && query.page > 1) {
+      setQuery((prev) => ({ ...prev, page: prev.page - 1 }))
+      return
+    }
+    fetchUsers()
+  }
+
+  const statusBadge = (status: number) => {
+    switch (status) {
+      case 1:
+        return { label: t('userManagement.statusDisabled'), variant: 'destructive' as const }
+      case 2:
+        return { label: t('userManagement.statusPending'), variant: 'outline' as const }
+      case 3:
+        return { label: t('userManagement.statusRejected'), variant: 'outline' as const }
+      default:
+        return { label: t('userManagement.statusNormal'), variant: 'secondary' as const }
+    }
+  }
+
+  const lastLoginText = (user: AdminUser) =>
+    formatTime(user.lastLoginAt) ?? t('userManagement.neverLoggedIn')
+
+  const createdText = (user: AdminUser) => formatTime(user.createdAt) ?? '—'
+
+  const renderActions = (user: AdminUser) => {
+    const self = user.id === currentUser?.id
+    const acting = actingId === user.id
+    const pending = user.status === 2
+    const rejected = user.status === 3
+    const canToggle = !self && !user.superAdmin && (user.status === 0 || user.status === 1)
+    const canDelete = !self && !user.superAdmin
+
+    return (
+      <div className='flex items-center justify-end gap-1'>
+        {pending && (
+          <>
+            <Button
+              size='sm'
+              className='h-7 px-2.5 text-xs'
+              disabled={acting}
+              onClick={() => handleApprove(user)}
+            >
+              {t('userManagement.approve')}
+            </Button>
+            <Button
+              variant='ghost'
+              size='sm'
+              className='h-7 px-2.5 text-xs text-destructive hover:text-destructive'
+              disabled={acting}
+              onClick={() => setRejectTarget(user)}
+            >
+              {t('userManagement.reject')}
+            </Button>
+          </>
+        )}
+        {user.locked && (
+          <Button
+            variant='ghost'
+            size='sm'
+            className='h-7 gap-1 px-2.5 text-xs'
+            disabled={acting}
+            onClick={() => handleUnlock(user)}
+          >
+            <LockOpen className='h-3.5 w-3.5' />
+            {t('userManagement.unlock')}
+          </Button>
+        )}
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant='ghost'
+              size='icon'
+              className='size-7'
+              disabled={acting}
+              aria-label={t('userManagement.actions')}
+            >
+              <MoreHorizontal className='h-4 w-4' />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align='end' className='w-40'>
+            <DropdownMenuItem onClick={() => setEditTarget(user)}>
+              {t('userManagement.editUser')}
+            </DropdownMenuItem>
+            {!self && !rejected && (
+              <DropdownMenuItem onClick={() => setResetTarget(user)}>
+                {t('userManagement.resetPassword')}
+              </DropdownMenuItem>
+            )}
+            {canToggle && !user.locked && (
+              <DropdownMenuItem
+                onClick={() =>
+                  user.status === 0 ? setDisableTarget(user) : handleEnable(user)
+                }
+              >
+                {user.status === 0
+                  ? t('userManagement.disable')
+                  : t('userManagement.enable')}
+              </DropdownMenuItem>
+            )}
+            {!self && user.onlineTerminals > 0 && (
+              <DropdownMenuItem onClick={() => setKickTarget(user)}>
+                {t('userManagement.kickOnline')}
+              </DropdownMenuItem>
+            )}
+            {canDelete && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className='text-destructive focus:text-destructive'
+                  onClick={() => setDeleteTarget(user)}
+                >
+                  {t('userManagement.deleteUser')}
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    )
+  }
+
+  const busy = loading || actingId !== null
 
   return (
     <div className='flex flex-1 flex-col'>
-      <header className='flex items-start justify-between'>
+      <header className='flex flex-wrap items-start justify-between gap-4'>
         <div>
           <SettingsPageTitle>{t('userManagement.pageTitle')}</SettingsPageTitle>
           <SettingsPageDescription>
             {t('userManagement.pageDescription')}
           </SettingsPageDescription>
         </div>
-        <div className='flex items-center gap-1'>
+        <div className='flex shrink-0 items-center gap-1'>
           <Button
             variant='ghost'
             size='sm'
@@ -149,7 +358,7 @@ export function SettingsUserManagement() {
             variant='ghost'
             size='icon'
             className='size-8'
-            onClick={fetchAll}
+            onClick={fetchUsers}
             disabled={loading}
             aria-label={t('userManagement.refresh')}
           >
@@ -158,133 +367,172 @@ export function SettingsUserManagement() {
         </div>
       </header>
 
-      <div className='mt-8 flex-1'>
+      <div className='mt-4 flex flex-wrap items-center gap-2'>
+        <form
+          className='relative min-w-0 flex-1 sm:max-w-64'
+          onSubmit={(e) => {
+            e.preventDefault()
+            submitSearch()
+          }}
+        >
+          <button
+            type='submit'
+            aria-label={t('userManagement.search')}
+            className='absolute top-1/2 left-1.5 flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground'
+          >
+            <Search className='size-4' />
+          </button>
+          <Input
+            value={keywordInput}
+            onChange={(e) => setKeywordInput(e.target.value)}
+            placeholder={t('userManagement.searchPlaceholder')}
+            enterKeyHint='search'
+            className='h-8 pl-8 text-sm'
+          />
+        </form>
+        <Select
+          value={query.status === undefined ? 'all' : String(query.status)}
+          onValueChange={(value) =>
+            setQuery((prev) => ({
+              ...prev,
+              status: value === 'all' ? undefined : Number(value),
+              page: 1,
+            }))
+          }
+        >
+          <SelectTrigger size='sm' className='w-32 text-xs'>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value='all'>{t('userManagement.filterAll')}</SelectItem>
+            <SelectItem value='0'>{t('userManagement.statusNormal')}</SelectItem>
+            <SelectItem value='1'>{t('userManagement.statusDisabled')}</SelectItem>
+            <SelectItem value='2'>{t('userManagement.statusPending')}</SelectItem>
+            <SelectItem value='3'>{t('userManagement.statusRejected')}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className='mt-4 flex-1'>
         <div className='rounded-md border'>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>{t('userManagement.colUser')}</TableHead>
-                {/* 手机（<sm）把时间折叠到用户名下方，只留 用户 + 操作 两列，避免表格横向滚动 */}
-                <TableHead className='hidden sm:table-cell'>
-                  {t('userManagement.colTime')}
+                <TableHead className='hidden md:table-cell'>
+                  {t('userManagement.colStatus')}
                 </TableHead>
-                <TableHead className='w-28 sm:w-40'>
+                <TableHead className='hidden whitespace-nowrap md:table-cell'>
+                  {t('userManagement.colLastLogin')}
+                </TableHead>
+                <TableHead className='hidden whitespace-nowrap lg:table-cell'>
+                  {t('userManagement.colCreatedAt')}
+                </TableHead>
+                <TableHead className='w-24'>
                   {t('userManagement.colActions')}
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading && rows.length === 0 ? (
+              {loading && users.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={3}
+                    colSpan={5}
                     className='py-8 text-center text-muted-foreground'
                   >
                     {t('userManagement.loading')}
                   </TableCell>
                 </TableRow>
-              ) : rows.length === 0 ? (
+              ) : users.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={3}
+                    colSpan={5}
                     className='py-8 text-center text-muted-foreground'
                   >
                     {t('userManagement.empty')}
                   </TableCell>
                 </TableRow>
               ) : (
-                rows.map((row) => {
-                  const name = row.user.nickname || row.user.username
-                  const timeText =
-                    row.kind === 'pending'
-                      ? row.user.createdAt
-                        ? dayjs(row.user.createdAt).format('YYYY-MM-DD HH:mm')
-                        : '—'
-                      : t('userManagement.lockedRemaining', {
-                          minutes: Math.max(
-                            1,
-                            Math.ceil(row.user.remainingSeconds / 60)
-                          ),
-                        })
-                  const actingKey =
-                    row.kind === 'pending' ? row.user.id : `locked:${row.user.username}`
+                users.map((user) => {
+                  const self = user.id === currentUser?.id
+                  const status = statusBadge(user.status)
+                  const name = user.nickname || user.username
                   return (
-                    <TableRow key={row.key}>
+                    <TableRow key={user.id}>
                       <TableCell>
                         <div className='flex items-center gap-3'>
                           <Avatar className='h-8 w-8'>
-                            {row.user.avatar && (
-                              <AvatarImage src={row.user.avatar} />
-                            )}
+                            {user.avatar && <AvatarImage src={user.avatar} />}
                             <AvatarFallback className='text-xs'>
                               {name.slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div className='min-w-0'>
-                            <div className='flex items-center gap-2'>
-                              <div className='truncate text-sm font-medium'>
+                            <div className='flex flex-wrap items-center gap-x-2 gap-y-1'>
+                              <span className='truncate text-sm font-medium'>
                                 {name}
-                              </div>
-                              <Badge
-                                variant={
-                                  row.kind === 'pending'
-                                    ? 'secondary'
-                                    : 'destructive'
-                                }
-                                className='h-5 shrink-0 px-1.5 text-[10px] font-normal'
-                              >
-                                {row.kind === 'pending'
-                                  ? t('userManagement.badgePending')
-                                  : t('userManagement.badgeLocked')}
-                              </Badge>
+                              </span>
+                              {user.superAdmin && (
+                                <Badge
+                                  variant='secondary'
+                                  className='h-5 shrink-0 px-1.5 text-[10px] font-normal'
+                                >
+                                  {t('userManagement.badgeSuperAdmin')}
+                                </Badge>
+                              )}
+                              {self && (
+                                <Badge
+                                  variant='outline'
+                                  className='h-5 shrink-0 px-1.5 text-[10px] font-normal'
+                                >
+                                  {t('userManagement.badgeSelf')}
+                                </Badge>
+                              )}
+                              {user.locked && (
+                                <Badge
+                                  variant='destructive'
+                                  className='h-5 shrink-0 px-1.5 text-[10px] font-normal'
+                                >
+                                  {t('userManagement.badgeLocked')}
+                                </Badge>
+                              )}
+                              {user.onlineTerminals > 0 && (
+                                <Badge className='h-5 shrink-0 px-1.5 text-[10px] font-normal'>
+                                  {t('userManagement.badgeOnline', {
+                                    n: user.onlineTerminals,
+                                  })}
+                                </Badge>
+                              )}
                             </div>
                             <div className='truncate text-xs text-muted-foreground'>
-                              {row.user.username}
+                              {user.username}
                             </div>
-                            {/* 手机专享：被折叠掉的时间列内容放到用户名下方 */}
-                            <div className='truncate text-[11px] text-muted-foreground sm:hidden'>
-                              {timeText}
+                            {/* 窄屏把被折叠的时间列放到用户名下方 */}
+                            <div className='truncate text-[11px] text-muted-foreground md:hidden'>
+                              {t('userManagement.colLastLogin')}：
+                              {lastLoginText(user)}
+                            </div>
+                            <div className='truncate text-[11px] text-muted-foreground lg:hidden'>
+                              {t('userManagement.colCreatedAt')}：{createdText(user)}
                             </div>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className='hidden text-xs text-muted-foreground sm:table-cell'>
-                        {timeText}
+                      <TableCell className='hidden md:table-cell'>
+                        <Badge
+                          variant={status.variant}
+                          className='text-[11px] font-normal'
+                        >
+                          {status.label}
+                        </Badge>
                       </TableCell>
-                      <TableCell>
-                        {row.kind === 'pending' ? (
-                          <div className='flex items-center gap-2'>
-                            <Button
-                              size='sm'
-                              className='h-7 px-2.5 text-xs'
-                              disabled={actingId === actingKey}
-                              onClick={() => handleApprove(row.user)}
-                            >
-                              {t('userManagement.approve')}
-                            </Button>
-                            <Button
-                              variant='ghost'
-                              size='sm'
-                              className='h-7 px-2.5 text-xs text-destructive hover:text-destructive'
-                              disabled={actingId === actingKey}
-                              onClick={() => setRejectTarget(row.user)}
-                            >
-                              {t('userManagement.reject')}
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button
-                            variant='ghost'
-                            size='sm'
-                            className='h-7 gap-1 px-2.5 text-xs'
-                            disabled={actingId === actingKey}
-                            onClick={() => handleUnlock(row.user)}
-                          >
-                            <LockOpen className='h-3.5 w-3.5' />
-                            {t('userManagement.unlock')}
-                          </Button>
-                        )}
+                      <TableCell className='hidden text-xs whitespace-nowrap text-muted-foreground md:table-cell'>
+                        {lastLoginText(user)}
                       </TableCell>
+                      <TableCell className='hidden text-xs whitespace-nowrap text-muted-foreground lg:table-cell'>
+                        {createdText(user)}
+                      </TableCell>
+                      <TableCell>{renderActions(user)}</TableCell>
                     </TableRow>
                   )
                 })
@@ -292,12 +540,69 @@ export function SettingsUserManagement() {
             </TableBody>
           </Table>
         </div>
+
+        <div className='mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground'>
+          <span>
+            {t('userManagement.pagination', {
+              page: query.page,
+              pages,
+              total,
+            })}
+          </span>
+          <div className='flex items-center gap-1'>
+            <Button
+              variant='ghost'
+              size='sm'
+              className='h-7 gap-0.5 px-2 text-xs'
+              disabled={busy || query.page <= 1}
+              onClick={() =>
+                setQuery((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))
+              }
+            >
+              <ChevronLeft className='h-3.5 w-3.5' />
+              {t('userManagement.prevPage')}
+            </Button>
+            <Button
+              variant='ghost'
+              size='sm'
+              className='h-7 gap-0.5 px-2 text-xs'
+              disabled={busy || query.page >= pages}
+              onClick={() =>
+                setQuery((prev) => ({
+                  ...prev,
+                  page: Math.min(pages, prev.page + 1),
+                }))
+              }
+            >
+              {t('userManagement.nextPage')}
+              <ChevronRight className='h-3.5 w-3.5' />
+            </Button>
+          </div>
+        </div>
       </div>
 
       <CreateUserDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onCreated={fetchAll}
+        onCreated={fetchUsers}
+      />
+
+      <EditUserDialog
+        user={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSaved={fetchUsers}
+      />
+
+      <ResetPasswordDialog
+        user={resetTarget}
+        onClose={() => setResetTarget(null)}
+        onDone={fetchUsers}
+      />
+
+      <DeleteUserDialog
+        user={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onDone={handleDeleted}
       />
 
       <AlertDialog
@@ -306,7 +611,9 @@ export function SettingsUserManagement() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('userManagement.confirmRejectTitle')}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t('userManagement.confirmRejectTitle')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {t('userManagement.confirmRejectDesc', {
                 name: rejectTarget?.nickname || rejectTarget?.username || '',
@@ -320,6 +627,59 @@ export function SettingsUserManagement() {
               onClick={handleReject}
             >
               {t('userManagement.reject')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!disableTarget}
+        onOpenChange={(open) => !open && setDisableTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('userManagement.disable')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('userManagement.confirmDisableDesc', {
+                name: disableTarget?.nickname || disableTarget?.username || '',
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('account.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
+              onClick={handleDisable}
+            >
+              {t('userManagement.disable')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!kickTarget}
+        onOpenChange={(open) => !open && setKickTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('userManagement.confirmKickTitle')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('userManagement.confirmKickDesc', {
+                name: kickTarget?.nickname || kickTarget?.username || '',
+                n: kickTarget?.onlineTerminals ?? 0,
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('account.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
+              onClick={handleKick}
+            >
+              {t('userManagement.kickOnline')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
