@@ -14,6 +14,10 @@
 
 - 本地联调直接跑 `D:\devTools` 的 MySQL/Redis + `fs-admin` 的 dev 配置（或 `mvn spring-boot:run`），**不要执行 `release\deploy-package\bin\start.bat`**——那会在部署包里产生数据、日志和机器本地配置。
 
+## 临时文件与截图
+
+- 临时文件、临时截图、验证输出等仅供开发过程使用的文件统一放在仓库根目录 `.freebuff/` 中，不要在根目录新增 `screenshots/` 等临时目录；长期有效的产品文档和测试报告应放在对应的 `doc/` 下。
+
 ## release\deploy-package（发行版模板目录）
 
 - 此目录是打包模板，必须保持干净：不得积累 MySQL/Redis 数据、日志、上传文件等运行残留。
