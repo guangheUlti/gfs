@@ -13,6 +13,9 @@ import {
   FilePen,
   Info,
   Loader2,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatFileListDisplayTime, formatFileSize } from '@/utils/format'
@@ -60,6 +63,47 @@ export function FileListRowActionIcon() {
   )
 }
 
+/** 表头可排序字段，取值与后端 orderBy 参数一致（FileInfoServiceImpl.getList） */
+type SortField = 'displayName' | 'size' | 'updateTime'
+
+/** 切换列时的初始方向：名称 A→Z、大小从大到小、时间从新到旧 */
+const DEFAULT_SORT_DIRECTION: Record<SortField, SortOrder> = {
+  displayName: 'ASC',
+  size: 'DESC',
+  updateTime: 'DESC',
+}
+
+function SortHeaderButton({
+  label,
+  active,
+  direction,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  direction: SortOrder
+  onClick: () => void
+}) {
+  const Icon = !active ? ArrowUpDown : direction === 'ASC' ? ArrowUp : ArrowDown
+  return (
+    <button
+      type='button'
+      onClick={onClick}
+      className={cn(
+        'inline-flex max-w-full items-center gap-1 rounded-sm transition-colors',
+        'hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+        active ? 'text-foreground' : 'text-muted-foreground'
+      )}
+    >
+      <span className='truncate'>{label}</span>
+      <Icon
+        className={cn('size-3 shrink-0', !active && 'opacity-40')}
+        aria-hidden
+      />
+    </button>
+  )
+}
+
 interface FileListViewProps {
   fileList: FileItem[]
   /** 当前生效的搜索关键词，用于结果高亮 */
@@ -68,6 +112,12 @@ interface FileListViewProps {
   onSelectionChange: (keys: string[]) => void
   onFileClick: (file: FileItem) => void
   onSortChange: (field: string, direction: SortOrder) => void
+  /** 当前生效的排序字段（后端 orderBy 参数值） */
+  orderBy?: string
+  /** 当前生效的排序方向 */
+  orderDirection?: SortOrder
+  /** 表头是否可排序（最近使用等固定排序的视图传 false） */
+  sortable?: boolean
   onDownload: (file: FileItem | FileItem[]) => void
   onShare: (file: FileItem) => void
   onDelete: (file: FileItem) => void
@@ -99,6 +149,10 @@ export function FileListView({
   selectedKeys,
   onSelectionChange,
   onFileClick,
+  onSortChange,
+  orderBy = 'updateTime',
+  orderDirection = 'DESC',
+  sortable = true,
   onDownload,
   onShare,
   onDelete,
@@ -134,6 +188,24 @@ export function FileListView({
   // 分享功能开关关闭（或缺省）时隐藏分享入口
   const shareEnabled = useFeatureStore((s) => !!s.toggles.share)
   const canShare = shareEnabled && hasPermission('file:share')
+
+  // 排序由后端执行（远程存储在后端本地排），这里只切换字段与方向
+  const sortEnabled = sortable && !!onSortChange
+  const ariaSortFor = (
+    field: SortField
+  ): 'none' | 'ascending' | 'descending' => {
+    if (orderBy !== field) return 'none'
+    return orderDirection === 'ASC' ? 'ascending' : 'descending'
+  }
+  const handleSort = (field: SortField) => {
+    if (!sortEnabled) return
+    // 点当前排序列翻转方向，点其他列回到该列的默认方向
+    if (orderBy === field) {
+      onSortChange(field, orderDirection === 'ASC' ? 'DESC' : 'ASC')
+      return
+    }
+    onSortChange(field, DEFAULT_SORT_DIRECTION[field])
+  }
 
   // 拖拽功能
   const {
@@ -241,17 +313,52 @@ export function FileListView({
           */}
           <TableHeader className='[&_tr]:border-0 [&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-background'>
             <TableRow className='border-0 hover:bg-transparent'>
-              <TableHead className='text-muted-foreground h-[48px] px-2 text-left text-xs font-medium sm:px-4 sm:text-sm'>
-                {t('table.colName')}
+              <TableHead
+                aria-sort={sortEnabled ? ariaSortFor('displayName') : undefined}
+                className='text-muted-foreground h-[48px] px-2 text-left text-xs font-medium sm:px-4 sm:text-sm'
+              >
+                {sortEnabled ? (
+                  <SortHeaderButton
+                    label={t('table.colName')}
+                    active={orderBy === 'displayName'}
+                    direction={orderDirection}
+                    onClick={() => handleSort('displayName')}
+                  />
+                ) : (
+                  t('table.colName')
+                )}
               </TableHead>
               {/* 手机（<sm）不展示这两列：名称列吃掉全部宽度，大小/时间折叠到名称下方一行 */}
-              {/* em 宽度按最长内容 1023.99 GB 设计，随响应式字号缩放 */}
-              <TableHead className='text-muted-foreground hidden h-[48px] w-[9em] px-2 text-left text-xs font-medium sm:table-cell sm:px-4 sm:text-sm'>
-                {t('table.colSize')}
+              {/* em 宽度按最长内容（1023.99 GB / 16 字符时间）加上排序箭头设计，随响应式字号缩放 */}
+              <TableHead
+                aria-sort={sortEnabled ? ariaSortFor('size') : undefined}
+                className='text-muted-foreground hidden h-[48px] w-[10em] px-2 text-left text-xs font-medium sm:table-cell sm:px-4 sm:text-sm'
+              >
+                {sortEnabled ? (
+                  <SortHeaderButton
+                    label={t('table.colSize')}
+                    active={orderBy === 'size'}
+                    direction={orderDirection}
+                    onClick={() => handleSort('size')}
+                  />
+                ) : (
+                  t('table.colSize')
+                )}
               </TableHead>
-              {/* 恒定 16 字符 yyyy-MM-dd HH:mm，9.3em 文本 + 列内边距 */}
-              <TableHead className='text-muted-foreground hidden h-[48px] w-[11.5em] px-2 text-left text-xs font-medium sm:table-cell sm:px-4 sm:text-sm'>
-                {t('table.colModified')}
+              <TableHead
+                aria-sort={sortEnabled ? ariaSortFor('updateTime') : undefined}
+                className='text-muted-foreground hidden h-[48px] w-[12.5em] px-2 text-left text-xs font-medium sm:table-cell sm:px-4 sm:text-sm'
+              >
+                {sortEnabled ? (
+                  <SortHeaderButton
+                    label={t('table.colModified')}
+                    active={orderBy === 'updateTime'}
+                    direction={orderDirection}
+                    onClick={() => handleSort('updateTime')}
+                  />
+                ) : (
+                  t('table.colModified')
+                )}
               </TableHead>
               {/* 行尾操作列只在触屏设备上出现：鼠标端靠右键菜单 */}
               <TableHead className='text-muted-foreground h-[48px] w-10 px-1 text-right text-xs font-medium hoverable:hidden sm:text-sm'>

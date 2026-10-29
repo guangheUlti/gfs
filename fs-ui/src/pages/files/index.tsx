@@ -687,6 +687,10 @@ export default function FilesPage() {
                       onSelectionChange={setSelectedKeys}
                       onFileClick={handleFileClick}
                       onSortChange={fileList.handleSortChange}
+                      orderBy={fileList.orderBy}
+                      orderDirection={fileList.orderDirection}
+                      /* 最近使用视图由后端固定按访问时间倒序，表头排序点了也没用，直接关掉 */
+                      sortable={!isRecentsView}
                       onDownload={operations.handleDownload}
                       onShare={operations.openShareModal}
                       onDelete={operations.openDeleteConfirm}
