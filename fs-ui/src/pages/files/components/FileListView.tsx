@@ -174,7 +174,7 @@ export function FileListView({
   scrollRootRef,
 }: FileListViewProps) {
   const { t } = useTranslation('files')
-  // 收藏功能未开启、或当前为无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载，不落库）时，隐藏收藏入口
+  // 收藏功能未开启、或当前为无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地存储，不落库）时，隐藏收藏入口
   const favoriteToggle = useFeatureStore((s) => !!s.toggles.favorite)
   const { isStateless } = useCurrentStoragePlatform()
   const favoriteEnabled = favoriteToggle && !isStateless

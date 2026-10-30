@@ -8,7 +8,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 本地存储默认配置（数据库是唯一生效来源，此处仅作为全新数据库首次初始化时的兜底默认值）
+ * 系统存储默认配置（数据库是唯一生效来源，此处仅作为全新数据库首次初始化时的兜底默认值）
  *
  * @Author: guangheUlti
  * @Date: 2026/01/12 22:06

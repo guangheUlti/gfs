@@ -24,7 +24,7 @@ public @interface StoragePlugin {
 
     /**
      * 平台显示名称
-     * 如：本地存储, 阿里云OSS
+     * 如：系统存储, 通用 OSS
      *
      * @return 平台显示名称
      */

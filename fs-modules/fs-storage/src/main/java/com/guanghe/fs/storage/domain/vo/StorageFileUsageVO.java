@@ -29,7 +29,7 @@ public class StorageFileUsageVO implements Serializable {
     /**
      * 删除时是否只清网盘索引。
      * <p>
-     * true 为挂载式存储（本地挂载/SMB 等，真实目录是唯一真相源）：只删索引，真实文件保留；
+     * true 为挂载式存储（本地存储/SMB 等，真实目录是唯一真相源）：只删索引，真实文件保留；
      * false 为 GFS 托管存储（本地/OSS/等）：连同物理文件一并永久删除。
      */
     private boolean indexOnly;

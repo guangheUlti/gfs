@@ -37,7 +37,7 @@ import lombok.Getter;
 @Getter
 @Deprecated(since = "2.0", forRemoval = true)
 public enum StoragePlatformIdentifierEnum {
-    LOCAL("Local", "本地存储", "icon-bendicunchu1"),
+    LOCAL("Local", "系统存储", "icon-bendicunchu1"),
     RUSTFS("RustFS", "OSS（S3 兼容）", "icon-bendicunchu1"),
     QINIU_KODO("Kodo", "七牛云Kodo", "icon-normal-logo-blue");
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getActiveStoragePlatforms } from '@/api/storage'
 
-/** 当前存储平台选择（localStorage）；未写入 = 内置本地存储（请求头不携带 configId） */
+/** 当前存储平台选择（localStorage）；未写入 = 内置系统存储（请求头不携带 configId） */
 export const STORAGE_PLATFORM_KEY = 'current-storage-platform'
 const STORAGE_PLATFORM_CHANGED = 'storage-platform-changed'
 
@@ -36,7 +36,7 @@ export function useActiveStoragePlatforms() {
 /**
  * 当前存储平台及其能力。
  *
- * isStatelessRemote：无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载），文件直接操作远端、不落库，
+ * isStatelessRemote：无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地存储），文件直接操作远端、不落库，
  * 因此回收站/收藏/最近使用都不可用。
  */
 export function useCurrentStoragePlatform() {

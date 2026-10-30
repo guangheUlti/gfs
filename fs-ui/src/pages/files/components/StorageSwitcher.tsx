@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-/** 未写入 localStorage = 内置本地存储（请求头不携带 configId） */
+/** 未写入 localStorage = 内置系统存储（请求头不携带 configId） */
 const readCurrent = (): { settingId: string; platformName?: string } => {
   try {
     const stored = JSON.parse(

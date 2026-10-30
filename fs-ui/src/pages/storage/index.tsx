@@ -25,7 +25,7 @@ export default function StoragePage() {
     staleTime: 30_000,
   })
 
-  // 过滤配置：内置本地存储（固定 id=Local）固定首位，其余按平台名称升序保持列表稳定。
+  // 过滤配置：内置系统存储（固定 id=Local）固定首位，其余按平台名称升序保持列表稳定。
   // 注意不能用 identifier 判定：附加本地存储实例 identifier 同样是 Local，但 id 是 UUID
   const filteredSettings = userSettings
     .sort((a, b) => {

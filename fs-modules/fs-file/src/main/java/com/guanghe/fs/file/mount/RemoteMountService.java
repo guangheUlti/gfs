@@ -35,7 +35,7 @@ import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
 /**
- * 无状态远程挂载服务（SFTP / SMB / FTP / WebDAV / 内存 / 本地挂载）
+ * 无状态远程挂载服务（SFTP / SMB / FTP / WebDAV / 内存 / 本地存储）
  * <p>
  * 文件条目完全以远端服务器为唯一真相源，不写 file_info。前端拿到的 ID 是自解释的虚拟路径 ID：
  * {@code vfs:<settingId>:<d|f>:<payload>}，其中 payload 为 base64url 编码的相对路径（较长时 deflate 压缩）。

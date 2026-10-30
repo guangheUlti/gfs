@@ -294,7 +294,7 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
         }
         LocalDateTime now = LocalDateTime.now();
         fileIds.forEach(fileId -> {
-            // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）不落库，没有可更新的访问时间
+            // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地存储）不落库，没有可更新的访问时间
             if (fileInfoService.isVirtualFileId(fileId)) {
                 return;
             }

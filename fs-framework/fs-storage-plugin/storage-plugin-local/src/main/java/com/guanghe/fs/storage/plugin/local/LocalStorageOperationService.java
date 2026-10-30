@@ -18,7 +18,7 @@ import java.nio.file.Paths;
 import java.util.*;
 
 /**
- * 本地存储插件实现
+ * 系统存储插件实现
  *
  * @Author: guangheUlti
  * @Date: 2024/10/26 17:00
@@ -26,8 +26,8 @@ import java.util.*;
 @Slf4j
 @StoragePlugin(
     identifier = "Local",
-    name = "本地存储",
-    description = "系统内置的本地磁盘存储；也支持添加多个不同根目录的本地存储实例。",
+    name = "系统存储",
+    description = "系统内置的磁盘存储，文件落在服务器上的网盘数据目录；也支持添加多个不同根目录的系统存储实例。",
     icon = "icon-bendicunchu1",
     isDefault = true,
     schemaResource = "classpath:schema/local-schema.json"
@@ -348,7 +348,7 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
                     throw new StorageOperationException("无法创建分片上传临时目录: " + tempDir);
                 }
             }
-            log.info("本地存储分片上传初始化成功: objectKey={}, uploadId={}, 存储目录={}", objectKey, uploadId, tempDir);
+            log.info("系统存储分片上传初始化成功: objectKey={}, uploadId={}, 存储目录={}", objectKey, uploadId, tempDir);
             return uploadId;
         } catch (Exception e) {
             throw new StorageOperationException("分片初始化失败: " + e.getMessage(), e);
@@ -386,12 +386,12 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
             File partFile = new File(partFilePath);
             String etag = partFile.length() + "_" + partFile.lastModified();
 
-            log.debug("本地存储分片上传成功: objectKey={}, partNumber={}, etag={}", objectKey, partNumber, etag);
+            log.debug("系统存储分片上传成功: objectKey={}, partNumber={}, etag={}", objectKey, partNumber, etag);
             return etag;
 
         } catch (IOException e) {
-            log.error("本地存储分片上传失败, objectKey={}, partNumber={}: {}", objectKey, partNumber, e.getMessage(), e);
-            throw new StorageOperationException("本地存储分片上传失败: " + e.getMessage(), e);
+            log.error("系统存储分片上传失败, objectKey={}, partNumber={}: {}", objectKey, partNumber, e.getMessage(), e);
+            throw new StorageOperationException("系统存储分片上传失败: " + e.getMessage(), e);
         }
     }
 
@@ -480,12 +480,12 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
             // 清理临时目录
             FileUtil.del(tempDir);
 
-            log.info("本地存储分片上传完成: objectKey={}, uploadId={}", objectKey, uploadId);
+            log.info("系统存储分片上传完成: objectKey={}, uploadId={}", objectKey, uploadId);
 //            return getFileUrl(objectKey, null);
 
         } catch (IOException e) {
-            log.error("本地存储分片上传完成失败, objectKey={}: {}", objectKey, e.getMessage(), e);
-            throw new StorageOperationException("本地存储分片上传完成失败: " + e.getMessage(), e);
+            log.error("系统存储分片上传完成失败, objectKey={}: {}", objectKey, e.getMessage(), e);
+            throw new StorageOperationException("系统存储分片上传完成失败: " + e.getMessage(), e);
         }
     }
 
@@ -497,11 +497,11 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
             // 清理临时目录
             String tempDir = getTempDir(uploadId);
             FileUtil.del(tempDir);
-            log.info("本地存储分片上传已中止: objectKey={}, uploadId={}", objectKey, uploadId);
+            log.info("系统存储分片上传已中止: objectKey={}, uploadId={}", objectKey, uploadId);
 
         } catch (Exception e) {
-            log.error("中止本地存储分片上传失败, objectKey={}: {}", objectKey, e.getMessage(), e);
-            throw new StorageOperationException("中止本地存储分片上传失败: " + e.getMessage(), e);
+            log.error("中止系统存储分片上传失败, objectKey={}: {}", objectKey, e.getMessage(), e);
+            throw new StorageOperationException("中止系统存储分片上传失败: " + e.getMessage(), e);
         }
     }
 

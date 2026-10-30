@@ -32,7 +32,7 @@ public class StorageIntegrationConfig {
 
     /**
      * 注册存储删除占用检查：FILE_INFO 按 STORAGE_PLATFORM_SETTING_ID 计数（不含回收站）。
-     * 本地挂载（直读）与无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）例外：其索引行只是历史快照，
+     * 本地存储（直读）与无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地存储）例外：其索引行只是历史快照，
      * 真实文件系统/远端才是唯一真相源，不构成文件占用，删除配置时由挂载卸载回调清理，故放行删除。
      */
     @EventListener(ApplicationReadyEvent.class)
@@ -52,7 +52,7 @@ public class StorageIntegrationConfig {
         }
     }
 
-    /** 是否为本地挂载（直读）存储：能力位判断，实例不可用时按保守处理（仍有索引则阻止删除） */
+    /** 是否为本地存储（直读）存储：能力位判断，实例不可用时按保守处理（仍有索引则阻止删除） */
     private boolean isDirectAccessStorage(String settingId) {
         try {
             return storageServiceFacade.getStorageService(settingId).isDirectAccess();

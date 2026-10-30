@@ -20,7 +20,7 @@ export function AppSidebar() {
   const { user: authUser } = useAuth()
   const { hasPermission } = usePermission()
   const featureToggles = useFeatureStore((s) => s.toggles)
-  // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）不落库，收藏/历史/回收站没有意义
+  // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地存储）不落库，收藏/历史/回收站没有意义
   const { isStateless } = useCurrentStoragePlatform()
 
   // 使用真实用户信息，如果未登录则使用占位符

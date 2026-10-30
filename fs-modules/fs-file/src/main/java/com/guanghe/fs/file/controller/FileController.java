@@ -100,7 +100,7 @@ public class FileController {
         List<String> dbIds = distinctIds.stream()
                 .filter(id -> !fileInfoService.isVirtualFileId(id)).toList();
         List<FileInfo> targets = getAuthorizedFiles(distinctIds);
-        // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）没有回收站，删除即远端永久删除
+        // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地存储）没有回收站，删除即远端永久删除
         if (!virtualIds.isEmpty()) {
             fileInfoService.deleteRemoteFiles(virtualIds);
         }

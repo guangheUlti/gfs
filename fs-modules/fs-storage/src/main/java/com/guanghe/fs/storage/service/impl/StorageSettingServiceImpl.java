@@ -112,7 +112,7 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     private final CacheManager cacheManager;
 
     /**
-     * 启动后装配内置本地存储：
+     * 启动后装配内置系统存储：
      * 1. 懒建固定 id="Local" 的配置行（首次启动用 application.yml 默认值落库）
      * 2. 向 LocalStorageManager 注入 DB 属性覆盖，使内置实例按 DB 配置的根目录工作
      * 3. 清空本服务列表缓存，避免升级后命中旧版本写入的过期结构（TTL 1h 内不自愈）
@@ -128,10 +128,10 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
                     cache.clear();
                 }
             });
-            log.info("内置本地存储配置装配完成: basePath={}",
+            log.info("内置系统存储配置装配完成: basePath={}",
                     localStorageManager.getEffectiveProperties().get("basePath"));
         } catch (Exception e) {
-            log.warn("内置本地存储配置装配失败，沿用 application.yml 默认值: {}", e.getMessage());
+            log.warn("内置系统存储配置装配失败，沿用 application.yml 默认值: {}", e.getMessage());
         }
     }
 
@@ -149,7 +149,7 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
         local.setEnabled(CommonConstant.Y);
         local.setRemark(I18nUtils.getMessage("storage.system.default"));
         this.save(local);
-        log.info("内置本地存储配置行已初始化");
+        log.info("内置系统存储配置行已初始化");
     }
 
     /**
@@ -193,7 +193,7 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     }
 
     /**
-     * 构造内置本地存储的展示行：id 固定为 "Local"，恒启用，携带生效配置与配置Schema 供编辑表单使用
+     * 构造内置系统存储的展示行：id 固定为 "Local"，恒启用，携带生效配置与配置Schema 供编辑表单使用
      */
     private StorageSettingUserVO buildLocalSettingVO() {
         StorageSettingUserVO vo = new StorageSettingUserVO();
@@ -219,7 +219,7 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     @Cacheable(value = "storageActivePlatforms", key = "'global'", unless = "#result == null || #result.isEmpty()")
     public List<StorageActivePlatformsVO> getActiveStoragePlatforms() {
         List<StorageActivePlatformsVO> result = new ArrayList<>();
-        // 内置本地存储恒可用，固定首位
+        // 内置系统存储恒可用，固定首位
         StorageActivePlatformsVO localInstance = new StorageActivePlatformsVO();
         StoragePluginMetadata localMetadata = storagePluginRegistry.getMetadata(StorageUtils.LOCAL_PLATFORM_IDENTIFIER);
         localInstance.setSettingId(StorageUtils.LOCAL_PLATFORM_IDENTIFIER);
@@ -283,7 +283,7 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     public void enableOrDisableStoragePlatform(String settingId, Integer action) {
         Integer newStatus = action == 0 ? CommonConstant.N : CommonConstant.Y;
 
-        // 内置本地存储恒启用：重复启用直接成功，禁用一律拒绝
+        // 内置系统存储恒启用：重复启用直接成功，禁用一律拒绝
         if (StorageUtils.LOCAL_PLATFORM_IDENTIFIER.equals(settingId)) {
             if (CommonConstant.N.equals(newStatus)) {
                 throw new BusinessException(I18nUtils.getMessage("storage.local.disable.forbidden"));
@@ -388,7 +388,7 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     }
 
     /**
-     * 内置本地存储编辑：更新固定 id="Local" 配置行的根目录等属性并重建内置实例。
+     * 内置系统存储编辑：更新固定 id="Local" 配置行的根目录等属性并重建内置实例。
      * 改根目录只影响新写入文件，既有文件索引仍指向旧根目录下的 objectKey，需自行迁移物理文件。
      */
     private void editBuiltinLocalSetting(StorageSettingEditCmd cmd) {
@@ -417,7 +417,7 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
         this.updateById(local);
         // 重建内置单例：属性覆盖 supplier 惰性重读 DB 行
         localStorageManager.reset();
-        log.info("内置本地存储配置已更新: basePath={}", basePath);
+        log.info("内置系统存储配置已更新: basePath={}", basePath);
     }
 
     /**
@@ -475,7 +475,7 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
             @CacheEvict(value = "storageActivePlatforms", key = "'global'")
     })
     public void deleteStorageSettingById(String id, boolean purgeFiles) {
-        // 内置本地存储是系统默认存储，禁止删除
+        // 内置系统存储是系统默认存储，禁止删除
         if (StorageUtils.LOCAL_PLATFORM_IDENTIFIER.equals(id)) {
             throw new BusinessException(I18nUtils.getMessage("storage.local.delete.forbidden"));
         }

@@ -32,7 +32,7 @@ public final class AvatarUtils {
      * 转换为可直接用于 <img src> 的展示值；读取失败一律返回 null（前端回退姓名首字）
      *
      * @param stored        库内存储值：objectKey / 旧版完整 URL / 外部图片 URL
-     * @param localSupplier 内置本地存储实例（懒加载，仅在需要读文件时创建）
+     * @param localSupplier 内置系统存储实例（懒加载，仅在需要读文件时创建）
      */
     public static String resolve(String stored, Supplier<IStorageOperationService> localSupplier) {
         if (stored == null || stored.isBlank()) {

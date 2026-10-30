@@ -63,13 +63,13 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
         LocalMountConfig cfg = readConfig(config);
         String normalized = cfg.normalizedRootPath();
         if (normalized == null || normalized.isEmpty()) {
-            throw new StorageConfigException("本地挂载配置错误：挂载根路径不能为空");
+            throw new StorageConfigException("本地存储配置错误：挂载根路径不能为空");
         }
         // 开启加密时口令必填（与 Local 插件同规则）
         if (cfg.isEncryptionEnabled()) {
             String secret = cfg.getEncryptionSecret();
             if (secret == null || secret.trim().isEmpty()) {
-                throw new StorageConfigException("本地挂载配置错误：开启落盘加密后必须设置密钥（encryptionSecret）");
+                throw new StorageConfigException("本地存储配置错误：开启落盘加密后必须设置密钥（encryptionSecret）");
             }
         }
     }
@@ -81,13 +81,13 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
         String normalized = cfg.normalizedRootPath();
         Path raw = Paths.get(normalized);
         if (!Files.isDirectory(raw, LinkOption.NOFOLLOW_LINKS)) {
-            throw new StorageConfigException("本地挂载配置错误：根路径不存在或不是目录: " + normalized);
+            throw new StorageConfigException("本地存储配置错误：根路径不存在或不是目录: " + normalized);
         }
         try {
             // 统一使用真实路径（解析大小写/符号链接差异），便于后续逃逸校验
             this.rootPath = raw.toRealPath();
         } catch (IOException e) {
-            throw new StorageConfigException("本地挂载配置错误：根路径无法解析: " + e.getMessage());
+            throw new StorageConfigException("本地存储配置错误：根路径无法解析: " + e.getMessage());
         }
         this.followSymlinks = cfg.isFollowSymlinks();
         this.encryptionSecret = cfg.isEncryptionEnabled() ? cfg.getEncryptionSecret().trim() : null;
@@ -258,7 +258,7 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
 
     @Override
     public String getFileUrl(String objectKey, Integer expireSeconds) {
-        throw new StorageOperationException("本地挂载不支持生成公网直链");
+        throw new StorageOperationException("本地存储不支持生成公网直链");
     }
 
     @Override
@@ -431,7 +431,7 @@ public class LocalMountStorageOperationService extends AbstractTempChunkStorageS
         try {
             return LocalMountConfig.toObject(config);
         } catch (Exception e) {
-            throw new StorageConfigException("本地挂载配置解析失败: " + e.getMessage());
+            throw new StorageConfigException("本地存储配置解析失败: " + e.getMessage());
         }
     }
 

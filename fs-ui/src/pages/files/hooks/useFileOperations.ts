@@ -18,7 +18,7 @@ import { usePreviewStore } from '@/store/preview'
 import { useTransferStore } from '@/store/transfer'
 import { useFeatureStore } from '@/store/feature'
 
-/** 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）虚拟 ID：vfs:<settingId>:...，不落库 */
+/** 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地存储）虚拟 ID：vfs:<settingId>:...，不落库 */
 const isVirtualFileId = (id: string) => id.startsWith('vfs:')
 
 export function useFileOperations(

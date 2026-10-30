@@ -392,7 +392,7 @@ public class SftpStorageOperationService extends AbstractTempChunkStorageService
 
     @Override
     public boolean isMountMode() {
-        // 远程目录树镜像：文件页通过挂载点 + 目录索引浏览服务器已有文件，与 SMB/本地挂载一致
+        // 远程目录树镜像：文件页通过挂载点 + 目录索引浏览服务器已有文件，与 SMB/本地存储一致
         return true;
     }
 

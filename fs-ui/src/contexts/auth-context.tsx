@@ -48,7 +48,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const loadStoragePlatform = async () => {
     try {
       const activePlatforms = await getActiveStoragePlatforms()
-      // 多存储：保留用户已选且仍可用的存储；未选择 = 内置本地存储（不携带请求头）
+      // 多存储：保留用户已选且仍可用的存储；未选择 = 内置系统存储（不携带请求头）
       let stored: { settingId?: string } | null = null
       try {
         stored = JSON.parse(

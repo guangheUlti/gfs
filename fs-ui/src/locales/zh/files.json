@@ -21,7 +21,7 @@
     "selectAll": "全选",
     "deselectAll": "取消全选",
     "storageSwitch": "切换存储",
-    "storageLocal": "本地存储",
+    "storageLocal": "系统存储",
     "select": "选择",
     "done": "完成",
     "ariaGrid": "网格视图",

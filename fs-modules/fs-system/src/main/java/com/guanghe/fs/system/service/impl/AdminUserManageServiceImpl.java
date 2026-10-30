@@ -229,7 +229,7 @@ public class AdminUserManageServiceImpl implements AdminUserManageService {
         return purger;
     }
 
-    /** 头像存放在本地存储 avatar/{userId} 目录下，随账号一起删除 */
+    /** 头像存放在系统存储 avatar/{userId} 目录下，随账号一起删除 */
     private void deleteAvatar(String userId) {
         try {
             pluginManager.getLocalInstance()

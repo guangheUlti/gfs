@@ -50,7 +50,7 @@ public class FileStreamController {
 
         FileInfo fileInfo;
         try {
-            // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）虚拟 ID 在此解析为远端真实条目
+            // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地存储）虚拟 ID 在此解析为远端真实条目
             fileInfo = fileInfoService.resolveFile(fileId);
         } catch (BusinessException e) {
             return ResponseEntity.notFound().build();

@@ -10,7 +10,7 @@
     <artifactId>storage-plugin-local</artifactId>
 
     <description>
-        storage-plugin-local - 存储插件-本地存储
+        storage-plugin-local - 存储插件-系统存储
     </description>
 
     <dependencies>

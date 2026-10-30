@@ -43,7 +43,7 @@ export interface ActiveStoragePlatform {
   platformName: string
   platformIcon: string
   isEnabled: boolean
-  /** 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）：文件直接操作远端，不落库，不支持回收站/收藏/最近 */
+  /** 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地存储）：文件直接操作远端，不落库，不支持回收站/收藏/最近 */
   statelessRemote?: boolean
   remark?: string
   createdAt?: string

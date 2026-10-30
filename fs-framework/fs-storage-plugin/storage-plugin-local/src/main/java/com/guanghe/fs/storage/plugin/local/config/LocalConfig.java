@@ -4,7 +4,7 @@ import com.guanghe.fs.storage.plugin.core.config.StorageConfig;
 import lombok.Data;
 
 /**
- * 本地存储配置对象（schema 属性映射）
+ * 系统存储配置对象（schema 属性映射）
  *
  * @Author: guangheUlti
  * @Date: 2026/09/13

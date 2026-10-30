@@ -81,7 +81,7 @@ export function StorageSettingCard({
   const [deleteUsage, setDeleteUsage] = useState<StorageFileUsage | null>(null)
   const [isUsageLoading, setIsUsageLoading] = useState(false)
 
-  // 内置本地存储：固定 id=Local（恒启用，支持查看/编辑根目录，不支持禁用与删除）。
+  // 内置系统存储：固定 id=Local（恒启用，支持查看/编辑根目录，不支持禁用与删除）。
   // 注意不能用 identifier 判定：附加的本地存储实例 identifier 同样是 Local，但 id 是 UUID，必须有删除/启停
   const isBuiltinLocal = setting.id === 'Local'
 
@@ -278,7 +278,7 @@ export function StorageSettingCard({
     setIsLoading(true)
     try {
       await toggleStorageSetting(setting.id.toString(), action)
-      // 多激活下禁用不再自动切换平台；若禁用的是当前选中的存储，清除本地选择以回退内置本地存储
+      // 多激活下禁用不再自动切换平台；若禁用的是当前选中的存储，清除本地选择以回退内置系统存储
       if (action === 0) {
         try {
           const stored = JSON.parse(

@@ -13,7 +13,7 @@ import java.util.List;
 public class StorageUtils {
 
     /**
-     * 本地存储平台标识符常量
+     * 系统存储平台标识符常量
      */
     public static final String LOCAL_PLATFORM_IDENTIFIER = "Local";
 

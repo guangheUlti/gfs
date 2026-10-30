@@ -31,7 +31,7 @@
 - **实时上传进度** - 实时推送上传进度，精确到分片级别
 - **秒传功能** - 基于 MD5 双重校验，相同文件秒级完成
 - **插件化存储** - SPI 机制热插拔，5 分钟接入一个新存储平台
-- **本地挂载** - 把服务器真实目录直接挂进网盘，浏览时实时列目录，增删改查直接作用于真实文件系统，外部改动刷新即可见
+- **本地存储** - 把服务器真实目录直接挂进网盘，浏览时实时列目录，增删改查直接作用于真实文件系统，外部改动刷新即可见
 - **对外文件服务** - 系统自身对外充当 WebDAV / SFTP / FTP / AList / S3 兼容 OSS 服务端，客户端可把网盘直接挂载为本地磁盘、按 AList v3 协议接入影视仓/TVBox，或以 S3 桶方式访问
 - **国际化支持** - 中英文双语支持，轻松扩展更多语言
 - **虚拟线程** - 全面启用 Java 虚拟线程，异步任务、定时任务与预览队列高并发下更稳
@@ -70,9 +70,9 @@
     - 自动清理机制
 
 - **存储平台**
-    - 内置本地存储，通过 OSS 插件接入阿里云 OSS、MinIO、RustFS、AWS S3 等 S3 兼容对象存储
+    - 内置系统存储，通过 OSS 插件接入阿里云 OSS、MinIO、RustFS、AWS S3 等 S3 兼容对象存储
     - 远程协议接入：SMB/CIFS（NAS 共享）、WebDAV（坚果云/Alist/Nextcloud）、SFTP（密码/私钥）、FTP/FTPS
-    - 本地挂载：真实目录挂进网盘，增删改直接作用于真实文件，外部改动刷新即可见（不建后台索引）
+    - 本地存储：真实目录挂进网盘，增删改直接作用于真实文件，外部改动刷新即可见（不建后台索引）
     - 一键切换存储平台
     - 平台配置声明式生成（JSON Schema），保存前自动连接测试，密码等敏感字段掩码展示
     - 存储空间统计
@@ -311,8 +311,8 @@ gfs/
 │   └── fs-storage-plugin/       # 存储插件框架
 │       ├── storage-plugin-boot/        # 插件核心管理模块
 │       ├── storage-plugin-core/        # 插件核心接口模块
-│       ├── storage-plugin-local/       # 本地存储插件
-│       ├── storage-plugin-localmount/  # 本地挂载插件
+│       ├── storage-plugin-local/       # 系统存储插件（内置默认）
+│       ├── storage-plugin-localmount/  # 本地存储插件（真实目录直挂）
 │       ├── storage-plugin-rustfs/      # OSS 插件（S3 兼容：阿里云 OSS / MinIO / RustFS / AWS S3）
 │       ├── storage-plugin-smb/         # SMB/CIFS 网络存储插件
 │       ├── storage-plugin-webdav/      # WebDAV 插件

@@ -274,7 +274,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                     null,
                     storagePlatformSettingId
             );
-            // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）：objectKey 即远端相对路径，不落 file_info
+            // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地存储）：objectKey 即远端相对路径，不落 file_info
             String objectKey;
             if (remoteMountService.isStatelessSetting(storagePlatformSettingId)) {
                 String parentPath = "";

@@ -131,7 +131,7 @@ public class MountPointService {
 
     /**
      * 同用户根目录下挂载点名去重：与其它设置的挂载点或普通目录同名时加 (n)。
-     * 本地存储（settingId 为 NULL）的普通根目录不参与去重（不同存储空间互不可见，同平台过滤已隔离）。
+     * 系统存储（settingId 为 NULL）的普通根目录不参与去重（不同存储空间互不可见，同平台过滤已隔离）。
      */
     private String dedupeName(String userId, String desiredName, String settingId) {
         List<FileInfo> mountPoints = fileInfoService.list(new QueryWrapper()
