@@ -105,7 +105,9 @@ class GfsReadChannel implements SeekableByteChannel {
             return;
         }
         long end = size - 1;
-        InputStream range = path.getFileSystem().bridge().runAs(path.getFileSystem().userId(),
+        InputStream range = path.getFileSystem().bridge().runAs(
+                com.guanghe.fs.service.service.ServiceSettingService.TYPE_SFTP,
+                path.getFileSystem().userId(),
                 () -> files().openRangeStream(file.getId(), from, end));
         this.current = new BufferedInputStream(range, READ_BUFFER);
     }

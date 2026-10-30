@@ -183,7 +183,7 @@ public class GfsFtpBridge implements UserManager {
      * 解析绝对路径为目标记录（不存在返回 null；根目录返回 null）
      */
     public FileInfo resolve(String userId, String absolutePath) {
-        return saTokenBridge.runAs(userId, () -> pathResolver.resolve(absolutePath, userId));
+        return saTokenBridge.runAs(com.guanghe.fs.service.service.ServiceSettingService.TYPE_FTP, userId, () -> pathResolver.resolve(absolutePath, userId));
     }
 
     /**
@@ -210,7 +210,7 @@ public class GfsFtpBridge implements UserManager {
      * 列目录（直接子项）
      */
     public List<FileInfo> listChildren(String userId, String dirAbsPath) {
-        return saTokenBridge.runAs(userId, () -> {
+        return saTokenBridge.runAs(com.guanghe.fs.service.service.ServiceSettingService.TYPE_FTP, userId, () -> {
             FileInfo dir = GfsPathResolver.normalize(dirAbsPath).isEmpty()
                     ? null : pathResolver.resolve(dirAbsPath, userId);
             String dirId = dir == null ? null : dir.getId();
@@ -250,7 +250,7 @@ public class GfsFtpBridge implements UserManager {
             log.debug("FTP 只读模式拒绝 MKD: {}", absPath);
             return false;
         }
-        return Boolean.TRUE.equals(saTokenBridge.runAs(userId, () -> {
+        return Boolean.TRUE.equals(saTokenBridge.runAs(com.guanghe.fs.service.service.ServiceSettingService.TYPE_FTP, userId, () -> {
             String normalized = GfsPathResolver.normalize(absPath);
             if (normalized.isEmpty()) {
                 return false; // 根目录已存在
@@ -290,7 +290,7 @@ public class GfsFtpBridge implements UserManager {
             log.debug("FTP 只读模式拒绝 DELE/RMD: {}", absPath);
             return false;
         }
-        return saTokenBridge.runAs(userId, () -> {
+        return saTokenBridge.runAs(com.guanghe.fs.service.service.ServiceSettingService.TYPE_FTP, userId, () -> {
             String normalized = GfsPathResolver.normalize(absPath);
             if (normalized.isEmpty()) {
                 return false;
@@ -312,7 +312,7 @@ public class GfsFtpBridge implements UserManager {
             log.debug("FTP 只读模式拒绝 RNFR/RNTO: {} -> {}", absPath, newName);
             return false;
         }
-        return Boolean.TRUE.equals(saTokenBridge.runAs(userId, () -> {
+        return Boolean.TRUE.equals(saTokenBridge.runAs(com.guanghe.fs.service.service.ServiceSettingService.TYPE_FTP, userId, () -> {
             FileInfo file = pathResolver.resolve(absPath, userId);
             if (file == null) {
                 return false;
@@ -332,7 +332,7 @@ public class GfsFtpBridge implements UserManager {
             log.debug("FTP 只读模式拒绝跨目录移动: {} -> {}", fromAbs, toAbs);
             return false;
         }
-        return Boolean.TRUE.equals(saTokenBridge.runAs(userId, () -> {
+        return Boolean.TRUE.equals(saTokenBridge.runAs(com.guanghe.fs.service.service.ServiceSettingService.TYPE_FTP, userId, () -> {
             FileInfo from = pathResolver.resolve(fromAbs, userId);
             if (from == null) {
                 return false;
@@ -346,11 +346,16 @@ public class GfsFtpBridge implements UserManager {
             if (targetParent == null || !Boolean.TRUE.equals(targetParent.getIsDir())) {
                 return false;
             }
+            boolean virtual = files().isVirtualFileId(from.getId());
             com.guanghe.fs.file.domain.dto.MoveFileCmd mv = new com.guanghe.fs.file.domain.dto.MoveFileCmd();
             mv.setFileIds(List.of(from.getId()));
             mv.setDirId(targetParent.getId());
+            // 虚拟 ID 随路径变化：移动+改名必须一次完成
+            if (virtual) {
+                mv.setDisplayName(targetName);
+            }
             files().moveFile(mv);
-            if (!targetName.equals(from.getDisplayName())) {
+            if (!virtual && !targetName.equals(from.getDisplayName())) {
                 RenameFileCmd rename = new RenameFileCmd();
                 rename.setDisplayName(targetName);
                 files().renameFile(from.getId(), rename);
@@ -363,7 +368,7 @@ public class GfsFtpBridge implements UserManager {
      * 读文件（流式，读毕由调用方关流）
      */
     public InputStream readFile(String userId, String absPath) {
-        return saTokenBridge.runAs(userId, () -> {
+        return saTokenBridge.runAs(com.guanghe.fs.service.service.ServiceSettingService.TYPE_FTP, userId, () -> {
             FileInfo file = pathResolver.resolve(absPath, userId);
             if (file == null || Boolean.TRUE.equals(file.getIsDir())) {
                 return null;
@@ -377,7 +382,7 @@ public class GfsFtpBridge implements UserManager {
      * Range 读（start 含、end 含；断点续传）
      */
     public InputStream readFileRange(String userId, String absPath, long start, long end) {
-        return saTokenBridge.runAs(userId, () -> {
+        return saTokenBridge.runAs(com.guanghe.fs.service.service.ServiceSettingService.TYPE_FTP, userId, () -> {
             FileInfo file = pathResolver.resolve(absPath, userId);
             if (file == null || Boolean.TRUE.equals(file.getIsDir())) {
                 return null;
@@ -469,7 +474,7 @@ public class GfsFtpBridge implements UserManager {
                 }
                 submitted = true;
                 try (InputStream in = java.nio.file.Files.newInputStream(temp)) {
-                    saTokenBridge.runAs(userId, () -> {
+                    saTokenBridge.runAs(com.guanghe.fs.service.service.ServiceSettingService.TYPE_FTP, userId, () -> {
                         String normalized = GfsPathResolver.normalize(absPath);
                         int idx = normalized.lastIndexOf('/');
                         String parentPath = idx <= 0 ? "" : normalized.substring(0, idx);

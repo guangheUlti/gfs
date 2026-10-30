@@ -143,7 +143,8 @@ public class GfsFileSystemProvider extends FileSystemProvider {
             throw new IOException("not a gfs path");
         }
         com.guanghe.fs.service.sftp.SaTokenBridge bridge = bridge();
-        bridge.runAs(gp.getFileSystem().userId(), () -> {
+        bridge.runAs(com.guanghe.fs.service.service.ServiceSettingService.TYPE_SFTP,
+                gp.getFileSystem().userId(), () -> {
             FileInfo parent = gp.getParent() == null ? null
                     : resolver().resolve(gp.getParent().toString());
             com.guanghe.fs.file.domain.dto.CreateDirectoryCmd cmd =
@@ -164,7 +165,8 @@ public class GfsFileSystemProvider extends FileSystemProvider {
         if (!(path instanceof GfsPath gp)) {
             throw new IOException("not a gfs path");
         }
-        bridge().runAs(gp.getFileSystem().userId(), () -> {
+        bridge().runAs(com.guanghe.fs.service.service.ServiceSettingService.TYPE_SFTP,
+                gp.getFileSystem().userId(), () -> {
             FileInfo file = gp.toFileInfo();
             if (file == null) {
                 throw new RuntimeException(new NoSuchFileException(gp.toString()));
@@ -184,7 +186,8 @@ public class GfsFileSystemProvider extends FileSystemProvider {
         if (!(source instanceof GfsPath src) || !(target instanceof GfsPath dst)) {
             throw new IOException("not a gfs path");
         }
-        bridge().runAs(src.getFileSystem().userId(), () -> {
+        bridge().runAs(com.guanghe.fs.service.service.ServiceSettingService.TYPE_SFTP,
+                src.getFileSystem().userId(), () -> {
             FileInfo file = src.toFileInfo();
             if (file == null) {
                 throw new RuntimeException(new NoSuchFileException(src.toString()));
@@ -200,12 +203,17 @@ public class GfsFileSystemProvider extends FileSystemProvider {
                     cmd.setDisplayName(targetName);
                     files().getObject().renameFile(file.getId(), cmd);
                 } else {
+                    boolean virtual = files().getObject().isVirtualFileId(file.getId());
                     com.guanghe.fs.file.domain.dto.MoveFileCmd cmd =
                             new com.guanghe.fs.file.domain.dto.MoveFileCmd();
                     cmd.setFileIds(List.of(file.getId()));
                     cmd.setDirId(dstParent == null ? null : dstParent.getId());
+                    // 虚拟 ID 随路径变化：移动+改名必须一次完成
+                    if (virtual) {
+                        cmd.setDisplayName(targetName);
+                    }
                     files().getObject().moveFile(cmd);
-                    if (!targetName.equals(file.getDisplayName())) {
+                    if (!virtual && !targetName.equals(file.getDisplayName())) {
                         com.guanghe.fs.file.domain.dto.RenameFileCmd rename =
                                 new com.guanghe.fs.file.domain.dto.RenameFileCmd();
                         rename.setDisplayName(targetName);
@@ -234,7 +242,8 @@ public class GfsFileSystemProvider extends FileSystemProvider {
             A root = (A) new GfsBasicFileAttributes(null, 0L, null, true, gp.toString());
             return root;
         }
-        bridge().runAs(gp.getFileSystem().userId(), () -> {
+        bridge().runAs(com.guanghe.fs.service.service.ServiceSettingService.TYPE_SFTP,
+                gp.getFileSystem().userId(), () -> {
         });
         FileInfo file = resolveInSession(gp);
         if (file == null) {
@@ -361,7 +370,8 @@ public class GfsFileSystemProvider extends FileSystemProvider {
         if (!(source instanceof GfsPath src) || !(target instanceof GfsPath dst)) {
             throw new IOException("not a gfs path");
         }
-        bridge().runAs(src.getFileSystem().userId(), () -> {
+        bridge().runAs(com.guanghe.fs.service.service.ServiceSettingService.TYPE_SFTP,
+                src.getFileSystem().userId(), () -> {
             FileInfo file = src.toFileInfo();
             if (file == null) {
                 throw new RuntimeException(new NoSuchFileException(src.toString()));

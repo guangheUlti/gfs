@@ -18,6 +18,11 @@
   },
   "form": {
     "enabled": "启用服务",
+    "storage": "服务存储",
+    "storagePh": "选择存储",
+    "storageHint": "外部客户端通过该协议只能访问所选存储，默认为系统存储；网页端不受影响，仍可自行切换。挂载类存储删除即远端永久删除，没有回收站",
+    "storageMount": "挂载",
+    "storageInvalid": "所选存储已停用或被删除，当前已回退到系统存储，请重新选择",
     "readOnly": "只读模式",
     "readOnlyHint": "开启后仅允许读取（浏览目录、下载、在线播放），上传、新建目录、改名、移动、删除等写操作会被拒绝；切换即时生效",
     "accessUrl": "访问地址",
@@ -99,7 +104,7 @@
       "client": "rclone：rclone config 新建 S3 类型 remote，端点 http://<主机>/oss，区域 us-east-1，凭证使用下方密钥对",
       "keys": "SDK/工具连接时桶名固定为 gfs，路径风格 path-style（如 /oss/gfs/目录/文件.txt）",
       "prefix": "SigV4 签名认证：请求需携带 AWS4-HMAC-SHA256 授权头（rclone、AWS SDK、Cyberduck、WinSCP S3 等均原生支持）",
-      "semantics": "删除操作进回收站可恢复；不支持桶管理、ACL 与匿名访问；密钥吊销后立即失效"
+      "semantics": "删除操作进回收站可恢复（挂载类存储为远端永久删除）；不支持桶管理、ACL 与匿名访问；密钥吊销后立即失效"
     }
   },
   "oss": {

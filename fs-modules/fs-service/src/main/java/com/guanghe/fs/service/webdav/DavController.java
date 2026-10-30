@@ -516,12 +516,17 @@ public class DavController {
                     cmd.setDisplayName(dest.name());
                     fileInfoService.renameFile(resolved.file().getId(), cmd);
                 } else {
+                    boolean virtual = fileInfoService.isVirtualFileId(resolved.file().getId());
                     MoveFileCmd cmd = new MoveFileCmd();
                     cmd.setFileIds(List.of(resolved.file().getId()));
                     cmd.setDirId(dest.parent() == null ? null : dest.parent().getId());
+                    // 虚拟 ID 随路径变化：移动+改名必须一次完成，不能补第二次 rename
+                    if (virtual) {
+                        cmd.setDisplayName(dest.name());
+                    }
                     fileInfoService.moveFile(cmd);
-                    // moveFile 不改名，目标名不同时补一次 rename
-                    if (!dest.name().equals(resolved.file().getDisplayName())) {
+                    // 落库文件 ID 稳定，moveFile 不改名，目标名不同时补一次 rename
+                    if (!virtual && !dest.name().equals(resolved.file().getDisplayName())) {
                         RenameFileCmd rename = new RenameFileCmd();
                         rename.setDisplayName(dest.name());
                         fileInfoService.renameFile(resolved.file().getId(), rename);

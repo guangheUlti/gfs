@@ -77,6 +77,7 @@ public class AlistAuthFilter implements Filter {
     private final ProtocolReadOnlyService protocolReadOnlyService;
     private final AlistTokenService tokenService;
     private final DavUserAuthenticator authenticator;
+    private final com.guanghe.fs.service.manager.ExternalStorageScopeService externalStorageScopeService;
 
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
@@ -112,12 +113,12 @@ public class AlistAuthFilter implements Filter {
                     return;
                 }
                 authenticator.bridgeSaToken(userId);
-                chain.doFilter(request, response);
+                chainScoped(request, response, chain);
                 return;
             }
             if (guestUserId != null) {
                 authenticator.bridgeSaToken(guestUserId);
-                chain.doFilter(request, response);
+                chainScoped(request, response, chain);
                 return;
             }
             logRejected(req, path, "直链未带签名且游客访问不可用");
@@ -140,7 +141,7 @@ public class AlistAuthFilter implements Filter {
                     req.setAttribute(GUEST_PASSWORD_USER_ATTR, guestUser);
                 }
                 authenticator.bridgeSaToken(guestUserId);
-                chain.doFilter(request, response);
+                chainScoped(request, response, chain);
                 return;
             }
             logRejected(req, path, StrUtil.isBlank(req.getHeader("Authorization"))
@@ -157,7 +158,18 @@ public class AlistAuthFilter implements Filter {
         }
 
         authenticator.bridgeSaToken(userId);
-        chain.doFilter(request, response);
+        chainScoped(request, response, chain);
+    }
+
+    /** 绑定服务级存储后进入业务链，结束后清理上下文（容器线程复用，不清理会串到别的请求） */
+    private void chainScoped(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+        externalStorageScopeService.apply(ServiceSettingService.TYPE_ALIST);
+        try {
+            chain.doFilter(request, response);
+        } finally {
+            externalStorageScopeService.clear();
+        }
     }
 
     /**

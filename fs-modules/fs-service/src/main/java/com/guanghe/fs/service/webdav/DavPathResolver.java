@@ -90,7 +90,10 @@ public class DavPathResolver {
         if (page != null && page.getData() != null && page.getData().getRecords() != null) {
             for (FileVO vo : page.getData().getRecords()) {
                 if (displayName.equals(vo.getDisplayName())) {
-                    return fileInfoService.getById(vo.getId());
+                    // 无状态挂载返回的是虚拟 ID，裸 getById 查不到，必须交由 resolveFile 解析
+                    return fileInfoService.isVirtualFileId(vo.getId())
+                            ? fileInfoService.resolveFile(vo.getId())
+                            : fileInfoService.getById(vo.getId());
                 }
             }
         }
@@ -135,6 +138,8 @@ public class DavPathResolver {
         if (file == null || StrUtil.isEmpty(file.getParentId())) {
             return null;
         }
-        return fileInfoService.getById(file.getParentId());
+        return fileInfoService.isVirtualFileId(file.getParentId())
+                ? fileInfoService.resolveFile(file.getParentId())
+                : fileInfoService.getById(file.getParentId());
     }
 }

@@ -18,6 +18,11 @@
   },
   "form": {
     "enabled": "Enable service",
+    "storage": "Service storage",
+    "storagePh": "Select storage",
+    "storageHint": "External clients using this protocol can only access the selected storage, which defaults to the system storage; the web UI is unaffected and can still switch storages. Deleting files in a mounted storage removes them from the remote permanently — there is no recycle bin",
+    "storageMount": "mount",
+    "storageInvalid": "The selected storage is disabled or deleted and currently falls back to the system storage; select another one",
     "readOnly": "Read-only mode",
     "readOnlyHint": "When on, only reading is allowed (browse, download, stream); upload, mkdir, rename, move and delete are rejected. Takes effect immediately",
     "accessUrl": "Access URL",
@@ -99,7 +104,7 @@
       "client": "rclone: create an S3 remote with rclone config, set the endpoint to http://<host>/oss, region us-east-1, and use the key pair below",
       "keys": "SDK/tools use the fixed bucket name gfs with path-style addressing (e.g. /oss/gfs/folder/file.txt)",
       "prefix": "SigV4 authentication: requests must carry an AWS4-HMAC-SHA256 Authorization header (rclone, AWS SDKs, Cyberduck, WinSCP S3 all support it natively)",
-      "semantics": "Deletes go to the recycle bin and are recoverable; bucket management, ACL and anonymous access are not supported; revoked keys stop working immediately"
+      "semantics": "Deletes go to the recycle bin and are recoverable (mounted storages delete the remote file permanently); bucket management, ACL and anonymous access are not supported; revoked keys stop working immediately"
     }
   },
   "oss": {

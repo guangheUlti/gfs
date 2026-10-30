@@ -46,9 +46,11 @@ import static com.guanghe.fs.system.domain.table.SysUserTableDef.SYS_USER;
 public class ServiceSettingController {
 
     private final ServiceSettingService serviceSettingService;
+    private final com.guanghe.fs.storage.service.StorageSettingService storageSettingService;
     private final SysUserMapper userMapper;
     private final ProtocolServiceManager protocolServiceManager;
     private final com.guanghe.fs.service.manager.ProtocolReadOnlyService protocolReadOnlyService;
+    private final com.guanghe.fs.service.manager.ExternalStorageScopeService externalStorageScopeService;
     private final com.guanghe.fs.service.spi.ExternalFileServiceRegistry externalFileServiceRegistry;
 
     @Operation(summary = "全部服务配置 + 实时运行状态")
@@ -68,6 +70,7 @@ public class ServiceSettingController {
             vo.setGuestUserId(guestUserId);
             vo.setGuestUsername(usernameOf(guestUserId));
             vo.setGuestPassword(ServiceSettingService.isGuestPasswordRequired(setting));
+            vo.setStorageSettingId(ServiceSettingService.storageSettingId(setting));
             vo.setPort(setting.getPort());
             vo.setBindAddress(setting.getBindAddress());
             vo.setUpdatedAt(setting.getUpdatedAt());
@@ -113,6 +116,12 @@ public class ServiceSettingController {
                 requireNormalUser(ServiceSettingService.guestUserId(setting));
             }
         }
+        // 服务级存储：外部协议固定落到该存储；空值表示不修改，Local 表示内置系统存储
+        if (cmd.getStorageSettingId() != null) {
+            requireStorage(cmd.getStorageSettingId());
+            setting.setConfigData(ServiceSettingService.mergeStorageSettingId(
+                    setting.getConfigData(), cmd.getStorageSettingId()));
+        }
         if (cmd.getPort() != null) {
             setting.setPort(cmd.getPort());
         }
@@ -124,6 +133,8 @@ public class ServiceSettingController {
 
         // 只读开关无需重建服务，直接刷运行时快照，下一条写请求就生效
         protocolReadOnlyService.update(type, ServiceSettingService.isReadOnly(setting));
+        // 存储作用域同样即时生效
+        externalStorageScopeService.invalidate(type);
 
         // 热生效：启动失败不抛给保存动作（失败状态经 /list 返回）
         protocolServiceManager.apply(type, setting);
@@ -187,6 +198,18 @@ public class ServiceSettingController {
             default -> throw new BusinessException(I18nUtils.getMessage("service.type.invalid"));
         }
         return Result.ok();
+    }
+
+    /** 服务级存储必须是存在且已启用的配置；Local 恒可用 */
+    private void requireStorage(String settingId) {
+        String id = StrUtil.trimToEmpty(settingId);
+        if (id.isEmpty() || com.guanghe.fs.storage.plugin.core.utils.StorageUtils.isLocalConfig(id)) {
+            return;
+        }
+        var storage = storageSettingService.getById(id);
+        if (storage == null || storage.getEnabled() == null || storage.getEnabled() != 1) {
+            throw new BusinessException(I18nUtils.getMessage("service.storage.invalid"));
+        }
     }
 
     /** 游客绑定账号必须是存在且状态正常的用户，否则匿名请求会带着无效身份进入业务层 */

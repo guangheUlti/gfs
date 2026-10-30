@@ -41,6 +41,7 @@ public class OssAuthFilter implements Filter {
     private final ServiceSettingService serviceSettingService;
     private final OssAccessKeyService ossAccessKeyService;
     private final com.guanghe.fs.service.webdav.DavUserAuthenticator davUserAuthenticator;
+    private final com.guanghe.fs.service.manager.ExternalStorageScopeService externalStorageScopeService;
 
     /** 只读模式下拒绝的写方法：PUT（上传/复制目标）、POST（分片初始化/合并）、DELETE（删对象） */
     private static final java.util.Set<String> WRITE_METHODS = java.util.Set.of("PUT", "POST", "DELETE", "PATCH");
@@ -87,7 +88,12 @@ public class OssAuthFilter implements Filter {
             return;
         }
 
-        chain.doFilter(request, response);
+        externalStorageScopeService.apply(ServiceSettingService.TYPE_OSS);
+        try {
+            chain.doFilter(request, response);
+        } finally {
+            externalStorageScopeService.clear();
+        }
     }
 
     private void authenticate(HttpServletRequest req, HttpServletResponse resp) throws IOException {

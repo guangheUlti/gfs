@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { useActiveStoragePlatforms } from '@/hooks/use-current-storage'
 import { useServiceSettings } from '../hooks/useServiceSettings'
 import { OssKeyManager } from './OssKeyManager'
 import { ServiceStatusBadge } from './ServiceStatusBadge'
@@ -56,6 +57,9 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
   })
   const guestUsers = guestUsersQuery.data ?? []
 
+  const platformsQuery = useActiveStoragePlatforms()
+  const platforms = platformsQuery.data ?? []
+
   // 后端热生效后状态经轮询返回；配置变更时同步本地表单
   useEffect(() => {
     setPort(String(setting.port ?? 9022))
@@ -77,10 +81,14 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
       allowGuest?: boolean
       guestUserId?: string
       guestPassword?: boolean
+      storageSettingId?: string
     }) =>
       updateServiceConfig(setting.serviceType, {
         enabled: params.enabled,
         readOnly: params.readOnly,
+        ...(params.storageSettingId !== undefined
+          ? { storageSettingId: params.storageSettingId }
+          : {}),
         ...(isAlist
           ? {
               allowGuest: params.allowGuest ?? setting.allowGuest,
@@ -146,6 +154,18 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
     configMutation.mutate({ enabled: setting.enabled, readOnly: setting.readOnly })
   }
 
+  /**
+   * 服务存储即时保存：外部协议按服务级配置解析，下一次请求就落到新存储；
+   * 缓存随保存失效，无需重启服务
+   */
+  const handleStorageChange = (id: string) => {
+    configMutation.mutate({
+      enabled: setting.enabled,
+      readOnly: setting.readOnly,
+      storageSettingId: id,
+    })
+  }
+
   /** 只读开关即时保存：可逆的读权限收紧/放开，不需要二次确认 */
   const handleReadOnlyToggle = (next: boolean) => {
     configMutation.mutate({ enabled: setting.enabled, readOnly: next })
@@ -195,6 +215,13 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
       guestUsersQuery.isSuccess &&
       !guestUsers.some((user) => user.id === setting.guestUserId)
   )
+  // 已选存储被停用/删除时后端回退到内置系统存储，这里显式提示避免静默换盘
+  const storageMissing = Boolean(
+    setting.storageSettingId &&
+      setting.storageSettingId !== 'Local' &&
+      platformsQuery.isSuccess &&
+      !platforms.some((p) => p.settingId === setting.storageSettingId)
+  )
 
   return (
     <div className='flex flex-col rounded-lg border bg-card text-card-foreground shadow-sm'>
@@ -238,6 +265,37 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
             disabled={toggling || isBusyAction}
             onCheckedChange={handleToggle}
           />
+        </div>
+
+        <div className='space-y-1.5'>
+          <Label>{t('form.storage')}</Label>
+          <Select
+            value={setting.storageSettingId || 'Local'}
+            onValueChange={handleStorageChange}
+            disabled={toggling || isBusyAction || platformsQuery.isLoading}
+          >
+            <SelectTrigger className='w-full'>
+              <SelectValue placeholder={t('form.storagePh')} />
+            </SelectTrigger>
+            <SelectContent>
+              {platforms.map((platform) => (
+                <SelectItem key={platform.settingId} value={platform.settingId}>
+                  {platform.platformName}
+                  {platform.statelessRemote ? ` · ${t('form.storageMount')}` : ''}
+                  {platform.settingId !== 'Local' && platform.remark
+                    ? ` · ${platform.remark}`
+                    : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {storageMissing ? (
+            <p className='text-xs text-destructive'>
+              {t('form.storageInvalid')}
+            </p>
+          ) : (
+            <p className='text-xs text-muted-foreground'>{t('form.storageHint')}</p>
+          )}
         </div>
 
         <div className='space-y-1.5'>

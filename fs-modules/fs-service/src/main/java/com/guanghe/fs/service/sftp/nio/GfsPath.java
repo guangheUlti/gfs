@@ -80,7 +80,8 @@ public class GfsPath implements Path {
         if (!absolute) {
             return null;
         }
-        return fileSystem.bridge().runAs(fileSystem.userId(),
+        return fileSystem.bridge().runAs(com.guanghe.fs.service.service.ServiceSettingService.TYPE_SFTP,
+                fileSystem.userId(),
                 () -> fileSystem.pathResolver().resolve(path, fileSystem.userId()));
     }
 

@@ -13,6 +13,8 @@ export interface ServiceSettingVO {
   guestUsername: string | null
   /** 游客目录密码（仅 alist）：开启后客户端「密码」必须是公开账号的登录密码 */
   guestPassword: boolean
+  /** 服务级存储配置 ID（全部协议）：外部客户端固定访问该存储，Local 表示内置系统存储 */
+  storageSettingId: string
   /** socket 型服务（sftp/ftp）有值；webdav/alist/oss 复用主 HTTP 端口为 null */
   port: number | null
   bindAddress: string
@@ -33,6 +35,8 @@ export interface UpdateServiceSettingParams {
   guestUserId?: string
   /** 仅 AList：游客请求是否必须携带公开账号的登录密码 */
   guestPassword?: boolean
+  /** 全部协议：服务级存储配置 ID，Local 或空串表示内置系统存储，缺省表示不修改 */
+  storageSettingId?: string
   /** 仅 SFTP，1024-65535 */
   port?: number
   /** 仅 SFTP */

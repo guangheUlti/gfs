@@ -50,6 +50,7 @@ public class DavAuthFilter implements Filter {
 
     private final DavUserAuthenticator authenticator;
     private final ServiceSettingService serviceSettingService;
+    private final com.guanghe.fs.service.manager.ExternalStorageScopeService externalStorageScopeService;
 
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
@@ -124,8 +125,13 @@ public class DavAuthFilter implements Filter {
         // 桥接当前用户：后续 service 层 StpUtil.getLoginIdAsString() 正常工作
         authenticator.bridgeSaToken(user.getId());
 
-        // 给 WebDAV 请求设置存储平台上下文（协议端始终走默认存储）
-        chain.doFilter(request, response);
+        // 给 WebDAV 请求设置服务级存储上下文（协议端始终走该存储），请求结束后必须清理，避免线程复用串味
+        externalStorageScopeService.apply(ServiceSettingService.TYPE_WEBDAV);
+        try {
+            chain.doFilter(request, response);
+        } finally {
+            externalStorageScopeService.clear();
+        }
     }
 
     private void unauthorized(HttpServletResponse resp) throws IOException {

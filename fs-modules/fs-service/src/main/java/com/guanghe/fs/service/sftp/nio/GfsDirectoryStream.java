@@ -31,7 +31,8 @@ class GfsDirectoryStream implements DirectoryStream<Path> {
         if (closed) {
             throw new IOException("directory stream closed");
         }
-        dir.getFileSystem().bridge().runAs(dir.getFileSystem().userId(), () -> {
+        dir.getFileSystem().bridge().runAs(com.guanghe.fs.service.service.ServiceSettingService.TYPE_SFTP,
+                dir.getFileSystem().userId(), () -> {
             String parentId = null;
             try {
                 if (!dir.isRoot()) {

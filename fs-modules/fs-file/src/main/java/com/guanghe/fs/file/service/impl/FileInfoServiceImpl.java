@@ -94,7 +94,7 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     @Autowired
     private MountManager mountManager;
 
-    // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）虚拟路径服务
+    // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地存储）虚拟路径服务
     @Autowired
     private RemoteMountService remoteMountService;
 
@@ -117,7 +117,7 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         }
     }
 
-    /** 当前配置是否为无状态远程存储（SFTP/SMB/FTP/WebDAV/内存/本地挂载，不落库） */
+    /** 当前配置是否为无状态远程存储（SFTP/SMB/FTP/WebDAV/内存/本地存储，不落库） */
     private boolean isStatelessStorage(String settingId) {
         return remoteMountService.isStatelessSetting(settingId);
     }
@@ -265,8 +265,24 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         if (fileIds == null || fileIds.isEmpty()) {
             return;
         }
-        if (fileIds.stream().anyMatch(remoteMountService::isVirtualId)) {
-            throw new BusinessException(I18nUtils.getMessage("remote.recycle.unsupported"));
+        List<String> requestedIds = fileIds.stream().distinct().toList();
+        List<String> virtualIds = requestedIds.stream()
+                .filter(remoteMountService::isVirtualId)
+                .toList();
+        if (!virtualIds.isEmpty()) {
+            // 无状态挂载没有回收站：协议端删除即远端永久删除；与本地入库文件不允许混批
+            if (virtualIds.size() != requestedIds.size()) {
+                throw new BusinessException(I18nUtils.getMessage("remote.recycle.unsupported"));
+            }
+            for (String virtualId : virtualIds) {
+                RemoteMountService.VirtualPath virtualPath = remoteMountService.parse(virtualId);
+                if (virtualPath.path().isEmpty()) {
+                    throw new BusinessException(I18nUtils.getMessage("mount.point.protected"));
+                }
+                remoteMountService.delete(remoteMountService.resolve(virtualId));
+                log.info("远程条目已永久删除: {}", virtualId);
+            }
+            return;
         }
 
         String userId = StpUtil.getLoginIdAsString();
@@ -910,7 +926,7 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
             if (virtualIds.size() != requestedIds.size()) {
                 throw new BusinessException(I18nUtils.getMessage("mount.move.unsupported"));
             }
-            moveRemoteFiles(virtualIds, targetDirId);
+            moveRemoteFiles(virtualIds, targetDirId, cmd.getDisplayName());
             return;
         }
 
@@ -1035,13 +1051,19 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     /**
      * 无状态远程移动：同配置内真实 rename，不落库；跨配置与移动到自身子树拒绝。
      */
-    private void moveRemoteFiles(List<String> virtualIds, String targetDirId) {
+    private void moveRemoteFiles(List<String> virtualIds, String targetDirId, String targetDisplayName) {
         FileInfo targetDir = targetDirId == null ? null : getAuthorizedFile(targetDirId);
         if (targetDir != null && !Boolean.TRUE.equals(targetDir.getIsDir())) {
             throw new BusinessException(I18nUtils.getMessage("file.target.dir.invalid"));
         }
         String targetSettingId = targetDir == null ? null : targetDir.getStoragePlatformSettingId();
         String targetPath = targetDir == null ? "" : remoteMountService.relativePath(targetDir);
+        // 虚拟 ID 由路径派生：跨目录改名必须与移动一次完成，先 move 再 rename 时旧 ID 已失效
+        String targetName = virtualIds.size() == 1 ? StrUtil.trimToNull(targetDisplayName) : null;
+        if (targetName != null && (!MountManager.isValidNameSegment(targetName)
+                || ".".equals(targetName) || "..".equals(targetName))) {
+            throw new BusinessException(I18nUtils.getMessage("file.name.invalid"));
+        }
 
         List<FileInfo> sources = virtualIds.stream()
                 .map(remoteMountService::resolve)
@@ -1062,9 +1084,9 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         for (FileInfo source : sources) {
             RemoteMountService.VirtualPath sourcePath = remoteMountService.parse(source.getId());
             String settingId = sourcePath.settingId();
-            String parentPath = remoteMountService.parentPath(sourcePath.path());
+            String wantedName = targetName == null ? source.getDisplayName() : targetName;
             String finalName = remoteMountService.uniqueName(settingId, targetPath,
-                    source.getDisplayName(), sourcePath.isDir(), sourcePath.path());
+                    wantedName, sourcePath.isDir(), sourcePath.path());
             String newPath = remoteMountService.childPath(targetPath, finalName);
             if (sourcePath.path().equals(newPath)) {
                 continue;

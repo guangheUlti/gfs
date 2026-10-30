@@ -113,7 +113,10 @@ public class GfsPathResolver {
         if (page != null && page.getData() != null && page.getData().getRecords() != null) {
             for (FileVO vo : page.getData().getRecords()) {
                 if (displayName.equals(vo.getDisplayName())) {
-                    return files().getById(vo.getId());
+                    // 无状态挂载返回的是虚拟 ID，裸 getById 查不到，必须交由 resolveFile 解析
+                    return files().isVirtualFileId(vo.getId())
+                            ? files().resolveFile(vo.getId())
+                            : files().getById(vo.getId());
                 }
             }
         }

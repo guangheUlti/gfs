@@ -4,6 +4,7 @@ import cn.hutool.core.lang.Dict;
 import cn.hutool.core.util.StrUtil;
 import com.guanghe.fs.framework.common.utils.JsonUtils;
 import com.guanghe.fs.service.domain.ServiceSetting;
+import com.guanghe.fs.storage.plugin.core.utils.StorageUtils;
 import com.mybatisflex.core.service.IService;
 
 /**
@@ -37,6 +38,9 @@ public interface ServiceSettingService extends IService<ServiceSetting> {
 
     /** `config_data` 里的游客目录密码标记键（仅 AList：游客请求必须带公开账号的登录密码） */
     String CONFIG_GUEST_PASSWORD = "guestPassword";
+
+    /** `config_data` 里的服务级存储配置键（全部协议：外部访问固定落到该存储） */
+    String CONFIG_STORAGE_SETTING_ID = "storageSettingId";
 
     /**
      * 校验服务类型是否合法（以 SPI 注册表为准动态校验；静态兜底覆盖内置协议）
@@ -99,6 +103,31 @@ public interface ServiceSettingService extends IService<ServiceSetting> {
      */
     static boolean isGuestPasswordRequired(ServiceSetting setting) {
         return isFlag(setting, CONFIG_GUEST_PASSWORD);
+    }
+
+    /**
+     * 解析服务级存储：`config_data` 中未配置/为空/为 Local 时返回内置系统存储。
+     * 旧配置没有这个键，升级后外部协议行为保持原样。
+     *
+     * @param setting 服务配置
+     * @return 存储配置 ID（至少为 "Local"）
+     */
+    static String storageSettingId(ServiceSetting setting) {
+        String value = strValue(setting, CONFIG_STORAGE_SETTING_ID);
+        return StrUtil.isBlank(value) ? StorageUtils.LOCAL_PLATFORM_IDENTIFIER : value;
+    }
+
+    /**
+     * 在既有 `config_data` JSON 上合并服务级存储；Local 视为默认值直接移除该键。
+     */
+    static String mergeStorageSettingId(String rawConfig, String settingId) {
+        Dict config = parseConfig(rawConfig);
+        if (StrUtil.isBlank(settingId) || StorageUtils.isLocalConfig(settingId.trim())) {
+            config.remove(CONFIG_STORAGE_SETTING_ID);
+        } else {
+            config.set(CONFIG_STORAGE_SETTING_ID, settingId.trim());
+        }
+        return JsonUtils.toJsonString(config);
     }
 
     private static boolean isFlag(ServiceSetting setting, String key) {

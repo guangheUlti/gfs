@@ -45,7 +45,9 @@ class GfsWriteChannel implements SeekableByteChannel {
         if (append) {
             FileInfo existing = path.toFileInfo();
             if (existing != null && !Boolean.TRUE.equals(existing.getIsDir())) {
-                try (InputStream in = path.getFileSystem().bridge().runAs(path.getFileSystem().userId(),
+                try (InputStream in = path.getFileSystem().bridge().runAs(
+                        com.guanghe.fs.service.service.ServiceSettingService.TYPE_SFTP,
+                        path.getFileSystem().userId(),
                         () -> fileInfoService.downloadFile(existing.getId()))) {
                     Files.copy(in, tempFile, StandardCopyOption.REPLACE_EXISTING);
                     writePosition = existing.getSize() == null ? 0 : existing.getSize();
@@ -118,12 +120,16 @@ class GfsWriteChannel implements SeekableByteChannel {
         try {
             String targetName = GfsPathResolver.baseName(path.toString());
             FileInfo parent = path.getParent() == null ? null
-                    : path.getFileSystem().bridge().runAs(path.getFileSystem().userId(),
+                    : path.getFileSystem().bridge().runAs(
+                        com.guanghe.fs.service.service.ServiceSettingService.TYPE_SFTP,
+                        path.getFileSystem().userId(),
                             () -> path.getFileSystem().pathResolver().resolve(path.getParent().toString()));
             String parentId = parent == null ? null : parent.getId();
             // 隐藏临时文件（openssh 客户端 put 过程中会重复列目录）
             try (InputStream in = Files.newInputStream(tempFile)) {
-                path.getFileSystem().bridge().runAs(path.getFileSystem().userId(), () ->
+                path.getFileSystem().bridge().runAs(
+                        com.guanghe.fs.service.service.ServiceSettingService.TYPE_SFTP,
+                        path.getFileSystem().userId(), () ->
                         fileInfoService.writeFileContent(parentId, targetName, in, writePosition));
             }
             log.debug("SFTP 写入提交完成: path={}, size={}", path.toString(), writePosition);

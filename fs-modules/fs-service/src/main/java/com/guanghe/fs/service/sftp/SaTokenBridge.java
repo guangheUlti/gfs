@@ -23,9 +23,12 @@ import java.util.function.Supplier;
 public class SaTokenBridge {
 
     private final DavUserAuthenticator authenticator;
+    private final com.guanghe.fs.service.manager.ExternalStorageScopeService externalStorageScopeService;
 
-    public SaTokenBridge(DavUserAuthenticator authenticator) {
+    public SaTokenBridge(DavUserAuthenticator authenticator,
+                         com.guanghe.fs.service.manager.ExternalStorageScopeService externalStorageScopeService) {
         this.authenticator = authenticator;
+        this.externalStorageScopeService = externalStorageScopeService;
     }
 
     /** 线程局部 mock 嵌套深度；配合 ThreadLocal 防止串线程 */
@@ -33,9 +36,10 @@ public class SaTokenBridge {
     private static final ThreadLocal<Boolean> TOKEN_SET = ThreadLocal.withInitial(() -> false);
 
     /**
-     * 以指定用户身份执行文件操作（可重入）
+     * 以指定用户身份、指定对外服务的存储作用域执行文件操作（可重入）。
+     * 最外层负责写入/清理存储上下文，嵌套调用沿用外层作用域。
      */
-    public <T> T runAs(String userId, Supplier<T> action) {
+    public <T> T runAs(String serviceType, String userId, Supplier<T> action) {
         int depth = MOCK_DEPTH.get();
         boolean alreadySet = TOKEN_SET.get();
 
@@ -44,8 +48,10 @@ public class SaTokenBridge {
             return SaTokenContextMockUtil.setMockContext(() -> {
                 try {
                     doRunAs(userId, alreadySet);
+                    externalStorageScopeService.apply(serviceType);
                     return action.get();
                 } finally {
+                    externalStorageScopeService.clear();
                     MOCK_DEPTH.remove();
                     TOKEN_SET.remove();
                     SaTokenContextMockUtil.clearContext();
@@ -61,7 +67,7 @@ public class SaTokenBridge {
     /**
      * 无返回值版本（可重入）
      */
-    public void runAs(String userId, Runnable action) {
+    public void runAs(String serviceType, String userId, Runnable action) {
         int depth = MOCK_DEPTH.get();
         boolean alreadySet = TOKEN_SET.get();
 
@@ -69,8 +75,10 @@ public class SaTokenBridge {
             SaTokenContextMockUtil.setMockContext(() -> {
                 try {
                     doRunAs(userId, alreadySet);
+                    externalStorageScopeService.apply(serviceType);
                     action.run();
                 } finally {
+                    externalStorageScopeService.clear();
                     MOCK_DEPTH.remove();
                     TOKEN_SET.remove();
                     SaTokenContextMockUtil.clearContext();
