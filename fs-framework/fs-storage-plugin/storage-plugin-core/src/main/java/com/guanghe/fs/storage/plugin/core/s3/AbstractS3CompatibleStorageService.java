@@ -126,7 +126,7 @@ public abstract class AbstractS3CompatibleStorageService<T extends S3CompatibleC
 //                    .socketTimeout(Duration.ofSeconds(s3Config.getSocketTimeout()));
             // 构建S3客户端
             this.s3Client = S3Client.builder()
-                    .region(s3Config.getRegion())
+                    .region(s3Config.resolvedRegion())
                     .endpointOverride(URI.create(s3Config.getEndpoint()))
                     .credentialsProvider(StaticCredentialsProvider.create(credentials))
                     .serviceConfiguration(s3ConfigBuilder.build())
@@ -134,7 +134,7 @@ public abstract class AbstractS3CompatibleStorageService<T extends S3CompatibleC
                     .build();
             // 构建预签名URL生成器
             this.s3Presigner = S3Presigner.builder()
-                    .region(s3Config.getRegion())
+                    .region(s3Config.resolvedRegion())
                     .endpointOverride(URI.create(s3Config.getEndpoint()))
                     .credentialsProvider(StaticCredentialsProvider.create(credentials))
                     .serviceConfiguration(s3ConfigBuilder.build())

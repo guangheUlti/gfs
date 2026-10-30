@@ -29,7 +29,7 @@ public class StorageConfig {
     private String configId;
 
     /**
-     * 平台标识符（如：local、aliyun_oss、minio）
+     * 平台标识符（如：local、rustfs、smb）
      */
     private String platformIdentifier;
 

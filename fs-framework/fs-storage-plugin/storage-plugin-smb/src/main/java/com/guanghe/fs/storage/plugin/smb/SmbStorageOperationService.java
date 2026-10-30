@@ -32,7 +32,7 @@ import java.util.List;
 /**
  * SMB/CIFS 网络共享存储插件（基于 smbj）
  * <p>
- * 纯对象式存储（同 Local/Minio 模式）：分片先落本地 temp，complete 时合并写远程。
+ * 纯对象式存储（同 Local/OSS 模式）：分片先落本地 temp，complete 时合并写远程。
  * SMBClient 实例线程安全可跨线程共享。连接模型：实例内维持一条常驻 Connection/Session/DiskShare
  * （NAS 普遍限制单账号会话数，若每次操作新建会话则只增不销，堆满后 NAS 以 STATUS_REQUEST_NOT_ACCEPTED 拒绝认证），
  * 连接失效时自动整链重建，close() 时统一释放。匿名访问：匿名开关开启时用 Guest 会话建连（用户名/密码可不填）。

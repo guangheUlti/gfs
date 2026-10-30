@@ -21,7 +21,9 @@
     "identifier": "endpoint",
     "validation": {
       "required": true
-    }
+    },
+    "description": "阿里云 OSS 填 https://oss-cn-hangzhou.aliyuncs.com 这类端点；MinIO/RustFS 填 http://主机:端口",
+    "placeholder": "https://oss-cn-hangzhou.aliyuncs.com"
   },
   {
     "label": "存储桶名",
@@ -30,5 +32,38 @@
     "validation": {
       "required": true
     }
+  },
+  {
+    "label": "区域",
+    "dataType": "string",
+    "identifier": "region",
+    "validation": {
+      "required": false
+    },
+    "description": "签名区域，需与端点对应（阿里云为 cn-hangzhou 这类区域 ID）；留空默认 us-east-1",
+    "placeholder": "如 cn-hangzhou；留空默认 us-east-1"
+  },
+  {
+    "label": "寻址方式",
+    "dataType": "radio",
+    "identifier": "pathStyleAccess",
+    "options": [
+      { "label": "路径样式（MinIO / RustFS）", "value": "true" },
+      { "label": "虚拟主机（阿里云 OSS / AWS S3）", "value": "false" }
+    ],
+    "defaultValue": "true",
+    "validation": {
+      "required": true
+    },
+    "description": "私有部署的 S3 服务通常用路径样式；阿里云 OSS、AWS S3 等云服务请选虚拟主机"
+  },
+  {
+    "label": "自定义域名",
+    "dataType": "string",
+    "identifier": "customDomain",
+    "validation": {
+      "required": false
+    },
+    "description": "生成文件直链时使用的自定义域名，如 https://file.example.com；留空则由端点拼接"
   }
 ]

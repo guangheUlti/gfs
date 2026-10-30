@@ -20,13 +20,7 @@
             <artifactId>storage-plugin-local</artifactId>
         </dependency>
 
-        <!-- 阿里云OSS插件（可选，根据需要添加） -->
-        <dependency>
-            <groupId>com.guanghe.fs</groupId>
-            <artifactId>storage-plugin-aliyunoss</artifactId>
-        </dependency>
-
-        <!-- RustFS插件（可选，根据需要添加） -->
+        <!-- OSS 插件（S3 兼容：阿里云 OSS / MinIO / RustFS / AWS S3） -->
         <dependency>
             <groupId>com.guanghe.fs</groupId>
             <artifactId>storage-plugin-rustfs</artifactId>

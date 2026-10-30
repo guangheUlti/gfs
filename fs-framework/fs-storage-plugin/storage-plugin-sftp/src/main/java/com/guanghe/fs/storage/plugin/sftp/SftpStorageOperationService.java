@@ -46,7 +46,7 @@ import java.util.Stack;
 /**
  * SFTP 存储插件（基于 sshj）
  * <p>
- * 纯对象式存储（同 Local/Minio 模式）：分片先落本地 temp，complete 时合并写远程。
+ * 纯对象式存储（同 Local/OSS 模式）：分片先落本地 temp，complete 时合并写远程。
  * SSH 连接每次操作新建（实例被缓存跨线程共享），SFTP 子会话随操作关闭。
  * <p>
  * symlink 一律跳过（防循环）；目录删除用 DFS 递归（SFTP 无递归删除命令）。
