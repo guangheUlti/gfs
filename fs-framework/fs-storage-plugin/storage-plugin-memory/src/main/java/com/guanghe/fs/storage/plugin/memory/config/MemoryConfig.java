@@ -4,7 +4,7 @@ import com.guanghe.fs.storage.plugin.core.config.StorageConfig;
 import lombok.Data;
 
 /**
- * 内存挂载配置
+ * 内存存储配置
  *
  * @Author: guangheUlti
  * @Date: 2026/09/26

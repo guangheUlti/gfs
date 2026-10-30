@@ -21,7 +21,7 @@ import java.util.TreeMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * 内存挂载插件（Memory）
+ * 内存插件（Memory）
  * <p>
  * 在服务器内存中开辟一块受容量硬上限约束的区域当网盘：文件不落库
  * （能力位 {@code isStatelessRemote=true}，file_info 不保留任何条目）、
@@ -49,7 +49,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 @Slf4j
 @StoragePlugin(
         identifier = "Memory",
-        name = "内存挂载",
+        name = "内存",
         description = "在服务器内存中开辟一块指定大小的区域直接挂进网盘：文件不落盘、不建后台索引，浏览时实时列目录，增删改查直接读写内存，实例删除或服务重启后内容即释放。",
         icon = "icon-bendicunchu1",
         schemaResource = "classpath:schema/memory-schema.json"
@@ -90,10 +90,10 @@ public class MemoryStorageOperationService extends AbstractTempChunkStorageServi
         MemoryConfig cfg = readConfig(config);
         long capacityMb = cfg.parsedCapacityMb();
         if (capacityMb <= 0) {
-            throw new StorageConfigException("内存挂载配置错误：内存大小必须是正整数（MB）");
+            throw new StorageConfigException("内存配置错误：内存大小必须是正整数（MB）");
         }
         if (capacityMb > MAX_CAPACITY_MB) {
-            throw new StorageConfigException("内存挂载配置错误：内存大小不能超过 " + MAX_CAPACITY_MB + " MB");
+            throw new StorageConfigException("内存配置错误：内存大小不能超过 " + MAX_CAPACITY_MB + " MB");
         }
     }
 
@@ -101,7 +101,7 @@ public class MemoryStorageOperationService extends AbstractTempChunkStorageServi
     protected void initialize(StorageConfig config) {
         MemoryConfig cfg = readConfig(config);
         this.capacityBytes = cfg.parsedCapacityMb() * 1024L * 1024L;
-        log.info("{} 内存挂载初始化完成: capacityMb={}, mountName={}, media=off-heap(1MiB blocks)",
+        log.info("{} 内存初始化完成: capacityMb={}, mountName={}, media=off-heap(1MiB blocks)",
                 getLogPrefix(), cfg.parsedCapacityMb(), cfg.getMountName());
     }
 
@@ -109,7 +109,7 @@ public class MemoryStorageOperationService extends AbstractTempChunkStorageServi
         try {
             return MemoryConfig.toObject(config);
         } catch (Exception e) {
-            throw new StorageConfigException("内存挂载配置解析失败: " + e.getMessage());
+            throw new StorageConfigException("内存配置解析失败: " + e.getMessage());
         }
     }
 
@@ -120,7 +120,7 @@ public class MemoryStorageOperationService extends AbstractTempChunkStorageServi
         ensureNotPrototype();
         String key = normalizeKey(objectKey);
         if (key.isEmpty() || key.contains("\\") || key.contains("..")) {
-            throw new StorageOperationException("非法的内存挂载路径: " + objectKey);
+            throw new StorageOperationException("非法的内存路径: " + objectKey);
         }
         lock.writeLock().lock();
         try {
@@ -161,7 +161,7 @@ public class MemoryStorageOperationService extends AbstractTempChunkStorageServi
                 throw e;
             } catch (IOException e) {
                 log.error("{} 文件上传失败（读取输入流）: objectKey={}", getLogPrefix(), objectKey, e);
-                throw new StorageOperationException("内存挂载写入失败: " + e.getMessage(), e);
+                throw new StorageOperationException("内存写入失败: " + e.getMessage(), e);
             }
 
             // 结构放置（父链创建；冲突抛出时 blocks 丢弃即可，尚未记账）
@@ -253,7 +253,7 @@ public class MemoryStorageOperationService extends AbstractTempChunkStorageServi
 
     @Override
     public String getFileUrl(String objectKey, Integer expireSeconds) {
-        throw new StorageOperationException("内存挂载不支持生成公网直链");
+        throw new StorageOperationException("内存不支持生成公网直链");
     }
 
     @Override
@@ -288,16 +288,6 @@ public class MemoryStorageOperationService extends AbstractTempChunkStorageServi
     public boolean isStatelessRemote() {
         // 不落库：内存目录树为唯一真相源，实例释放即失效
         return true;
-    }
-
-    @Override
-    public boolean isRealtimeWatchSupported() {
-        return false;
-    }
-
-    @Override
-    public boolean supportsWatchRealtime() {
-        return false;
     }
 
     // ==================== 目录操作（挂载同步器契约） ====================
@@ -477,7 +467,7 @@ public class MemoryStorageOperationService extends AbstractTempChunkStorageServi
             int count = tree.size();
             tree.clear();
             usedBytes = 0L;
-            log.info("{} 内存挂载已释放: entries={}, freedBytes={}（堆外块由 GC Cleaner 回收）",
+            log.info("{} 内存已释放: entries={}, freedBytes={}（堆外块由 GC Cleaner 回收）",
                     getLogPrefix(), count, freed);
         } finally {
             lock.writeLock().unlock();
@@ -487,7 +477,7 @@ public class MemoryStorageOperationService extends AbstractTempChunkStorageServi
     // ==================== 分片上传（基类契约） ====================
 
     /**
-     * 分片临时根目录：分片先落 {@code java.io.tmpdir}（不占内存挂载配额），complete 合并后流式进堆外并计容量
+     * 分片临时根目录：分片先落 {@code java.io.tmpdir}（不占内存配额），complete 合并后流式进堆外并计容量
      */
     @Override
     protected String getTempRoot() {
@@ -502,7 +492,7 @@ public class MemoryStorageOperationService extends AbstractTempChunkStorageServi
         try (InputStream in = java.nio.file.Files.newInputStream(mergedFile)) {
             uploadFile(in, objectKey);
         } catch (IOException e) {
-            throw new StorageOperationException("内存挂载合并写入失败: " + objectKey + ", " + e.getMessage(), e);
+            throw new StorageOperationException("内存合并写入失败: " + objectKey + ", " + e.getMessage(), e);
         }
     }
 
@@ -516,7 +506,7 @@ public class MemoryStorageOperationService extends AbstractTempChunkStorageServi
             long needMb = (needed + 1023) / 1024 / 1024;
             long freeMb = Math.max(0L, freeBytes) / 1024 / 1024;
             throw new StorageOperationException(String.format(
-                    "内存挂载空间不足：需要 %d MB，剩余 %d MB，请先清理不需要的文件", needMb, freeMb));
+                    "内存空间不足：需要 %d MB，剩余 %d MB，请先清理不需要的文件", needMb, freeMb));
         }
     }
 
@@ -526,7 +516,7 @@ public class MemoryStorageOperationService extends AbstractTempChunkStorageServi
     private void placeNode(String objectKey, Node node) {
         String key = normalizeKey(objectKey);
         if (key.isEmpty() || key.contains("\\") || key.contains("..")) {
-            throw new StorageOperationException("非法的内存挂载路径: " + objectKey);
+            throw new StorageOperationException("非法的内存路径: " + objectKey);
         }
         int idx = key.indexOf('/');
         while (idx > 0) {
@@ -564,7 +554,7 @@ public class MemoryStorageOperationService extends AbstractTempChunkStorageServi
     private Node resolveNode(String objectKey) {
         String key = normalizeKey(objectKey);
         if (key.contains("\\") || key.contains("..")) {
-            throw new StorageOperationException("非法的内存挂载路径: " + key);
+            throw new StorageOperationException("非法的内存路径: " + key);
         }
         return tree.get(key);
     }
