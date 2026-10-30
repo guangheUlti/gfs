@@ -91,13 +91,6 @@ export function getActiveStoragePlatforms() {
 }
 
 /**
- * 触发本地挂载存储重新扫描
- */
-export function scanMountStorage(settingId: number | string) {
-  return request.post(`/apis/file/mount/scan/${settingId}`)
-}
-
-/**
  * 探测存储服务器主机密钥（仅握手，不认证）
  */
 export function probeStorageHostKey(
@@ -123,14 +116,4 @@ export function trustStorageHostKey(
     configData,
     fingerprint,
   })
-}
-
-/**
- * 查询挂载上次扫描完成时间（epoch 毫秒）；尚未扫过返回 null
- */
-export async function getMountLastScanTime(settingId: number | string) {
-  const data = await request.get<number | null>(
-    `/apis/file/mount/last-scan/${settingId}`
-  )
-  return data ?? null
 }

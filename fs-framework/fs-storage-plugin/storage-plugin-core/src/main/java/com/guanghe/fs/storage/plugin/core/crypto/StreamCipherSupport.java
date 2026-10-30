@@ -18,7 +18,7 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 
 /**
- * 本地类存储（Local / LocalMount）落盘加密支持
+ * 本地类存储（Local / LocalDirect）落盘加密支持
  * <p>
  * 设计目标：<b>性能优先</b>，加密强度满足「防止文件被直接从硬盘拷走即可读」：
  * <ul>

@@ -149,12 +149,6 @@ oss:
 fs:
   cors:
     allowed-origins: ${FS_CORS_ALLOWED_ORIGINS:http://localhost,http://127.0.0.1,http://localhost:8000,http://127.0.0.1:8000}
-  file:
-    mount:
-      scan-enabled: true        # 挂载扫描总开关
-      scan-interval: 1800000    # 全局兑底扫描间隔 ms（挂载未配置扫描间隔时使用），默认 30 分钟
-      scan-max-entries: 50000   # 单轮扫描保险丝
-      watch-enabled: true       # 实时监听总开关（关闭后所有挂载退回纯定时扫描）
 
 # 临时调试：抓 SFTP 子系统吞掉的异常栈（验证完成后删除）
 logging:

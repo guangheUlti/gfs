@@ -383,7 +383,7 @@ public class FileRecycleServiceImpl implements FileRecycleService {
         if (CollUtil.isEmpty(files)) {
             return;
         }
-        // 挂载式存储（本地挂载/本地入库/SMB）的真实目录是唯一真相源：只清索引，绝不碰真实文件
+        // 挂载式存储（本地挂载/SMB）的真实目录是唯一真相源：只清索引，绝不碰真实文件
         boolean indexOnly = isMountStorage(storageSettingId);
         Map<String, List<String>> idsByUser = files.stream()
                 .filter(file -> StrUtil.isNotBlank(file.getUserId()))

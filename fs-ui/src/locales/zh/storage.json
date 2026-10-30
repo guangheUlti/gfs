@@ -65,14 +65,7 @@
     "toggleEnableDesc": "启用后该存储可在文件页面切换使用，支持多个存储同时启用。确定要继续吗？",
     "processing": "处理中...",
     "confirmToggle": "确认{{action}}",
-    "toastEnterField": "请输入{{label}}",
-    "rescan": "重新扫描",
-    "rescanOk": "扫描已触发，稍后刷新查看结果",
-    "rescanFail": "触发扫描失败，请稍后重试",
-    "lastScanPrefix": "上次扫描：",
-    "lastScanJustNow": "刚刚",
-    "lastScanMinutesAgo": "{{n}} 分钟前",
-    "lastScanHoursAgo": "{{n}} 小时前"
+    "toastEnterField": "请输入{{label}}"
   },
   "hostKey": {
     "title": "主机密钥校验",

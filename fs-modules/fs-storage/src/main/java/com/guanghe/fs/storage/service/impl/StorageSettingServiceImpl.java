@@ -73,16 +73,6 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     }
 
     /**
-     * 挂载配置变更回调（由 fs-file 在启动时注入）：启用或编辑保存挂载式配置后触发一次异步扫描，
-     * 使真实目录内容立即可见，并按新配置对齐实时监听；非挂载平台不回调。
-     */
-    private volatile java.util.function.Consumer<String> mountConfigChangedConsumer;
-
-    public void setMountConfigChangedConsumer(java.util.function.Consumer<String> consumer) {
-        this.mountConfigChangedConsumer = consumer;
-    }
-
-    /**
      * 存储占用检查（由 fs-file 在启动时注入，避免 fs-storage 反向依赖 fs-file）。
      * 返回 true 表示该配置下仍有文件索引，禁止删除。
      */
@@ -314,18 +304,6 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
             storageServiceFacade.removeInstance(settingId);
         } else {
             storageServiceFacade.refreshInstance(settingId);
-            // 启用挂载式配置后自动扫描一次（异步，回调内自行判断平台能力位）。
-            // 必须在事务提交后再触发：异步线程读库时 enabled 已落库，否则扫描线程读到旧 enabled=0 会跳过本轮（实测踩坑）
-            java.util.function.Consumer<String> changedConsumer = this.mountConfigChangedConsumer;
-            if (changedConsumer != null) {
-                afterCommit(() -> {
-                    try {
-                        changedConsumer.accept(settingId);
-                    } catch (Exception e) {
-                        log.warn("启用后触发挂载扫描失败: settingId={}", settingId, e);
-                    }
-                });
-            }
         }
     }
 
@@ -407,35 +385,6 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
         this.updateById(storageSetting);
         // 刷新缓存
         storageServiceFacade.refreshInstance(cmd.getSettingId());
-        // 挂载式配置编辑保存后自动异步扫描一次并按新配置对齐实时监听（回调内自行判断平台能力位，非挂载平台无副作用）。
-        // 同启用分支：事务提交后再触发，避免异步线程读到未提交的旧配置
-        java.util.function.Consumer<String> changedConsumer = this.mountConfigChangedConsumer;
-        if (changedConsumer != null) {
-            afterCommit(() -> {
-                try {
-                    changedConsumer.accept(cmd.getSettingId());
-                } catch (Exception e) {
-                    log.warn("编辑保存后触发挂载扫描失败: settingId={}", cmd.getSettingId(), e);
-                }
-            });
-        }
-    }
-
-    /**
-     * 事务提交后执行回调；无事务时立即执行（与 afterCommit 语义对齐，兼容非事务调用路径）。
-     */
-    private void afterCommit(Runnable action) {
-        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
-            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
-                    new org.springframework.transaction.support.TransactionSynchronization() {
-                        @Override
-                        public void afterCommit() {
-                            action.run();
-                        }
-                    });
-        } else {
-            action.run();
-        }
     }
 
     /**
@@ -573,20 +522,32 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
         log.info("存储配置已删除并移除缓存: settingId={}", id);
     }
 
+    /**
+     * 清理已下线平台的配置行：插件已从代码移除，实例无法再加载，
+     * 因此不能按能力位判断，直接执行索引清理回调后删除配置。
+     */
+    @Override
+    public void purgeOrphanPlatformSetting(String settingId) {
+        java.util.function.Consumer<String> unmount = this.mountUnmountConsumer;
+        if (unmount != null) {
+            try {
+                unmount.accept(settingId);
+            } catch (Exception e) {
+                log.error("已下线平台配置的索引清理失败: settingId={}", settingId, e);
+            }
+        } else {
+            log.warn("挂载卸载回调尚未注册，跳过已下线平台配置的索引清理: settingId={}", settingId);
+        }
+        this.removeById(settingId);
+        storageServiceFacade.removeInstance(settingId);
+    }
+
     @Override
     public List<StorageSetting> listByPlatformIdentifier(String platformIdentifier) {
         return this.list(
                 new QueryWrapper()
                         .where(STORAGE_SETTING.PLATFORM_IDENTIFIER.eq(platformIdentifier))
                         .and(STORAGE_SETTING.ENABLED.eq(CommonConstant.Y))
-        );
-    }
-
-    @Override
-    public List<StorageSetting> listEnabledSettings() {
-        return this.list(
-                new QueryWrapper()
-                        .where(STORAGE_SETTING.ENABLED.eq(CommonConstant.Y))
         );
     }
 

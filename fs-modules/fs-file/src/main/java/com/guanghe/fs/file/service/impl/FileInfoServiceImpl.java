@@ -24,7 +24,6 @@ import com.guanghe.fs.file.mapper.FileInfoMapper;
 import com.guanghe.fs.file.mount.MountManager;
 import com.guanghe.fs.file.mount.MountPathResolver;
 import com.guanghe.fs.file.mount.MountPointService;
-import com.guanghe.fs.file.mount.MountScanService;
 import com.guanghe.fs.file.mount.RemoteMountService;
 import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.file.service.FileObjectReferenceService;
@@ -95,10 +94,6 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     @Autowired
     private MountManager mountManager;
 
-    // 挂载扫描/对账服务（直读存储浏览时按层实时对账，字段注入容忍循环依赖）
-    @Autowired
-    private MountScanService mountScanService;
-
     // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地挂载）虚拟路径服务
     @Autowired
     private RemoteMountService remoteMountService;
@@ -118,19 +113,6 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
             return storageServiceFacade.getStorageService(settingId).isMountMode();
         } catch (Exception e) {
             log.warn("判断挂载存储失败，按非挂载处理: settingId={}", settingId, e);
-            return false;
-        }
-    }
-
-    /** 当前配置是否为本地挂载（直读）存储（能力位判断，勿比较 identifier 字符串） */
-    private boolean isDirectStorage(String settingId) {
-        if (StrUtil.isBlank(settingId)) {
-            return false;
-        }
-        try {
-            return storageServiceFacade.getStorageService(settingId).isDirectAccess();
-        } catch (Exception e) {
-            log.warn("判断直读存储失败，按非直读处理: settingId={}", settingId, e);
             return false;
         }
     }
@@ -1497,25 +1479,6 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
                 mountPointService.ensureMountPoint(userId, settingMap);
             } catch (Exception e) {
                 log.warn("挂载点懒创建失败，不影响本次列表: settingId={}", storagePlatformSettingId, e);
-            }
-        }
-
-        // 本地挂载（直读）：进入子目录前列一次真实目录并按层对账（真实 FS 为唯一真相源，无后台扫描）。
-        // 对账失败只告警不阻断，本次列表沿用现有索引行。
-        if (StrUtil.isNotBlank(storagePlatformSettingId)
-                && qry.getParentId() != null
-                && !Boolean.TRUE.equals(qry.getIsRecents())
-                && isDirectStorage(storagePlatformSettingId)) {
-            try {
-                FileInfo parent = getById(qry.getParentId());
-                if (parent != null
-                        && storagePlatformSettingId.equals(parent.getStoragePlatformSettingId())
-                        && Boolean.TRUE.equals(parent.getIsDir())
-                        && !Boolean.TRUE.equals(parent.getIsDeleted())) {
-                    mountScanService.reconcileDirectLevel(storagePlatformSettingId, parent);
-                }
-            } catch (Exception e) {
-                log.warn("本地挂载（直读）目录对账失败，不影响本次列表: parentId={}", qry.getParentId(), e);
             }
         }
 

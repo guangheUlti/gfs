@@ -71,24 +71,6 @@ public class StorageServiceFacade {
     }
 
     /**
-     * 平台是否参与挂载扫描：只读插件原型的能力位，不创建配置实例、不发起任何网络连接。
-     * <p>
-     * 定时任务必须先过这一层再取实例——创建 SMB/SFTP 等配置实例会真实建连（握手+认证），
-     * 远端磁盘空闲休眠时，每分钟一次的能力位判断就足以把它反复唤醒。
-     *
-     * @param platformIdentifier 平台标识符（StorageSetting.platformIdentifier）
-     * @return true-需要后台扫描（挂载式且非直读、非无状态远程）
-     */
-    public boolean isScannablePlatform(String platformIdentifier) {
-        if (StrUtil.isBlank(platformIdentifier)
-                || !pluginManager.getAvailablePlatforms().contains(platformIdentifier)) {
-            return false;
-        }
-        IStorageOperationService prototype = pluginManager.getPrototype(platformIdentifier);
-        return prototype.isMountMode() && !prototype.isDirectAccess() && !prototype.isStatelessRemote();
-    }
-
-    /**
      * 刷新存储实例
      * 先失效缓存，下次使用时自动重新加载
      *

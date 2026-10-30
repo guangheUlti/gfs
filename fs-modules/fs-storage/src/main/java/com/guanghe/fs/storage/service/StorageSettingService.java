@@ -71,17 +71,18 @@ public interface StorageSettingService extends IService<StorageSetting> {
     StorageFileUsageVO getStorageFileUsage(String id);
 
     /**
+     * 清理已下线平台的残留配置：插件已从代码移除，实例无法加载，
+     * 先经挂载卸载回调清掉索引，再删除配置行。
+     *
+     * @param id 配置ID
+     */
+    void purgeOrphanPlatformSetting(String id);
+
+    /**
      * 根据存储平台标识查询所有配置（用于检查是否有用户开通）
      *
      * @param platformIdentifier 存储平台标识
      * @return
      */
     List<StorageSetting> listByPlatformIdentifier(String platformIdentifier);
-
-    /**
-     * 列出所有启用的存储配置（不限平台，供能力位驱动的调用方自行过滤，如挂载扫描器）
-     *
-     * @return 启用中的存储配置列表
-     */
-    List<StorageSetting> listEnabledSettings();
 }
