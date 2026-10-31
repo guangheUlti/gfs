@@ -80,6 +80,6 @@ fs:
 
 mybatis-flex:
   # sql审计
-  audit_enable: true
+  audit_enable: false
   # sql打印
-  sql_print: true
+  sql_print: false
