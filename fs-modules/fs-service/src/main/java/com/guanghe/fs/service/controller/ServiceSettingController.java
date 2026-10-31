@@ -69,7 +69,6 @@ public class ServiceSettingController {
             String guestUserId = ServiceSettingService.guestUserId(setting);
             vo.setGuestUserId(guestUserId);
             vo.setGuestUsername(usernameOf(guestUserId));
-            vo.setGuestPassword(ServiceSettingService.isGuestPasswordRequired(setting));
             vo.setStorageSettingId(ServiceSettingService.storageSettingId(setting));
             vo.setPort(setting.getPort());
             vo.setBindAddress(setting.getBindAddress());
@@ -108,10 +107,6 @@ public class ServiceSettingController {
                 setting.setConfigData(ServiceSettingService.mergeGuest(
                         setting.getConfigData(), Boolean.TRUE.equals(cmd.getAllowGuest())));
             }
-            if (cmd.getGuestPassword() != null) {
-                setting.setConfigData(ServiceSettingService.mergeGuestPassword(
-                        setting.getConfigData(), Boolean.TRUE.equals(cmd.getGuestPassword())));
-            }
             if (Boolean.TRUE.equals(cmd.getAllowGuest())) {
                 requireNormalUser(ServiceSettingService.guestUserId(setting));
             }
@@ -138,10 +133,9 @@ public class ServiceSettingController {
 
         // 热生效：启动失败不抛给保存动作（失败状态经 /list 返回）
         protocolServiceManager.apply(type, setting);
-        log.info("对外文件服务配置已更新: type={}, enabled={}, readOnly={}, allowGuest={}, guestUserId={}, guestPassword={}",
+        log.info("对外文件服务配置已更新: type={}, enabled={}, readOnly={}, allowGuest={}, guestUserId={}",
                 type, setting.getEnabled(), ServiceSettingService.isReadOnly(setting),
-                ServiceSettingService.isGuestAllowed(setting), ServiceSettingService.guestUserId(setting),
-                ServiceSettingService.isGuestPasswordRequired(setting));
+                ServiceSettingService.isGuestAllowed(setting), ServiceSettingService.guestUserId(setting));
         return Result.ok();
     }
 

@@ -30,9 +30,6 @@ public class ServiceSettingVO {
     @Schema(description = "游客视角账号用户名（仅 alist，便于界面展示）")
     private String guestUsername;
 
-    @Schema(description = "游客目录密码（仅 alist）：开启后客户端「密码」必须是公开账号的登录密码")
-    private Boolean guestPassword;
-
     @Schema(description = "服务级存储配置 ID：外部访问固定落到该存储，Local 为内置系统存储")
     private String storageSettingId;
 

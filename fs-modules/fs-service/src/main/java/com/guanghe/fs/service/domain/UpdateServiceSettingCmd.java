@@ -28,9 +28,6 @@ public class UpdateServiceSettingCmd {
     @Schema(description = "游客视角账号 ID（仅 alist）：匿名请求以该账号身份只读，传空表示清除")
     private String guestUserId;
 
-    @Schema(description = "游客目录密码（仅 alist）：true 时游客请求必须携带公开账号的登录密码")
-    private Boolean guestPassword;
-
     @Schema(description = "服务级存储配置 ID（全部协议）：外部访问固定落到该存储，Local 或空表示内置系统存储")
     private String storageSettingId;
 }

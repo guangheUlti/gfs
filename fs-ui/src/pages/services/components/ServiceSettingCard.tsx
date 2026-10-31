@@ -80,7 +80,6 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
       readOnly: boolean
       allowGuest?: boolean
       guestUserId?: string
-      guestPassword?: boolean
       storageSettingId?: string
     }) =>
       updateServiceConfig(setting.serviceType, {
@@ -93,7 +92,6 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
           ? {
               allowGuest: params.allowGuest ?? setting.allowGuest,
               guestUserId: params.guestUserId ?? guestUserId,
-              guestPassword: params.guestPassword ?? setting.guestPassword,
             }
           : {}),
         ...(socketBased ? { port: Number(port), bindAddress: bindAddress.trim() } : {}),
@@ -192,15 +190,6 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
       enabled: setting.enabled,
       readOnly: setting.readOnly,
       guestUserId: id,
-    })
-  }
-
-  /** 目录密码开关即时保存：密码校验在接口入口，保存后下一条请求就生效 */
-  const handleGuestPasswordToggle = (next: boolean) => {
-    configMutation.mutate({
-      enabled: setting.enabled,
-      readOnly: setting.readOnly,
-      guestPassword: next,
     })
   }
 
@@ -359,22 +348,6 @@ export function ServiceSettingCard({ setting, children }: ServiceSettingCardProp
                   {t('form.guestUserHint')}
                 </p>
               )}
-            </div>
-            <div className='space-y-1.5 border-t border-dashed pt-3'>
-              <div className='flex items-center justify-between'>
-                <Label htmlFor='alist-guest-password' className='cursor-pointer'>
-                  {t('form.guestPassword')}
-                </Label>
-                <Switch
-                  id='alist-guest-password'
-                  checked={setting.guestPassword}
-                  disabled={toggling || isBusyAction || !setting.allowGuest}
-                  onCheckedChange={handleGuestPasswordToggle}
-                />
-              </div>
-              <p className='text-xs text-muted-foreground'>
-                {t('form.guestPasswordHint')}
-              </p>
             </div>
           </div>
         )}

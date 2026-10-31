@@ -10,7 +10,7 @@ export function UsageTips({ setting }: { setting: ServiceSettingVO }) {
 
   const keysByType: Record<string, string[]> = {
     webdav: ['windows', 'rclone', 'basic', 'lock'],
-    alist: ['client', 'playback', 'clients', 'readonly', 'guestPassword'],
+    alist: ['client', 'playback', 'clients', 'readonly'],
     sftp: ['client', 'sshfs', 'winscp', 'readonly'],
     ftp: ['client', 'filezilla', 'pasv', 'security'],
     oss: ['client', 'keys', 'prefix', 'semantics'],
