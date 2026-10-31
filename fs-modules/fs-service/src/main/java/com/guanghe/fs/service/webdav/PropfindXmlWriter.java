@@ -94,6 +94,14 @@ public final class PropfindXmlWriter {
                 + "  <D:propstat><D:prop/><D:status>HTTP/1.1 200 OK</D:status></D:propstat>\n</D:response>\n");
     }
 
+    /** PROPFIND Depth: infinity 的拒绝应答（RFC 4918 §9.1） */
+    public static String propfindFiniteDepthError() {
+        return XML_DECLARATION
+                + "<D:error xmlns:D=\"DAV:\">\n"
+                + "  <D:propfind-finite-depth/>\n"
+                + "</D:error>\n";
+    }
+
     /**
      * LOCK 成功应答：&lt;D:prop&gt; 内含 &lt;D:lockdiscovery&gt;。
      *

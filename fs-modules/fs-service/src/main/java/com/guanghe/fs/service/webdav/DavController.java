@@ -87,7 +87,7 @@ public class DavController {
         response.setContentLength(0);
     }
 
-    /** PROPFIND：Depth 0=自身、1=一层子项；infinity 一律按 1 处理并返回 207 */
+    /** PROPFIND：Depth 0=自身、1=一层子项；infinity 按 RFC 4918 §9.1 返回 403 propfind-finite-depth */
     private void handlePropfind(HttpServletRequest request, HttpServletResponse response, String relativePath)
             throws IOException {
         DavPathResolver.ResolvedPath resolved = resolveQuietly(response, relativePath);
@@ -98,7 +98,15 @@ public class DavController {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
             return;
         }
-        String depth = StrUtil.blankToDefault(request.getHeader("Depth"), "1");
+        String depth = StrUtil.blankToDefault(request.getHeader("Depth"), "1").trim();
+        if ("infinity".equalsIgnoreCase(depth)) {
+            byte[] body = PropfindXmlWriter.propfindFiniteDepthError().getBytes(StandardCharsets.UTF_8);
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            response.setContentType("application/xml; charset=UTF-8");
+            response.setContentLength(body.length);
+            response.getOutputStream().write(body);
+            return;
+        }
         StringBuilder responses = new StringBuilder();
 
         if (StrUtil.isEmpty(relativePath)) {
@@ -279,15 +287,22 @@ public class DavController {
         FileInfo file = resolved.file();
         long size = file.getSize() == null ? 0 : file.getSize();
         boolean head = "HEAD".equals(request.getMethod().toUpperCase());
+        String etag = "\"" + file.getId() + "-" + (file.getUpdateTime() == null ? 0
+                : file.getUpdateTime().atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()) + "\"";
 
         // 公共响应头（GET 与 HEAD 通用）
         response.setContentType(StrUtil.blankToDefault(file.getMimeType(), "application/octet-stream"));
         response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''"
                 + URLEncoder.encode(file.getDisplayName(), StandardCharsets.UTF_8).replace("+", "%20"));
         response.setHeader("Last-Modified", PropfindXmlWriter.formatHttpDate(file.getUploadTime()));
-        response.setHeader("ETag", "\"" + file.getId() + "-" + (file.getUpdateTime() == null ? 0
-                : file.getUpdateTime().atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()) + "\"");
+        response.setHeader("ETag", etag);
         response.setHeader("Accept-Ranges", "bytes");
+
+        // 条件请求：内容未变化时返回 304（播放器/系统挂载避免重复拉流）
+        if (notModified(request, file, etag)) {
+            response.setStatus(HttpServletResponse.SC_NOT_MODIFIED);
+            return;
+        }
 
         // 解析 Range 头（仅对 GET 生效，HEAD 恒返回全量元数据）
         Range range = null;
@@ -328,6 +343,44 @@ public class DavController {
             if (!response.isCommitted()) {
                 response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             }
+        }
+    }
+
+    /**
+     * 条件 GET/HEAD 是否命中缓存：If-None-Match 优先（弱比较），其存在但未命中时忽略 If-Modified-Since。
+     */
+    private boolean notModified(HttpServletRequest request, FileInfo file, String etag) {
+        String ifNoneMatch = request.getHeader("If-None-Match");
+        if (StrUtil.isNotBlank(ifNoneMatch)) {
+            String local = etag.startsWith("W/") ? etag.substring(2) : etag;
+            for (String raw : ifNoneMatch.split(",")) {
+                String token = raw.trim();
+                if ("*".equals(token)) {
+                    return true;
+                }
+                if (token.startsWith("W/")) {
+                    token = token.substring(2);
+                }
+                if (token.equals(local)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        String ifModifiedSince = request.getHeader("If-Modified-Since");
+        if (StrUtil.isBlank(ifModifiedSince) || file.getUploadTime() == null) {
+            return false;
+        }
+        try {
+            java.time.ZonedDateTime since = java.time.ZonedDateTime.parse(ifModifiedSince.trim(),
+                    java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME);
+            // HTTP 日期只有秒精度，本地时间截断到秒后再比较
+            java.time.ZonedDateTime lastModified = file.getUploadTime()
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+            return !lastModified.isAfter(since);
+        } catch (java.time.format.DateTimeParseException ignore) {
+            return false;
         }
     }
 

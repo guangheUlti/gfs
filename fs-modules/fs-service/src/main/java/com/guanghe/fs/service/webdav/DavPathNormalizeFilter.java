@@ -13,17 +13,23 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 
 /**
- * /dav 请求路径归一化：把连续斜杠折叠成单个，再交给后续过滤器与控制器。
+ * /dav 请求路径归一化：把连续斜杠折叠成单个、把 {@code %2E} 还原成 {@code .}，再交给后续过滤器与控制器。
  * <p>
- * 为什么需要：不少 TV / Android WebDAV 客户端不是直接用 PROPFIND 返回的子项 href，
- * 而是用「集合 href + "/" + 文件名」拼 URL。根集合的 href 按 RFC 4918 是 {@code /dav/}，
- * 两者一拼就得到 {@code /dav//视频.mp4}。sa-token 防火墙把含 {@code //} 的 URL 判为
- * 「非法请求」并返回 200 + text/plain（几十字节文本），播放器拿到的不是视频流，
- * 表现为「点开一直加载、网速只有几 B/s」。
- * <p>
+ * 为什么需要：
+ * <ul>
+ *   <li>不少 TV / Android WebDAV 客户端不是直接用 PROPFIND 返回的子项 href，
+ *       而是用「集合 href + "/" + 文件名」拼 URL。根集合的 href 按 RFC 4918 是 {@code /dav/}，
+ *       两者一拼就得到 {@code /dav//视频.mp4}。sa-token 防火墙把含 {@code //} 的 URL 判为
+ *       「非法请求」并返回 200 + text/plain（几十字节文本），播放器拿到的不是视频流，
+ *       表现为「点开一直加载、网速只有几 B/s」。</li>
+ *   <li>部分客户端把文件名里的 {@code .} 编码成 {@code %2E}，而 sa-token 防火墙的危险字符表
+ *       包含 {@code %2e}/{@code %2E}，同样会被拦成 200 + text/plain。这里先按字节还原成 {@code .}，
+ *       含 {@code .} 的普通文件名即可正常访问。</li>
+ * </ul>
  * 该过滤器必须排在 sa-token 上下文过滤器（-104）与防火墙（-103）之前，
  * 否则请求在被改写前就已经被拦下（见 {@link com.guanghe.fs.service.web.WebDavFilterConfig} 的 order 说明）。
- * 只折叠斜杠，不动 {@code .} / {@code ..} 段——路径穿越仍由后续安全校验拦截。
+ * 只折叠斜杠、还原 {@code %2E}，不动 {@code .}/{@code ..} 段语义——路径穿越仍由
+ * {@link DavPathResolver#normalize} 拒绝（解码后出现的 {@code ..} 段同样会被拦下）。
  */
 @Slf4j
 @Component
@@ -39,7 +45,7 @@ public class DavPathNormalizeFilter implements Filter {
             return;
         }
         String uri = req.getRequestURI();
-        if (uri == null || uri.indexOf("//") < 0) {
+        if (uri == null) {
             chain.doFilter(request, response);
             return;
         }
@@ -49,7 +55,7 @@ public class DavPathNormalizeFilter implements Filter {
             chain.doFilter(request, response);
             return;
         }
-        String normalizedPath = collapseSlashes(path);
+        String normalizedPath = collapseSlashes(decodeEncodedDots(path));
         if (normalizedPath.equals(path)) {
             chain.doFilter(request, response);
             return;
@@ -57,6 +63,14 @@ public class DavPathNormalizeFilter implements Filter {
         String normalizedUri = contextPath + normalizedPath;
         log.debug("WebDAV 路径归一化: {} -> {}", uri, normalizedUri);
         chain.doFilter(new NormalizedPathRequest(req, normalizedUri, normalizedPath), response);
+    }
+
+    /** 还原被编码的点号（%2E/%2e）：sa-token 防火墙把编码点号当危险字符，解码后按普通文件名处理 */
+    private static String decodeEncodedDots(String path) {
+        if (path.indexOf("%2E") < 0 && path.indexOf("%2e") < 0) {
+            return path;
+        }
+        return path.replace("%2E", ".").replace("%2e", ".");
     }
 
     /** 连续斜杠折叠为单个（含末尾多余斜杠保留一个的场景由下游自行处理） */
