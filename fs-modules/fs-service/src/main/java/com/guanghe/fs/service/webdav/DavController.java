@@ -115,28 +115,26 @@ public class DavController {
                     "", true, null, LocalDateTime.now(), null));
             if (!"0".equals(depth)) {
                 for (FileVO vo : pathResolver.listChildren(null)) {
-                    boolean childDir = Boolean.TRUE.equals(vo.getIsDir());
-                    responses.append(PropfindXmlWriter.writeResponse(
-                            href(vo.getDisplayName()) + (childDir ? "/" : ""),
-                            vo.getDisplayName(), childDir,
+                    responses.append(PropfindXmlWriter.writeResponse(href(vo.getDisplayName()),
+                            vo.getDisplayName(), Boolean.TRUE.equals(vo.getIsDir()),
                             vo.getSize(), vo.getUploadTime(), vo.getMimeType()));
                 }
             }
         } else {
             FileInfo file = resolved.file();
             boolean selfDir = Boolean.TRUE.equals(file.getIsDir());
-            // RFC 4918：collection 的 href 必须以 / 结尾，否则客户端会把「自身条目」误解为子项
-            // （表现：进入文件夹后里面出现一个同名但点不开的文件夹）
+            // 只给「自身条目」补结尾斜杠：缺斜杠时影视仓会把它当成子项，渲染出一个点不开的
+            // 同名文件夹；子项刻意不带斜杠，因为该客户端会丢弃带斜杠的集合条目（根目录直接空列表），
+            // 而 Windows 网络驱动器与 rclone 靠 resourcetype 判目录，不看这个斜杠
             String selfHref = href(relativePath) + (selfDir ? "/" : "");
             responses.append(PropfindXmlWriter.writeResponse(selfHref,
                     file.getDisplayName(), selfDir,
                     file.getSize(), file.getUploadTime(), file.getMimeType()));
             if (!"0".equals(depth) && selfDir) {
                 for (FileVO vo : pathResolver.listChildren(file.getId())) {
-                    boolean childDir = Boolean.TRUE.equals(vo.getIsDir());
                     responses.append(PropfindXmlWriter.writeResponse(
-                            href(relativePath + "/" + vo.getDisplayName()) + (childDir ? "/" : ""),
-                            vo.getDisplayName(), childDir,
+                            href(relativePath + "/" + vo.getDisplayName()),
+                            vo.getDisplayName(), Boolean.TRUE.equals(vo.getIsDir()),
                             vo.getSize(), vo.getUploadTime(), vo.getMimeType()));
                 }
             }

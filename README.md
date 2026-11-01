@@ -86,7 +86,7 @@
     - 认证复用网盘账号（WebDAV/SFTP/FTP/AList 走 BCrypt 校验，OSS 走 SigV4 密钥对），删除进回收站与 Web 端语义一致，内容级去重秒传
     - 协议端密码认证与 Web 登录**共用防暴力锁定**（账号+IP 连续失败 3 次锁 30 分钟，可配置），换协议不会拿到额外尝试次数
     - 启用/停用热生效，服务重启后自动拉起；SFTP 主机密钥持久化，重启后客户端无指纹告警
-    - 已知限制：防暴力计数按「账号+IP」，不防多 IP 撞库（FTP 拿不到客户端 IP，只按账号维度）；WebDAV 的 LOCK/UNLOCK 为最小内存实现（锁不持久化，重启/多实例失效，单实例够用），PROPFIND 仅支持 Depth 0/1（`infinity` 按 RFC 4918 返回 403）；SFTP 仅支持顺序写；OSS 固定单桶 gfs、不支持桶管理/ACL/匿名访问，`oss.aes-key` 需在配置中固化（缺失时随机生成，重启后已签发密钥失效）；AList 不做目录级加密，游客访问只暴露公开账号这一个命名空间，v2 兼容入口（`/api/public/path|search`）只实现读、不提供 mkdir/rename/move/copy/remove/上传
+    - 已知限制：防暴力计数按「账号+IP」，不防多 IP 撞库（FTP 拿不到客户端 IP，只按账号维度）；WebDAV 的 LOCK/UNLOCK 为最小内存实现（锁不持久化，重启/多实例失效，单实例够用），PROPFIND 仅支持 Depth 0/1（`infinity` 按 RFC 4918 返回 403），且子项集合的 `href` 不带结尾斜杠（部分 TV 客户端会整条丢弃带斜杠的集合条目，标准客户端按 `resourcetype` 判目录，不受影响）；SFTP 仅支持顺序写；OSS 固定单桶 gfs、不支持桶管理/ACL/匿名访问，`oss.aes-key` 需在配置中固化（缺失时随机生成，重启后已签发密钥失效）；AList 不做目录级加密，游客访问只暴露公开账号这一个命名空间，v2 兼容入口（`/api/public/path|search`）只实现读、不提供 mkdir/rename/move/copy/remove/上传
 
 ### 预览支持
 
