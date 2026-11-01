@@ -115,20 +115,28 @@ public class DavController {
                     "", true, null, LocalDateTime.now(), null));
             if (!"0".equals(depth)) {
                 for (FileVO vo : pathResolver.listChildren(null)) {
-                    responses.append(PropfindXmlWriter.writeResponse(href(vo.getDisplayName()),
-                            vo.getDisplayName(), Boolean.TRUE.equals(vo.getIsDir()),
+                    boolean childDir = Boolean.TRUE.equals(vo.getIsDir());
+                    responses.append(PropfindXmlWriter.writeResponse(
+                            href(vo.getDisplayName()) + (childDir ? "/" : ""),
+                            vo.getDisplayName(), childDir,
                             vo.getSize(), vo.getUploadTime(), vo.getMimeType()));
                 }
             }
         } else {
             FileInfo file = resolved.file();
-            responses.append(PropfindXmlWriter.writeResponse(href(relativePath),
-                    file.getDisplayName(), Boolean.TRUE.equals(file.getIsDir()),
+            boolean selfDir = Boolean.TRUE.equals(file.getIsDir());
+            // RFC 4918：collection 的 href 必须以 / 结尾，否则客户端会把「自身条目」误解为子项
+            // （表现：进入文件夹后里面出现一个同名但点不开的文件夹）
+            String selfHref = href(relativePath) + (selfDir ? "/" : "");
+            responses.append(PropfindXmlWriter.writeResponse(selfHref,
+                    file.getDisplayName(), selfDir,
                     file.getSize(), file.getUploadTime(), file.getMimeType()));
-            if (!"0".equals(depth) && Boolean.TRUE.equals(file.getIsDir())) {
+            if (!"0".equals(depth) && selfDir) {
                 for (FileVO vo : pathResolver.listChildren(file.getId())) {
-                    responses.append(PropfindXmlWriter.writeResponse(href(relativePath + "/" + vo.getDisplayName()),
-                            vo.getDisplayName(), Boolean.TRUE.equals(vo.getIsDir()),
+                    boolean childDir = Boolean.TRUE.equals(vo.getIsDir());
+                    responses.append(PropfindXmlWriter.writeResponse(
+                            href(relativePath + "/" + vo.getDisplayName()) + (childDir ? "/" : ""),
+                            vo.getDisplayName(), childDir,
                             vo.getSize(), vo.getUploadTime(), vo.getMimeType()));
                 }
             }
