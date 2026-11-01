@@ -123,7 +123,7 @@ public class DavUserAuthenticator {
     public String bridgeSaToken(String userId) {
         CachedToken cached = tokenCache.get(userId);
         long now = System.currentTimeMillis();
-        if (cached != null && cached.expireAt > now) {
+        if (cached != null && cached.expireAt > now && isTokenAlive(cached.token, userId)) {
             StpUtil.setTokenValue(cached.token);
             return cached.token;
         }
@@ -135,6 +135,23 @@ public class DavUserAuthenticator {
         String token = StpUtil.getTokenValue();
         tokenCache.put(userId, new CachedToken(token, now + TOKEN_TTL_MS));
         return token;
+    }
+
+    /**
+     * 缓存里的 token 是否仍然有效（对应会话还在）。
+     * <p>
+     * 必须有这道校验：退出登录、管理员踢下线、Redis 重启/清空都会让会话消失，而内存缓存还留着
+     * 那个 token。若不校验就直接 setTokenValue，后续 {@code StpUtil.getLoginIdAsString()} 会抛
+     * {@code NotLoginException}，表现为整条 WebDAV/SFTP/FTP 链路 500（客户端侧「访问不到任何文件」），
+     * 直到 30 分钟缓存过期才自愈。探测到失效就重新登录，请求无感恢复。
+     */
+    private boolean isTokenAlive(String token, String userId) {
+        try {
+            Object loginId = StpUtil.getLoginIdByToken(token);
+            return loginId != null && userId.equals(String.valueOf(loginId));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private record CachedToken(String token, long expireAt) {
