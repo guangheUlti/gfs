@@ -54,8 +54,8 @@ export function useFileList() {
   const [breadcrumbPath, setBreadcrumbPath] = useState<BreadcrumbItem[]>([])
   const { searchInput, setSearchInput, searchKeyword, commitSearch } =
     useToolbarSearch('keyword')
-  const [orderBy, setOrderBy] = useState('updateTime')
-  const [orderDirection, setOrderDirection] = useState<SortOrder>('DESC')
+  const [orderBy, setOrderBy] = useState('displayName')
+  const [orderDirection, setOrderDirection] = useState<SortOrder>('ASC')
 
   const currentParentId = searchParams.get('parentId') || undefined
   const viewType = searchParams.get('view')
