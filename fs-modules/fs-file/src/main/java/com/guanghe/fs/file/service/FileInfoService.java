@@ -43,6 +43,19 @@ public interface FileInfoService extends IService<FileInfo> {
     boolean isVirtualFileId(String fileId);
 
     /**
+     * 按「父目录 + 显示名」精确查找子项（协议路径解析用）。
+     * <p>
+     * 不能用带关键词的列表接口代劳：{@code getList} 在「父目录为空 + 有关键词」时会退化成全库检索，
+     * 同名目录会被解析到任意层级（导致 WebDAV/SFTP 访问 /音乐 实际打到了子目录里的同名文件夹）。
+     *
+     * @param userId      用户 id（MINA 等非 Web 线程也能安全调用，不依赖 sa-token 上下文）
+     * @param parentId    父目录 id；null 表示根目录
+     * @param displayName 子项显示名
+     * @return 命中记录；未落库（无状态远端目录）时返回 null，由调用方回退到目录列表匹配
+     */
+    FileInfo findChildByExactName(String userId, String parentId, String displayName);
+
+    /**
      * 永久删除无状态远程文件/目录（直接作用于远端服务器，不涉及 file_info）
      */
     void deleteRemoteFiles(List<String> fileIds);

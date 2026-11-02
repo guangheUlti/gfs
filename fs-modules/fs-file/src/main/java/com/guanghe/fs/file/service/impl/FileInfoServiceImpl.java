@@ -143,6 +143,32 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     }
 
     @Override
+    public FileInfo findChildByExactName(String userId, String parentId, String displayName) {
+        if (StrUtil.isBlank(userId) || StrUtil.isBlank(displayName)) {
+            return null;
+        }
+        String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
+
+        QueryWrapper wrapper = new QueryWrapper()
+                .where(FILE_INFO.USER_ID.eq(userId))
+                .and(FILE_INFO.IS_DELETED.eq(false))
+                .and(FILE_INFO.DISPLAY_NAME.eq(displayName));
+        if (StrUtil.isBlank(parentId)) {
+            wrapper.and(FILE_INFO.PARENT_ID.isNull());
+        } else {
+            wrapper.and(FILE_INFO.PARENT_ID.eq(parentId));
+        }
+        // 与列表接口保持一致：同一存储平台下才可见
+        if (StrUtil.isBlank(storagePlatformSettingId)) {
+            wrapper.and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.isNull());
+        } else {
+            wrapper.and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.eq(storagePlatformSettingId));
+        }
+        List<FileInfo> matched = this.list(wrapper);
+        return matched.isEmpty() ? null : matched.get(0);
+    }
+
+    @Override
     public void deleteRemoteFiles(List<String> fileIds) {
         if (CollUtil.isEmpty(fileIds)) {
             return;

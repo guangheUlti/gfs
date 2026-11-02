@@ -6,7 +6,6 @@ import com.guanghe.fs.file.domain.qry.FileQry;
 import com.guanghe.fs.file.domain.vo.FileVO;
 import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.framework.common.domain.PageResult;
-import com.mybatisflex.core.query.QueryWrapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -78,32 +77,26 @@ public class DavPathResolver {
     }
 
     /**
-     * 按「父目录 + 名称」精确查找子项（复用 getList 的用户归属过滤；找不到回退直接查库）
+     * 按「父目录 + 名称」精确查找子项。
+     * <p>
+     * 不能用带关键词的列表接口代劳：`getList` 在「parentId 为空 + 有关键词」时会退化成全库检索，
+     * 曾经把 /dav/音乐 解析成子目录里的同名文件夹（F跑步库/音乐），列出内容自然和 Web 端不一样。
+     * 因此先按唯一索引精确查库，只有未落库的子项（无状态远端目录）才回退到「该目录的直接子项」匹配。
      */
     public FileInfo findChild(String userId, String parentId, String displayName) {
-        FileQry qry = new FileQry();
-        qry.setParentId(StrUtil.emptyToNull(parentId));
-        qry.setKeyword(displayName);
-        qry.setPage(1);
-        qry.setPageSize(100);
-        PageResult<FileVO> page = fileInfoService.getList(qry);
-        if (page != null && page.getData() != null && page.getData().getRecords() != null) {
-            for (FileVO vo : page.getData().getRecords()) {
-                if (displayName.equals(vo.getDisplayName())) {
-                    // 无状态挂载返回的是虚拟 ID，裸 getById 查不到，必须交由 resolveFile 解析
-                    return fileInfoService.isVirtualFileId(vo.getId())
-                            ? fileInfoService.resolveFile(vo.getId())
-                            : fileInfoService.getById(vo.getId());
-                }
+        FileInfo exact = fileInfoService.findChildByExactName(userId, StrUtil.emptyToNull(parentId), displayName);
+        if (exact != null) {
+            return exact;
+        }
+        for (FileVO vo : listChildren(parentId)) {
+            if (displayName.equals(vo.getDisplayName())) {
+                // 无状态挂载返回的是虚拟 ID，裸 getById 查不到，必须交由 resolveFile 解析
+                return fileInfoService.isVirtualFileId(vo.getId())
+                        ? fileInfoService.resolveFile(vo.getId())
+                        : fileInfoService.getById(vo.getId());
             }
         }
-        // keyword 走 LIKE，精确匹配失败（如名称含 % _ 等通配符）时按唯一索引直查
-        return fileInfoService.getOne(new QueryWrapper()
-                .where(com.guanghe.fs.file.domain.table.FileInfoTableDef.FILE_INFO.USER_ID.eq(userId))
-                .and(com.guanghe.fs.file.domain.table.FileInfoTableDef.FILE_INFO.IS_DELETED.eq(false))
-                .and(com.guanghe.fs.file.domain.table.FileInfoTableDef.FILE_INFO.PARENT_ID.eq(
-                        StrUtil.emptyToNull(parentId)))
-                .and(com.guanghe.fs.file.domain.table.FileInfoTableDef.FILE_INFO.DISPLAY_NAME.eq(displayName)));
+        return null;
     }
 
     /**

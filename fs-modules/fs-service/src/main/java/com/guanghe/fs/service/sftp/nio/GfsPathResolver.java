@@ -7,7 +7,6 @@ import com.guanghe.fs.file.domain.qry.FileQry;
 import com.guanghe.fs.file.domain.vo.FileVO;
 import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.framework.common.domain.PageResult;
-import com.mybatisflex.core.query.QueryWrapper;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
@@ -101,31 +100,26 @@ public class GfsPathResolver {
     }
 
     /**
-     * 按「父目录 + 名称」精确查找子项（先走 getList，通配符名称回退直查）
+     * 按「父目录 + 名称」精确查找子项。
+     * <p>
+     * 先按唯一索引精确查库；未落库的子项（无状态远端目录）才回退到「该目录的直接子项」匹配。
+     * 不用关键词列表接口，是因为它在「根目录 + 有关键词」时会退化成全库检索，
+     * 同名目录会被解析到其他层级（与 WebDAV 同一问题）。
      */
     public FileInfo findChild(String userId, String parentId, String displayName) {
-        FileQry qry = new FileQry();
-        qry.setParentId(StrUtil.emptyToNull(parentId));
-        qry.setKeyword(displayName);
-        qry.setPage(1);
-        qry.setPageSize(100);
-        PageResult<FileVO> page = files().getList(qry);
-        if (page != null && page.getData() != null && page.getData().getRecords() != null) {
-            for (FileVO vo : page.getData().getRecords()) {
-                if (displayName.equals(vo.getDisplayName())) {
-                    // 无状态挂载返回的是虚拟 ID，裸 getById 查不到，必须交由 resolveFile 解析
-                    return files().isVirtualFileId(vo.getId())
-                            ? files().resolveFile(vo.getId())
-                            : files().getById(vo.getId());
-                }
+        FileInfo exact = files().findChildByExactName(userId, StrUtil.emptyToNull(parentId), displayName);
+        if (exact != null) {
+            return exact;
+        }
+        for (FileVO vo : listChildren(parentId)) {
+            if (displayName.equals(vo.getDisplayName())) {
+                // 无状态挂载返回的是虚拟 ID，裸 getById 查不到，必须交由 resolveFile 解析
+                return files().isVirtualFileId(vo.getId())
+                        ? files().resolveFile(vo.getId())
+                        : files().getById(vo.getId());
             }
         }
-        return files().getOne(new QueryWrapper()
-                .where(com.guanghe.fs.file.domain.table.FileInfoTableDef.FILE_INFO.USER_ID.eq(userId))
-                .and(com.guanghe.fs.file.domain.table.FileInfoTableDef.FILE_INFO.IS_DELETED.eq(false))
-                .and(com.guanghe.fs.file.domain.table.FileInfoTableDef.FILE_INFO.PARENT_ID.eq(
-                        StrUtil.emptyToNull(parentId)))
-                .and(com.guanghe.fs.file.domain.table.FileInfoTableDef.FILE_INFO.DISPLAY_NAME.eq(displayName)));
+        return null;
     }
 
     /**
