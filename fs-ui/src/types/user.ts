@@ -72,6 +72,16 @@ export interface AdminUserDataSummary {
   hasData: boolean
 }
 
+/** 批量删除账号结果：成功数 + 逐个失败原因 */
+export interface AdminBatchDeleteResult {
+  deletedCount: number
+  failed: {
+    id: string
+    username?: string
+    reason?: string
+  }[]
+}
+
 /** 被锁定账号（连续登录失败触发防暴力锁定，锁定数据在服务端 Redis） */
 export interface LockedUser {
   username: string

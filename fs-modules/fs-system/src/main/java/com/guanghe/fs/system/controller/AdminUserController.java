@@ -1,16 +1,21 @@
 package com.guanghe.fs.system.controller;
 
+import cn.hutool.core.util.StrUtil;
 import com.guanghe.fs.framework.common.domain.PageResult;
 import com.guanghe.fs.framework.common.domain.Result;
+import com.guanghe.fs.framework.common.exception.BusinessException;
+import com.guanghe.fs.framework.common.utils.I18nUtils;
 import com.guanghe.fs.log.constant.OperationType;
 import com.guanghe.fs.log.service.SysOperationLogService;
 import com.guanghe.fs.system.domain.SysUser;
 import com.guanghe.fs.system.domain.dto.AdminResetPasswordCmd;
+import com.guanghe.fs.system.domain.dto.AdminUserBatchDeleteCmd;
 import com.guanghe.fs.system.domain.dto.AdminUserCreateCmd;
 import com.guanghe.fs.system.domain.dto.AdminUserQry;
 import com.guanghe.fs.system.domain.dto.AdminUserStatusCmd;
 import com.guanghe.fs.system.domain.dto.AdminUserUpdateCmd;
 import com.guanghe.fs.system.domain.vo.AdminUserVO;
+import com.guanghe.fs.system.domain.vo.BatchUserDeleteResultVO;
 import com.guanghe.fs.system.domain.vo.LockedUserVO;
 import com.guanghe.fs.system.domain.vo.PendingUserVO;
 import com.guanghe.fs.system.domain.vo.UserDataSummaryVO;
@@ -19,6 +24,7 @@ import com.guanghe.fs.system.service.SysUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,6 +36,7 @@ import java.util.List;
  * @Author: guangheUlti
  * @Date: 2026/9/1
  */
+@Slf4j
 @Validated
 @RestController
 @RequestMapping("/apis/admin/users")
@@ -136,6 +143,43 @@ public class AdminUserController {
                 "已清理文件、分享、收藏、收集、传输任务等数据"
         );
         return Result.ok();
+    }
+
+    @Operation(summary = "批量删除账号并彻底清除各自数据",
+            description = "逐个账号独立事务处理，单个失败不影响其余账号，失败原因随结果返回")
+    @DeleteMapping("/batch")
+    public Result<BatchUserDeleteResultVO> batchDelete(
+            @Validated @RequestBody AdminUserBatchDeleteCmd cmd) {
+        List<String> ids = cmd.getIds().stream()
+                .filter(StrUtil::isNotBlank)
+                .map(String::trim)
+                .distinct()
+                .toList();
+
+        BatchUserDeleteResultVO result = new BatchUserDeleteResultVO();
+        for (String id : ids) {
+            String targetName = usernameOf(id);
+            try {
+                // 逐个调用，让每个账号走各自的删除事务（当前账号/系统管理员由服务层拦截）
+                adminUserManageService.deleteUser(id);
+                operationLogService.recordSuccess(
+                        OperationType.DELETE_USER,
+                        "批量删除用户并清除数据",
+                        "USER",
+                        id,
+                        targetName,
+                        "批量删除（共 " + ids.size() + " 个账号）"
+                );
+                result.recordDeleted();
+            } catch (BusinessException e) {
+                result.recordFailure(id, targetName, e.getMessage());
+            } catch (Exception e) {
+                log.error("批量删除账号失败: userId={}, error={}", id, e.getMessage(), e);
+                result.recordFailure(id, targetName,
+                        I18nUtils.getMessage("admin.user.batch.delete.failed"));
+            }
+        }
+        return Result.ok(result);
     }
 
     @Operation(summary = "待审核用户列表")

@@ -1,6 +1,7 @@
 import { request } from './request'
 import type { PageRecord } from '@/types/page'
 import type {
+  AdminBatchDeleteResult,
   AdminUser,
   AdminUserCreateParams,
   AdminUserDataSummary,
@@ -43,6 +44,13 @@ export const adminApi = {
   /** 删除账号并彻底清除其全部数据 */
   deleteUser: (userId: string) => {
     return request.delete(`/apis/admin/users/${userId}`)
+  },
+
+  /** 批量删除账号（逐个独立事务，失败项随结果返回） */
+  deleteUsers: (ids: string[]) => {
+    return request.delete<AdminBatchDeleteResult>('/apis/admin/users/batch', {
+      data: { ids },
+    })
   },
 
   /** 手动创建用户（免审核，创建即可登录） */

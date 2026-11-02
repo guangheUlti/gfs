@@ -9,6 +9,7 @@ import {
   MoreHorizontal,
   RefreshCw,
   Search,
+  Trash2,
   UserPlus,
 } from 'lucide-react'
 import { adminApi, isHandledError } from '@/api'
@@ -20,6 +21,7 @@ import {
 } from '../components/settings-page-header'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
 import {
@@ -58,6 +60,7 @@ import { CreateUserDialog } from './create-user-dialog'
 import { EditUserDialog } from './edit-user-dialog'
 import { ResetPasswordDialog } from './reset-password-dialog'
 import { DeleteUserDialog } from './delete-user-dialog'
+import { BatchDeleteUsersDialog } from './batch-delete-users-dialog'
 
 const PAGE_SIZE = 10
 
@@ -83,6 +86,8 @@ export function SettingsUserManagement() {
   const [query, setQuery] = useState<QueryState>({ page: 1 })
   const [keywordInput, setKeywordInput] = useState('')
   const [actingId, setActingId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [batchOpen, setBatchOpen] = useState(false)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null)
@@ -103,6 +108,8 @@ export function SettingsUserManagement() {
       })
       setUsers(res?.records ?? [])
       setTotal(Number(res?.total ?? 0))
+      // 列表刷新后勾选已无意义（可能已被删除或翻页），直接清空
+      setSelectedIds(new Set())
     } catch (err) {
       if (!isHandledError(err)) toast.error(t('userManagement.listFailed'))
     } finally {
@@ -333,6 +340,30 @@ export function SettingsUserManagement() {
     )
   }
 
+  /** 可勾选的账号：自己与系统管理员不允许删除（后端同样会拒绝） */
+  const selectableUsers = users.filter(
+    (user) => user.id !== currentUser?.id && !user.superAdmin
+  )
+  const selectedUsers = users.filter((user) => selectedIds.has(user.id))
+  const allSelected =
+    selectableUsers.length > 0 &&
+    selectableUsers.every((user) => selectedIds.has(user.id))
+
+  const toggleUser = (user: AdminUser) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(user.id)) next.delete(user.id)
+      else next.add(user.id)
+      return next
+    })
+  }
+
+  const toggleAll = () => {
+    setSelectedIds(
+      allSelected ? new Set() : new Set(selectableUsers.map((user) => user.id))
+    )
+  }
+
   const busy = loading || actingId !== null
 
   return (
@@ -411,6 +442,22 @@ export function SettingsUserManagement() {
             <SelectItem value='3'>{t('userManagement.statusRejected')}</SelectItem>
           </SelectContent>
         </Select>
+        {selectedIds.size > 0 && (
+          <div className='ml-auto flex items-center gap-2'>
+            <span className='whitespace-nowrap text-xs text-muted-foreground'>
+              {t('userManagement.selectedCount', { n: selectedIds.size })}
+            </span>
+            <Button
+              variant='outline'
+              size='sm'
+              className='h-8 gap-1 px-2.5 text-xs text-destructive hover:text-destructive'
+              onClick={() => setBatchOpen(true)}
+            >
+              <Trash2 className='h-3.5 w-3.5' />
+              {t('userManagement.batchDelete')}
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className='mt-4 flex-1'>
@@ -418,8 +465,23 @@ export function SettingsUserManagement() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className='w-9 pr-0'>
+                  <Checkbox
+                    aria-label={t('userManagement.selectAll')}
+                    className='relative before:absolute before:-inset-2 before:content-[""]'
+                    checked={
+                      allSelected
+                        ? true
+                        : selectedIds.size > 0
+                          ? 'indeterminate'
+                          : false
+                    }
+                    disabled={selectableUsers.length === 0 || busy}
+                    onCheckedChange={toggleAll}
+                  />
+                </TableHead>
                 <TableHead>{t('userManagement.colUser')}</TableHead>
-                <TableHead className='hidden md:table-cell'>
+                <TableHead className='hidden whitespace-nowrap md:table-cell'>
                   {t('userManagement.colStatus')}
                 </TableHead>
                 <TableHead className='hidden whitespace-nowrap md:table-cell'>
@@ -437,7 +499,7 @@ export function SettingsUserManagement() {
               {loading && users.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className='py-8 text-center text-muted-foreground'
                   >
                     {t('userManagement.loading')}
@@ -446,7 +508,7 @@ export function SettingsUserManagement() {
               ) : users.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className='py-8 text-center text-muted-foreground'
                   >
                     {t('userManagement.empty')}
@@ -457,8 +519,21 @@ export function SettingsUserManagement() {
                   const self = user.id === currentUser?.id
                   const status = statusBadge(user.status)
                   const name = user.nickname || user.username
+                  const selectable = !self && !user.superAdmin
                   return (
-                    <TableRow key={user.id}>
+                    <TableRow
+                      key={user.id}
+                      data-state={selectedIds.has(user.id) ? 'selected' : undefined}
+                    >
+                      <TableCell className='w-9 pr-0'>
+                        <Checkbox
+                          aria-label={t('userManagement.selectUser', { name })}
+                          className='relative before:absolute before:-inset-2 before:content-[""]'
+                          checked={selectedIds.has(user.id)}
+                          disabled={!selectable || busy}
+                          onCheckedChange={() => toggleUser(user)}
+                        />
+                      </TableCell>
                       <TableCell>
                         <div className='flex items-center gap-3'>
                           <Avatar className='h-8 w-8'>
@@ -521,7 +596,7 @@ export function SettingsUserManagement() {
                       <TableCell className='hidden md:table-cell'>
                         <Badge
                           variant={status.variant}
-                          className='text-[11px] font-normal'
+                          className='text-[11px] whitespace-nowrap font-normal'
                         >
                           {status.label}
                         </Badge>
@@ -603,6 +678,15 @@ export function SettingsUserManagement() {
         user={deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onDone={handleDeleted}
+      />
+
+      <BatchDeleteUsersDialog
+        users={batchOpen ? selectedUsers : []}
+        onClose={() => setBatchOpen(false)}
+        onDone={() => {
+          setSelectedIds(new Set())
+          fetchUsers()
+        }}
       />
 
       <AlertDialog
