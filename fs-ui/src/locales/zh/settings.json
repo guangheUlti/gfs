@@ -70,7 +70,7 @@
   },
   "userManagement": {
     "pageTitle": "用户管理",
-    "pageDescription": "管理系统全部账号：创建、审核、启用/禁用、重置密码、强制下线与删除",
+    "pageDescription": "管理系统全部账号：创建、审核、启用/禁用、重置密码、强制下线与批量删除",
     "createUser": "创建用户",
     "createTitle": "创建用户",
     "createDescription": "手动创建的账号无需审核，创建后即可登录系统",
@@ -165,7 +165,18 @@
     "deleting": "删除中...",
     "deleted": "已删除账号 {{name}} 及其数据",
     "deleteFailed": "删除失败，请重试",
-    "loadDataFailed": "获取账号数据失败"
+    "loadDataFailed": "获取账号数据失败",
+    "batchDelete": "批量删除",
+    "selectedCount": "已选 {{n}} 个",
+    "selectAll": "全选本页",
+    "selectUser": "选择 {{name}}",
+    "batchDeleteTitle": "删除 {{n}} 个账号？",
+    "batchDeleteDesc": "将逐个删除所选账号，并彻底清除各自的文件、分享、收藏等数据。",
+    "batchDeleteWarning": "会物理删除这些账号名下的全部文件与记录，不可恢复。如需保留数据，请改用「禁用」。",
+    "batchDeleteAcknowledge": "我已知晓此操作不可恢复",
+    "batchDeleteConfirm": "删除 {{n}} 个账号",
+    "batchDeleted": "已删除 {{n}} 个账号及其数据",
+    "batchDeletePartial": "成功删除 {{done}} 个，{{failed}} 个未删除："
   },
   "loginManagement": {
     "pageTitle": "登录管理",
@@ -227,6 +238,11 @@
     "thumbnailsOn": "启用",
     "thumbnailsOff": "关闭",
     "thumbnailsUpdated": "缩略图设置已更新",
+    "fileSortLabel": "文件默认排序",
+    "fileSortDescription": "打开文件页时按哪种方式排列文件；之后仍可点表头临时切换。",
+    "fileSortName": "按名称",
+    "fileSortTime": "按修改时间",
+    "fileSortUpdated": "默认排序已更新",
     "validation": {
       "layout": "请选择布局",
       "theme": "请选择主题",

@@ -14,6 +14,10 @@ import type {
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { getFileList, getFolderPath } from '@/api/file'
 import { useFilesLocationStore } from '@/store/files-location'
+import {
+  FILE_SORT_DIRECTION,
+  useAppearanceStore,
+} from '@/store/appearance'
 import { useToolbarSearch } from '@/hooks/useToolbarSearch'
 
 /** 每页条数（与后端约定一致） */
@@ -54,8 +58,15 @@ export function useFileList() {
   const [breadcrumbPath, setBreadcrumbPath] = useState<BreadcrumbItem[]>([])
   const { searchInput, setSearchInput, searchKeyword, commitSearch } =
     useToolbarSearch('keyword')
-  const [orderBy, setOrderBy] = useState('displayName')
-  const [orderDirection, setOrderDirection] = useState<SortOrder>('ASC')
+  // 默认排序取「偏好设置」里的本机偏好，仅在进入页面时读取一次；
+  // 之后用户点表头自行切换，不再被偏好设置覆盖。
+  const [defaultFileSort] = useState(
+    () => useAppearanceStore.getState().fileSort
+  )
+  const [orderBy, setOrderBy] = useState<string>(defaultFileSort)
+  const [orderDirection, setOrderDirection] = useState<SortOrder>(
+    FILE_SORT_DIRECTION[defaultFileSort]
+  )
 
   const currentParentId = searchParams.get('parentId') || undefined
   const viewType = searchParams.get('view')

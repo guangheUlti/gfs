@@ -70,7 +70,7 @@
   },
   "userManagement": {
     "pageTitle": "User Management",
-    "pageDescription": "Manage all accounts: create, review, enable/disable, reset passwords, force sign-out and delete",
+    "pageDescription": "Manage all accounts: create, review, enable/disable, reset passwords, force sign-out and batch delete",
     "createUser": "Create User",
     "createTitle": "Create User",
     "createDescription": "Manually created accounts skip approval and can sign in immediately",
@@ -165,7 +165,18 @@
     "deleting": "Deleting...",
     "deleted": "Account {{name}} and its data have been deleted",
     "deleteFailed": "Failed to delete. Please retry",
-    "loadDataFailed": "Failed to load account data"
+    "loadDataFailed": "Failed to load account data",
+    "batchDelete": "Delete selected",
+    "selectedCount": "{{n}} selected",
+    "selectAll": "Select all on this page",
+    "selectUser": "Select {{name}}",
+    "batchDeleteTitle": "Delete {{n}} accounts?",
+    "batchDeleteDesc": "The selected accounts will be deleted one by one, and their files, shares and other data will be purged.",
+    "batchDeleteWarning": "All files and records of these accounts will be permanently deleted. This cannot be undone. Use Disable instead if you want to keep the data.",
+    "batchDeleteAcknowledge": "I understand this cannot be undone",
+    "batchDeleteConfirm": "Delete {{n}} accounts",
+    "batchDeleted": "Deleted {{n}} accounts and their data",
+    "batchDeletePartial": "Deleted {{done}}, {{failed}} not deleted:"
   },
   "loginManagement": {
     "pageTitle": "Login Management",
@@ -227,6 +238,11 @@
     "thumbnailsOn": "On",
     "thumbnailsOff": "Off",
     "thumbnailsUpdated": "Thumbnail preference updated",
+    "fileSortLabel": "Default file order",
+    "fileSortDescription": "How files are ordered when the files page opens. You can still switch sorting from the table header.",
+    "fileSortName": "By name",
+    "fileSortTime": "By modified time",
+    "fileSortUpdated": "Default order updated",
     "validation": {
       "layout": "Please select a layout",
       "theme": "Please select a theme",

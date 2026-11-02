@@ -22,13 +22,17 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useTheme } from '@/components/theme-provider'
-import { useAppearanceStore } from '@/store/appearance'
+import {
+  useAppearanceStore,
+  type FileSortField,
+} from '@/store/appearance'
 import { SettingsBlock, SettingsRow } from '../components/settings-row'
 
 type AppearanceFormValues = {
   theme: 'light' | 'dark'
   language: AppLang
   thumbnails: boolean
+  fileSort: FileSortField
 }
 
 export function AppearanceForm() {
@@ -41,6 +45,8 @@ export function AppearanceForm() {
   const setThumbnailsEnabled = useAppearanceStore(
     (state) => state.setThumbnailsEnabled
   )
+  const fileSort = useAppearanceStore((state) => state.fileSort)
+  const setFileSort = useAppearanceStore((state) => state.setFileSort)
 
   const appearanceFormSchema = React.useMemo(
     () =>
@@ -52,6 +58,7 @@ export function AppearanceForm() {
           message: t('appearance.validation.language'),
         }),
         thumbnails: z.boolean(),
+        fileSort: z.enum(['displayName', 'updateTime']),
       }),
     [t]
   )
@@ -62,6 +69,7 @@ export function AppearanceForm() {
       theme: (theme as 'light' | 'dark') || 'light',
       language: getAppLang(),
       thumbnails: thumbnailsEnabled,
+      fileSort,
     },
   })
 
@@ -93,6 +101,11 @@ export function AppearanceForm() {
   const handleThumbnailsChange = (enabled: boolean) => {
     setThumbnailsEnabled(enabled)
     toast.success(t('appearance.thumbnailsUpdated'))
+  }
+
+  const handleFileSortChange = (value: FileSortField) => {
+    setFileSort(value)
+    toast.success(t('appearance.fileSortUpdated'))
   }
 
   return (
@@ -229,6 +242,44 @@ export function AppearanceForm() {
                         <RadioGroupItem value='false' id='thumbnails-off' />
                         <span className='text-sm'>
                           {t('appearance.thumbnailsOff')}
+                        </span>
+                      </label>
+                    </RadioGroup>
+                  </FormControl>
+                </SettingsRow>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='fileSort'
+            render={({ field }) => (
+              <FormItem className='space-y-0'>
+                <SettingsRow
+                  label={t('appearance.fileSortLabel')}
+                  description={t('appearance.fileSortDescription')}
+                >
+                  <FormControl>
+                    <RadioGroup
+                      onValueChange={(value) => {
+                        const next = value as FileSortField
+                        field.onChange(next)
+                        handleFileSortChange(next)
+                      }}
+                      value={field.value}
+                      className='flex flex-row flex-wrap items-center justify-end gap-6'
+                    >
+                      <label className='flex cursor-pointer items-center gap-2'>
+                        <RadioGroupItem value='displayName' id='file-sort-name' />
+                        <span className='text-sm'>
+                          {t('appearance.fileSortName')}
+                        </span>
+                      </label>
+                      <label className='flex cursor-pointer items-center gap-2'>
+                        <RadioGroupItem value='updateTime' id='file-sort-time' />
+                        <span className='text-sm'>
+                          {t('appearance.fileSortTime')}
                         </span>
                       </label>
                     </RadioGroup>
