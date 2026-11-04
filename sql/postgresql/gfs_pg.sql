@@ -325,6 +325,20 @@ CREATE TABLE "sys_feature_toggle" (
 COMMENT ON TABLE "sys_feature_toggle" IS '功能开关';
 
 -- ==============================================================
+-- 16. sys_ip_guard IP 安全防护配置（全局单行）
+-- ==============================================================
+DROP TABLE IF EXISTS "sys_ip_guard";
+CREATE TABLE "sys_ip_guard" (
+    "id" varchar(64) PRIMARY KEY,
+    "mode" varchar(16) NOT NULL DEFAULT 'OFF',
+    "white_list" text,
+    "black_list" text,
+    "created_at" timestamp NOT NULL,
+    "updated_at" timestamp NOT NULL
+);
+COMMENT ON TABLE "sys_ip_guard" IS 'IP 安全防护配置（mode：OFF 关闭 / WHITE 白名单 / BLACK 黑名单，互斥）';
+
+-- ==============================================================
 -- 初始化数据
 -- ==============================================================
 
@@ -342,5 +356,9 @@ INSERT INTO "storage_platform" ("name", "identifier", "config_scheme", "icon", "
 -- 系统管理员（用户名与 security.super-admin.username 配置一致即拥有存储/日志管理权限）
 INSERT INTO "sys_user" ("id", "username", "password", "nickname", "avatar", "status", "created_at", "updated_at", "last_login_at")
 VALUES ('01jrvgs943q0f43h0aa5mjde0y', 'admin', '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918', 'admin', NULL, 0, '2026-07-23 14:38:36', '2026-07-23 14:38:36', NULL);
+
+-- IP 安全防护：默认关闭，名单在「设置-系统-安全防护」里维护
+INSERT INTO "sys_ip_guard" ("id", "mode", "white_list", "black_list", "created_at", "updated_at")
+VALUES ('ip_guard', 'OFF', '[]', '[]', '2026-11-04 10:00:00', '2026-11-04 10:00:00');
 
 SET session_replication_role = 'origin';

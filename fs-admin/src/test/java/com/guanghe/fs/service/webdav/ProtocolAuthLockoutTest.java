@@ -29,7 +29,7 @@ import static org.mockito.Mockito.when;
  * 协议端（WebDAV / SFTP / FTP 共用的 {@link DavUserAuthenticator}）防暴力锁定行为。
  * <p>
  * 覆盖：连续失败达上限后锁定（正确密码也拒绝、且锁定期间不再查库/算哈希）、
- * 计数的 IP 维度隔离、成功登录清零、账号状态异常不计入密码试错。
+ * 计数的 IP 维度隔离、成功登录清零、账号状态异常不计入密码试错、IP 防护命中时不消耗试错计数。
  */
 class ProtocolAuthLockoutTest {
 
@@ -64,7 +64,15 @@ class ProtocolAuthLockoutTest {
         when(passwordHashService.matches(anyString(), anyString()))
                 .thenAnswer(inv -> GOOD_PASSWORD.equals(inv.getArgument(0)));
 
-        authenticator = new DavUserAuthenticator(userMapper, passwordHashService, guard);
+        authenticator = new DavUserAuthenticator(userMapper, passwordHashService, guard, allowAllIps());
+    }
+
+    /** IP 防护放行全部：本用例只验防暴力锁定，名单行为另测 */
+    private static com.guanghe.fs.system.service.IpGuardService allowAllIps() {
+        com.guanghe.fs.system.service.IpGuardService ipGuard =
+                mock(com.guanghe.fs.system.service.IpGuardService.class);
+        when(ipGuard.isAllowed(any())).thenReturn(true);
+        return ipGuard;
     }
 
     @Test
@@ -99,11 +107,29 @@ class ProtocolAuthLockoutTest {
 
     @Test
     void missingIpUsesSeparateBucket() {
-        // FTP 拿不到客户端 IP 时传 null，归入 unknown 桶，不与真实 IP 的锁互相污染
+        // 拿不到对端地址时传 null，归入 unknown 桶，不与真实 IP 的锁互相污染
         for (int i = 0; i < 3; i++) {
             assertNull(authenticator.authenticate(USERNAME, BAD_PASSWORD, null));
         }
         assertTrue(guard.isLoginLocked(USERNAME, null));
+        assertFalse(guard.isLoginLocked(USERNAME, IP));
+        assertNotNull(authenticator.authenticate(USERNAME, GOOD_PASSWORD, IP));
+    }
+
+    @Test
+    void blockedIpIsRejectedWithoutTouchingPasswordOrFailureCount() {
+        com.guanghe.fs.system.service.IpGuardService denyAll =
+                mock(com.guanghe.fs.system.service.IpGuardService.class);
+        when(denyAll.isAllowed(any())).thenReturn(false);
+        DavUserAuthenticator guarded =
+                new DavUserAuthenticator(userMapper, passwordHashService, guard, denyAll);
+
+        // 密码正确也拒绝，且不查库、不算哈希——名单外的地址连「试密码」的资格都没有
+        assertNull(guarded.authenticate(USERNAME, GOOD_PASSWORD, IP));
+        verify(userMapper, times(0)).selectOneByQuery(any());
+        verify(passwordHashService, times(0)).matches(anyString(), anyString());
+
+        // 也不计入防暴力失败次数：否则被拦下的地址能把账号在真实用户那边锁死
         assertFalse(guard.isLoginLocked(USERNAME, IP));
         assertNotNull(authenticator.authenticate(USERNAME, GOOD_PASSWORD, IP));
     }

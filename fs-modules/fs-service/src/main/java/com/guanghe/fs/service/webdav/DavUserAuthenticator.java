@@ -43,6 +43,7 @@ public class DavUserAuthenticator {
     private final com.guanghe.fs.system.mapper.SysUserMapper userMapper;
     private final com.guanghe.fs.system.auth.PasswordHashService passwordHashService;
     private final com.guanghe.fs.system.auth.LoginGuardService loginGuardService;
+    private final com.guanghe.fs.system.service.IpGuardService ipGuardService;
 
     /** userId -> 缓存的 token */
     private final Map<String, CachedToken> tokenCache = new ConcurrentHashMap<>();
@@ -54,10 +55,17 @@ public class DavUserAuthenticator {
      * 校验用户名密码；成功返回用户，失败返回 null（不区分「用户不存在」与「密码错误」，防枚举）。
      * 失败会累加防暴力计数，锁定期间直接返回 null（不泄漏是锁定还是密码错）。
      *
-     * @param clientIp 客户端 IP（WebDAV 取请求 remoteAddr，SFTP 取会话对端地址，FTP 取不到传 null）
+     * @param clientIp 客户端 IP（HTTP 端取 {@code IpUtils.getIpAddr(request)}，SFTP/FTP 取会话对端地址，拿不到传 null）
      */
     public SysUser authenticate(String username, String rawPassword, String clientIp) {
         if (username == null || rawPassword == null) {
+            return null;
+        }
+        // IP 防护：SFTP/FTP 是裸 TCP 会话、没有 HTTP 过滤器，判定落在这里；WebDAV/AList/OSS
+        // 已在 IpGuardFilter 拦过一遍，重复判定无副作用。放在密码校验之前：名单外的地址连「试密码」
+        // 的资格都没有，也不会消耗防暴力计数。
+        if (!ipGuardService.isAllowed(clientIp)) {
+            log.warn("协议认证被拒绝：来源 IP 不在允许范围内, username={}, ip={}", username, clientIp);
             return null;
         }
         // 防暴力：锁定期内直接失败，不查库、不做 BCrypt（避免锁定期间被当成哈希计算器刷 CPU）

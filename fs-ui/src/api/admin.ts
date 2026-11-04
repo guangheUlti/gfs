@@ -11,6 +11,7 @@ import type {
   OnlineUser,
   PendingUser,
 } from '@/types/user'
+import type { IpGuardConfig } from '@/types/security'
 
 /**
  * 系统级管理 API（全局操作，仅系统管理员可用）
@@ -105,5 +106,15 @@ export const adminApi = {
     return request.delete(`/apis/admin/sessions/${loginId}/terminals/${index}`, {
       params: tokenTail ? { tokenTail } : undefined,
     })
+  },
+
+  /** IP 安全防护配置（白名单/黑名单互斥） */
+  getIpGuard: () => {
+    return request.get<IpGuardConfig>('/apis/admin/ip-guard')
+  },
+
+  /** 保存 IP 安全防护配置（整份覆盖：模式 + 两份名单） */
+  saveIpGuard: (data: Pick<IpGuardConfig, 'mode' | 'whiteList' | 'blackList'>) => {
+    return request.put('/apis/admin/ip-guard', data)
   },
 }

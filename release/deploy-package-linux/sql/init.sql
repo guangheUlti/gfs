@@ -397,6 +397,26 @@ LOCK TABLES `sys_feature_toggle` WRITE;
 /*!40000 ALTER TABLE `sys_feature_toggle` DISABLE KEYS */;
 /*!40000 ALTER TABLE `sys_feature_toggle` ENABLE KEYS */;
 UNLOCK TABLES;
+DROP TABLE IF EXISTS `sys_ip_guard`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `sys_ip_guard` (
+  `id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '固定主键：全局单行 ip_guard',
+  `mode` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'OFF' COMMENT '防护模式：OFF关闭 WHITE白名单 BLACK黑名单（互斥）',
+  `white_list` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci COMMENT '白名单条目 JSON 数组（IP 或 CIDR 网段 + 备注）',
+  `black_list` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci COMMENT '黑名单条目 JSON 数组（IP 或 CIDR 网段 + 备注）',
+  `created_at` datetime NOT NULL COMMENT '创建时间',
+  `updated_at` datetime NOT NULL COMMENT '修改时间',
+  PRIMARY KEY (`id`) USING BTREE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC COMMENT='IP 安全防护配置';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+LOCK TABLES `sys_ip_guard` WRITE;
+/*!40000 ALTER TABLE `sys_ip_guard` DISABLE KEYS */;
+INSERT INTO `sys_ip_guard` VALUES ('ip_guard','OFF','[]','[]','2026-11-04 10:00:00','2026-11-04 10:00:00');
+/*!40000 ALTER TABLE `sys_ip_guard` ENABLE KEYS */;
+UNLOCK TABLES;
+
 DROP TABLE IF EXISTS `sys_login_log`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;

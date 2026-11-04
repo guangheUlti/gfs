@@ -12,6 +12,8 @@ import {
   RiEqualizer2Line,
   RiServerFill,
   RiServerLine,
+  RiShieldKeyholeFill,
+  RiShieldKeyholeLine,
   RiTShirtFill,
   RiTShirtLine,
   RiUserSettingsFill,
@@ -26,6 +28,7 @@ import { SettingsUserManagement } from './user-management'
 import { SettingsLoginManagement } from './login-management'
 import { SettingsFeatureToggles } from './feature-toggles'
 import { SettingsSystemManagement } from './system-management'
+import { SettingsIpProtection } from './ip-protection'
 import { SidebarNav, type SettingsNavGroup } from './components/sidebar-nav'
 import { useAuth } from '@/contexts/auth-context'
 
@@ -37,6 +40,7 @@ export type SettingsTab =
   | 'login-management'
   | 'feature-toggles'
   | 'system-management'
+  | 'ip-protection'
 
 interface NavItemConfig {
   title: string
@@ -93,6 +97,13 @@ function buildNavConfig(
           tab: 'feature-toggles',
           icon: { line: RiEqualizer2Line, fill: RiEqualizer2Fill },
           // 功能开关是全局配置（影响所有用户），仅系统管理员可见/可改
+          superAdminOnly: true,
+        },
+        {
+          title: t('nav.ipProtection'),
+          tab: 'ip-protection',
+          icon: { line: RiShieldKeyholeLine, fill: RiShieldKeyholeFill },
+          // IP 名单是全局准入配置，改错会影响所有账号，仅系统管理员可见/可改
           superAdminOnly: true,
         },
         {
@@ -158,6 +169,8 @@ function SettingsPanel({ tab }: { tab: SettingsTab }) {
       ) : (
         <NoPermission />
       )
+    case 'ip-protection':
+      return user?.isSuperAdmin ? <SettingsIpProtection /> : <NoPermission />
     default:
       return <SettingsProfile />
   }

@@ -101,15 +101,24 @@ public class GfsFtpBridge implements UserManager {
         if (!(authentication instanceof UsernamePasswordAuthentication passwd)) {
             throw new AuthenticationFailedException("only password auth supported");
         }
-        // FTP 的 UserManager SPI 不暴露会话/对端地址，IP 传 null（守卫归入 unknown 桶），
-        // 因此 FTP 的失败计数只按账号维度生效，不会污染 WebDAV/Web 登录的真实 IP 锁定键
-        com.guanghe.fs.system.domain.SysUser user =
-                authenticator.authenticate(passwd.getUsername(), passwd.getPassword(), null);
+        // 对端地址来自 PASS 命令构造的 UserMetadata（FtpServer 用控制连接的真实 socket 地址填充，
+        // 不经任何请求头），取不到时传 null 由守卫归入 unknown 桶
+        com.guanghe.fs.system.domain.SysUser user = authenticator.authenticate(
+                passwd.getUsername(), passwd.getPassword(), remoteIp(passwd));
         if (user == null) {
             log.info("FTP 认证失败: username={}", passwd.getUsername());
             throw new AuthenticationFailedException("530 Login incorrect");
         }
         return new GfsFtpUser(user.getUsername(), user.getId());
+    }
+
+    /** 取 FTP 控制连接的对端 IP；UserMetadata 缺失（如匿名登录路径）时返回 null */
+    private static String remoteIp(UsernamePasswordAuthentication authentication) {
+        org.apache.ftpserver.usermanager.impl.UserMetadata metadata = authentication.getUserMetadata();
+        if (metadata == null || metadata.getInetAddress() == null) {
+            return null;
+        }
+        return metadata.getInetAddress().getHostAddress();
     }
 
     @Override
