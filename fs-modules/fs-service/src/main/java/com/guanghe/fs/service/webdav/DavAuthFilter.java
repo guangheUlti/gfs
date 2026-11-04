@@ -2,6 +2,7 @@ package com.guanghe.fs.service.webdav;
 
 import cn.hutool.core.codec.Base64;
 import cn.hutool.core.util.StrUtil;
+import com.guanghe.fs.framework.common.utils.IpUtils;
 import com.guanghe.fs.service.domain.ServiceSetting;
 import com.guanghe.fs.service.service.ServiceSettingService;
 import jakarta.servlet.Filter;
@@ -88,9 +89,9 @@ public class DavAuthFilter implements Filter {
         String username = decoded.substring(0, idx);
         String password = decoded.substring(idx + 1);
 
-        // 防暴力计数按「账号+IP」：用 TCP 层 remoteAddr，不取 X-Forwarded-For（请求头可伪造，
-        // 每请求换一个伪造 IP 就能无限重置计数，等于防护失效）
-        var user = authenticator.authenticate(username, password, req.getRemoteAddr());
+        // 防暴力计数按「账号+IP」，IP 用全局统一口径（默认 TCP 层对端地址，见 IpUtils）：
+        // 采信可自造的 X-Forwarded-For 等于每请求换个假 IP 就重置一次计数，防护形同不存在
+        var user = authenticator.authenticate(username, password, IpUtils.getIpAddr(req));
         if (user == null) {
             unauthorized(resp);
             return;

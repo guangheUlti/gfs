@@ -4,3 +4,9 @@ spring:
 
 server:
   port: 80
+
+# 客户端 IP 来源：默认只认 TCP 层连接地址，X-Forwarded-For 等请求头由客户端自填、不可信。
+# 只有把本服务放在 Nginx 等可信反代之后（且代理覆写转发头）时才需要开启，
+# 开启后「所有用户共享代理 IP」的副作用会同时影响登录防爆破、注册限流与 IP 黑白名单。
+# security:
+#   trust-proxy: true

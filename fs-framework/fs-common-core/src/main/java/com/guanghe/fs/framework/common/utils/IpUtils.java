@@ -26,6 +26,22 @@ public class IpUtils {
     private static final String LOCALHOST_IPV6 = "0:0:0:0:0:0:0:1";
 
     /**
+     * 是否信任反向代理追加的转发请求头。
+     * <p>
+     * 默认 false：只认 TCP 层对端地址。因为 X-Forwarded-For 等头是客户端可自造的，且即使经过
+     * 反向代理（Nginx 的 $proxy_add_x_forwarded_for 是「追加」而非「覆盖」），最前几跳仍是请求方
+     * 自己填的值。按 IP 记账的防护（登录防爆破、注册限流、IP 黑白名单、文件收集访问码……）一旦
+     * 采信这些头，攻击者每请求换一个伪造 IP 就能无限拿到新的计数桶，防护形同不存在。
+     * <p>
+     * 只有应用确实坐在可信代理后面、且代理把转发头写对时，才由 {@code security.trust-proxy} 置 true。
+     */
+    private static volatile boolean trustProxyHeaders = false;
+
+    public static void setTrustProxyHeaders(boolean trustProxyHeaders) {
+        IpUtils.trustProxyHeaders = trustProxyHeaders;
+    }
+
+    /**
      * 获取客户端IP地址
      */
     public static String getIpAddr() {
@@ -42,6 +58,10 @@ public class IpUtils {
     public static String getIpAddr(HttpServletRequest request) {
         if (request == null) {
             return LOCALHOST_IP;
+        }
+
+        if (!trustProxyHeaders) {
+            return remoteAddr(request);
         }
 
         String ip = request.getHeader("X-Forwarded-For");
@@ -69,18 +89,24 @@ public class IpUtils {
             ip = request.getHeader("HTTP_X_FORWARDED_FOR");
         }
         if (!isValidIp(ip)) {
-            ip = request.getRemoteAddr();
-            if (LOCALHOST_IP.equals(ip) || LOCALHOST_IPV6.equals(ip)) {
-                // 根据网卡取本机配置的IP
-                try {
-                    InetAddress inet = InetAddress.getLocalHost();
-                    ip = inet.getHostAddress();
-                } catch (UnknownHostException e) {
-                    log.error("获取本机IP失败", e);
-                }
-            }
+            ip = remoteAddr(request);
         }
 
+        return ip;
+    }
+
+    /**
+     * TCP 层对端地址。本机回环时换成网卡地址，便于本地自测的日志里看出来源。
+     */
+    private static String remoteAddr(HttpServletRequest request) {
+        String ip = request.getRemoteAddr();
+        if (LOCALHOST_IP.equals(ip) || LOCALHOST_IPV6.equals(ip)) {
+            try {
+                ip = InetAddress.getLocalHost().getHostAddress();
+            } catch (UnknownHostException e) {
+                log.error("获取本机IP失败", e);
+            }
+        }
         return ip;
     }
 

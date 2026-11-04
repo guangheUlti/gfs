@@ -96,6 +96,12 @@ mybatis-flex:
 security:
   # 拦截路由前缀
   path-pattern: /apis/**
+  # 是否信任反向代理写入的来源头（X-Forwarded-For 等）。
+  # false（默认，直连部署）：客户端 IP 一律取 TCP 层对端地址——这些头是请求方自己填的，
+  #   采信后攻击者每请求换一个假 IP 就能拿到新的计数桶，登录防爆破、注册限流、IP 黑白名单、
+  #   文件收集访问码限制会同时失效。
+  # true：仅当应用确实坐在 Nginx 等可信代理后面、且代理覆写（而非追加）了转发头时开启。
+  trust-proxy: false
   #排除不需要登录认证的接口
   excludes:
     - /apis/auth/login

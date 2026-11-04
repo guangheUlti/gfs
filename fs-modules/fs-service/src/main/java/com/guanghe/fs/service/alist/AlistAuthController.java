@@ -2,6 +2,7 @@ package com.guanghe.fs.service.alist;
 
 import cn.hutool.core.lang.Dict;
 import cn.hutool.core.util.StrUtil;
+import com.guanghe.fs.framework.common.utils.IpUtils;
 import com.guanghe.fs.framework.common.utils.JsonUtils;
 import com.guanghe.fs.system.domain.SysUser;
 import com.guanghe.fs.system.mapper.SysUserMapper;
@@ -54,8 +55,8 @@ public class AlistAuthController {
             AlistResponse.error(response, AlistResponse.BAD_REQUEST, "username or password is required");
             return;
         }
-        // 防暴力计数按「账号+TCP 层 IP」，不取 X-Forwarded-For（请求头可伪造）
-        SysUser user = authenticator.authenticate(username, password, request.getRemoteAddr());
+        // 防暴力计数按「账号+IP」，IP 用全局统一口径（默认 TCP 层对端地址，见 IpUtils）
+        SysUser user = authenticator.authenticate(username, password, IpUtils.getIpAddr(request));
         if (user == null) {
             // 不区分「账号不存在 / 密码错 / 已锁定」，具体原因只在日志里
             AlistResponse.error(response, AlistResponse.BAD_REQUEST, "username or password is incorrect");

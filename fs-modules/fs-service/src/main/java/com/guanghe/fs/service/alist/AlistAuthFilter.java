@@ -1,6 +1,7 @@
 package com.guanghe.fs.service.alist;
 
 import cn.hutool.core.util.StrUtil;
+import com.guanghe.fs.framework.common.utils.IpUtils;
 import com.guanghe.fs.service.domain.ServiceSetting;
 import com.guanghe.fs.service.manager.ProtocolReadOnlyService;
 import com.guanghe.fs.service.service.ServiceSettingService;
@@ -135,7 +136,7 @@ public class AlistAuthFilter implements Filter {
             // 游客访问：仅「没带凭证 + 读操作」才放行；带了错 token 仍按认证失败处理，
             // 免得客户端误以为自己的凭证有效
             if (guestUserId != null && StrUtil.isBlank(req.getHeader("Authorization")) && isGuestReadOp(path)) {
-                log.debug("AList 游客访问: path={}, ip={}", path, req.getRemoteAddr());
+                log.debug("AList 游客访问: path={}, ip={}", path, IpUtils.getIpAddr(req));
                 authenticator.bridgeSaToken(guestUserId);
                 chainScoped(request, response, chain);
                 return;
@@ -174,7 +175,7 @@ public class AlistAuthFilter implements Filter {
      */
     private void logRejected(HttpServletRequest req, String path, String reason) {
         log.info("AList 拒绝访问: {} {}, 原因={}, ip={}, ua={}", req.getMethod(), path, reason,
-                req.getRemoteAddr(), StrUtil.blankToDefault(req.getHeader("User-Agent"), "-"));
+                IpUtils.getIpAddr(req), StrUtil.blankToDefault(req.getHeader("User-Agent"), "-"));
     }
 
     /** 去掉 contextPath 的请求路径 */
