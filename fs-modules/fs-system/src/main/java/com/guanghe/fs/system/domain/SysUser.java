@@ -60,4 +60,9 @@ public class SysUser extends BaseEntity {
      * 最后登录时间
      */
     private LocalDateTime lastLoginAt;
+
+    /**
+     * 注册来源 IP：仅自助注册时记录，管理员创建的账号与历史账号为空
+     */
+    private String registerIp;
 }

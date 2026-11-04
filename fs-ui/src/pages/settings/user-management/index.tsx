@@ -93,7 +93,11 @@ export function SettingsUserManagement() {
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null)
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null)
-  const [rejectTarget, setRejectTarget] = useState<AdminUser | null>(null)
+  /** 审核弹窗：通过与驳回共用一个确认框，便于展示注册时间与注册 IP */
+  const [reviewTarget, setReviewTarget] = useState<{
+    user: AdminUser
+    action: 'approve' | 'reject'
+  } | null>(null)
   const [disableTarget, setDisableTarget] = useState<AdminUser | null>(null)
   const [kickTarget, setKickTarget] = useState<AdminUser | null>(null)
 
@@ -133,6 +137,7 @@ export function SettingsUserManagement() {
     try {
       await adminApi.approveUser(user.id)
       toast.success(t('userManagement.approved'))
+      setReviewTarget(null)
       fetchUsers()
     } catch (err) {
       if (!isHandledError(err)) toast.error(t('userManagement.actionFailed'))
@@ -142,18 +147,25 @@ export function SettingsUserManagement() {
   }
 
   const handleReject = async () => {
-    if (!rejectTarget) return
-    setActingId(rejectTarget.id)
+    if (!reviewTarget) return
+    const user = reviewTarget.user
+    setActingId(user.id)
     try {
-      await adminApi.rejectUser(rejectTarget.id)
+      await adminApi.rejectUser(user.id)
       toast.success(t('userManagement.rejected'))
-      setRejectTarget(null)
+      setReviewTarget(null)
       fetchUsers()
     } catch (err) {
       if (!isHandledError(err)) toast.error(t('userManagement.actionFailed'))
     } finally {
       setActingId(null)
     }
+  }
+
+  const submitReview = () => {
+    if (!reviewTarget) return
+    if (reviewTarget.action === 'approve') handleApprove(reviewTarget.user)
+    else handleReject()
   }
 
   const handleUnlock = async (user: AdminUser) => {
@@ -241,7 +253,11 @@ export function SettingsUserManagement() {
   const lastLoginText = (user: AdminUser) =>
     formatTime(user.lastLoginAt) ?? t('userManagement.neverLoggedIn')
 
-  const createdText = (user: AdminUser) => formatTime(user.createdAt) ?? '—'
+  const createdText = (user?: AdminUser | null) =>
+    (user && formatTime(user.createdAt)) ?? '—'
+
+  const registerIpText = (user?: AdminUser | null) =>
+    user?.registerIp || t('userManagement.reviewIpUnknown')
 
   const renderActions = (user: AdminUser) => {
     const self = user.id === currentUser?.id
@@ -259,7 +275,7 @@ export function SettingsUserManagement() {
               size='sm'
               className='h-7 px-2.5 text-xs'
               disabled={acting}
-              onClick={() => handleApprove(user)}
+              onClick={() => setReviewTarget({ user, action: 'approve' })}
             >
               {t('userManagement.approve')}
             </Button>
@@ -268,7 +284,7 @@ export function SettingsUserManagement() {
               size='sm'
               className='h-7 px-2.5 text-xs text-destructive hover:text-destructive'
               disabled={acting}
-              onClick={() => setRejectTarget(user)}
+              onClick={() => setReviewTarget({ user, action: 'reject' })}
             >
               {t('userManagement.reject')}
             </Button>
@@ -490,6 +506,9 @@ export function SettingsUserManagement() {
                 <TableHead className='hidden whitespace-nowrap lg:table-cell'>
                   {t('userManagement.colCreatedAt')}
                 </TableHead>
+                <TableHead className='hidden whitespace-nowrap xl:table-cell'>
+                  {t('userManagement.colRegisterIp')}
+                </TableHead>
                 <TableHead className='w-24'>
                   {t('userManagement.colActions')}
                 </TableHead>
@@ -499,7 +518,7 @@ export function SettingsUserManagement() {
               {loading && users.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     className='py-8 text-center text-muted-foreground'
                   >
                     {t('userManagement.loading')}
@@ -508,7 +527,7 @@ export function SettingsUserManagement() {
               ) : users.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     className='py-8 text-center text-muted-foreground'
                   >
                     {t('userManagement.empty')}
@@ -590,6 +609,12 @@ export function SettingsUserManagement() {
                             <div className='truncate text-[11px] text-muted-foreground lg:hidden'>
                               {t('userManagement.colCreatedAt')}：{createdText(user)}
                             </div>
+                            {/* 注册 IP 列在窄屏折叠到用户名下方，仅在记录到 IP 时显示 */}
+                            {user.registerIp && (
+                              <div className='truncate text-[11px] text-muted-foreground xl:hidden'>
+                                {t('userManagement.colRegisterIp')}：{user.registerIp}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </TableCell>
@@ -606,6 +631,9 @@ export function SettingsUserManagement() {
                       </TableCell>
                       <TableCell className='hidden text-xs whitespace-nowrap text-muted-foreground lg:table-cell'>
                         {createdText(user)}
+                      </TableCell>
+                      <TableCell className='hidden text-xs whitespace-nowrap text-muted-foreground xl:table-cell'>
+                        {user.registerIp || '—'}
                       </TableCell>
                       <TableCell>{renderActions(user)}</TableCell>
                     </TableRow>
@@ -690,27 +718,56 @@ export function SettingsUserManagement() {
       />
 
       <AlertDialog
-        open={!!rejectTarget}
-        onOpenChange={(open) => !open && setRejectTarget(null)}
+        open={!!reviewTarget}
+        onOpenChange={(open) => !open && setReviewTarget(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {t('userManagement.confirmRejectTitle')}
+              {reviewTarget?.action === 'approve'
+                ? t('userManagement.confirmApproveTitle')
+                : t('userManagement.confirmRejectTitle')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {t('userManagement.confirmRejectDesc', {
-                name: rejectTarget?.nickname || rejectTarget?.username || '',
-              })}
+              {t(
+                reviewTarget?.action === 'approve'
+                  ? 'userManagement.confirmApproveDesc'
+                  : 'userManagement.confirmRejectDesc',
+                {
+                  name:
+                    reviewTarget?.user.nickname || reviewTarget?.user.username || '',
+                }
+              )}
             </AlertDialogDescription>
+            {/* 审核依据：注册时间与来源 IP，管理员创建的账号无 IP */}
+            <div className='mt-2 space-y-1 text-xs text-muted-foreground'>
+              <div>
+                {t('userManagement.reviewUsername')}：
+                {reviewTarget?.user.username}
+              </div>
+              <div>
+                {t('userManagement.reviewRegisterTime')}：
+                {createdText(reviewTarget?.user)}
+              </div>
+              <div>
+                {t('userManagement.reviewRegisterIp')}：
+                {registerIpText(reviewTarget?.user)}
+              </div>
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t('account.cancel')}</AlertDialogCancel>
             <AlertDialogAction
-              className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
-              onClick={handleReject}
+              className={
+                reviewTarget?.action === 'reject'
+                  ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                  : undefined
+              }
+              onClick={submitReview}
             >
-              {t('userManagement.reject')}
+              {reviewTarget?.action === 'approve'
+                ? t('userManagement.approve')
+                : t('userManagement.reject')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

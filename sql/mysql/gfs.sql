@@ -529,13 +529,14 @@ CREATE TABLE `sys_user` (
   `created_at` datetime NOT NULL COMMENT '创建时间',
   `updated_at` datetime NOT NULL COMMENT '更新时间',
   `last_login_at` datetime DEFAULT NULL COMMENT '最后登录时间',
+  `register_ip` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '注册来源IP（自助注册时记录，管理员创建的账号为空）',
   PRIMARY KEY (`id`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC COMMENT='用户表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `sys_user` WRITE;
 /*!40000 ALTER TABLE `sys_user` DISABLE KEYS */;
-INSERT INTO `sys_user` VALUES ('01jrvgs943q0f43h0aa5mjde0y','admin','$2a$12$gX2uOHIyWy78xH5Yd1GKeOyYfeyEwsyG2QSSrkXI8bVYHZZku0T0.','admin',NULL,0,'2026-07-23 14:38:36','2026-09-18 14:05:43','2026-09-18 14:05:43');
+INSERT INTO `sys_user` VALUES ('01jrvgs943q0f43h0aa5mjde0y','admin','$2a$12$gX2uOHIyWy78xH5Yd1GKeOyYfeyEwsyG2QSSrkXI8bVYHZZku0T0.','admin',NULL,0,'2026-07-23 14:38:36','2026-09-18 14:05:43','2026-09-18 14:05:43',NULL);
 /*!40000 ALTER TABLE `sys_user` ENABLE KEYS */;
 UNLOCK TABLES;
 DROP TABLE IF EXISTS `sys_user_transfer_setting`;

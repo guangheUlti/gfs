@@ -25,6 +25,8 @@ export interface PendingUser {
   nickname: string
   avatar: string
   createdAt: string
+  /** 注册来源 IP */
+  registerIp?: string
 }
 
 /** 管理员账号列表项 */
@@ -39,6 +41,8 @@ export interface AdminUser {
   superAdmin: boolean
   createdAt?: string
   lastLoginAt?: string
+  /** 注册来源 IP：自助注册时记录，管理员创建的账号为空 */
+  registerIp?: string
   /** 当前在线终端数 */
   onlineTerminals: number
   /** 是否被防暴力锁定 */

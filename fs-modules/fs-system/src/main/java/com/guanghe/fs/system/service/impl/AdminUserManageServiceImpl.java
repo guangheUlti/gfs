@@ -178,6 +178,7 @@ public class AdminUserManageServiceImpl implements AdminUserManageService {
         vo.setStatus(user.getStatus());
         vo.setCreatedAt(user.getCreatedAt());
         vo.setLastLoginAt(user.getLastLoginAt());
+        vo.setRegisterIp(user.getRegisterIp());
         vo.setSuperAdmin(isSuperAdmin(user));
         vo.setOnlineTerminals(onlineCounts.getOrDefault(user.getId(), 0));
         LoginGuardService.LockedAccount locked = lockedAccounts.get(user.getUsername());

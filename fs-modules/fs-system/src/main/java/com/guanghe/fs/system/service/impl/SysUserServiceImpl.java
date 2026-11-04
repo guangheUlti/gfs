@@ -7,6 +7,7 @@ import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.guanghe.fs.framework.common.constant.CommonConstant;
 import com.guanghe.fs.framework.common.exception.BusinessException;
 import com.guanghe.fs.framework.common.utils.I18nUtils;
+import com.guanghe.fs.framework.common.utils.IpUtils;
 import com.guanghe.fs.storage.plugin.boot.StoragePluginManager;
 import com.guanghe.fs.storage.plugin.core.IStorageOperationService;
 import com.guanghe.fs.system.domain.SysUser;
@@ -109,6 +110,8 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
             user.setAvatar(cmd.getAvatar());
             // 新注册账号需管理员审核通过后才允许登录
             user.setStatus(UserStatus.PENDING_REVIEW);
+            // 注册来源 IP 供管理员审核时判断（与注册限流同源，取同一份解析结果）
+            user.setRegisterIp(IpUtils.getIpAddr());
             this.save(user);
 
             // 初始化用户传输配置

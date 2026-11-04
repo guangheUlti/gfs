@@ -40,4 +40,7 @@ public class PendingUserVO implements Serializable {
     @Schema(description = "注册时间")
     @JsonFormat(pattern = DateUtils.DATE_TIME_PATTERN)
     private LocalDateTime createdAt;
+
+    @Schema(description = "注册来源IP")
+    private String registerIp;
 }

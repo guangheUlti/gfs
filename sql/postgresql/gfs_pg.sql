@@ -288,6 +288,7 @@ CREATE TABLE "sys_user" (
     "created_at" timestamp NOT NULL,
     "updated_at" timestamp NOT NULL,
     "last_login_at" timestamp DEFAULT NULL,
+    "register_ip" varchar(64) DEFAULT NULL,
     PRIMARY KEY ("id")
 );
 COMMENT ON TABLE "sys_user" IS '用户表';

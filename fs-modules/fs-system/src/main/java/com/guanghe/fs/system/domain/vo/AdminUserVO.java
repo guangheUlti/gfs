@@ -48,6 +48,9 @@ public class AdminUserVO implements Serializable {
     @JsonFormat(pattern = DateUtils.DATE_TIME_PATTERN)
     private LocalDateTime lastLoginAt;
 
+    @Schema(description = "注册来源IP：自助注册时记录，管理员创建的账号为空")
+    private String registerIp;
+
     @Schema(description = "当前在线终端数")
     private int onlineTerminals;
 
