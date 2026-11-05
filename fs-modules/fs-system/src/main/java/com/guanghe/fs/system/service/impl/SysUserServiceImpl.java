@@ -210,6 +210,8 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     @Transactional(rollbackFor = Exception.class)
     @Override
     public void createUserByAdmin(AdminUserCreateCmd cmd) {
+        // 手动创建免审核账号属系统级操作，必须限系统管理员，否则普通登录用户可自行造号
+        assertSuperAdmin();
         // 管理员创建入口同样受防暴力约束（复用注册失败计数，防脚本滥用）
         loginGuardService.checkRegisterAllowed();
         try {

@@ -3,6 +3,7 @@ package com.guanghe.fs.web;
 import cn.dev33.satoken.interceptor.SaInterceptor;
 import cn.dev33.satoken.stp.StpUtil;
 import com.guanghe.fs.framework.security.properties.SecurityProperties;
+import com.guanghe.fs.system.constant.UserPermissions;
 import com.guanghe.fs.interceptor.PreviewInterceptor;
 import com.guanghe.fs.interceptor.StoragePlatformInterceptor;
 import java.io.IOException;
@@ -80,6 +81,12 @@ public class WebMvcConfig implements WebMvcConfigurer {
         registry.addInterceptor(new SaInterceptor(handle -> StpUtil.checkLogin()))
                 .addPathPatterns(securityProperties.getPathPattern())
                 .excludePathPatterns(securityProperties.getExcludes())
+                .order(1);
+
+        // 系统管理接口统一要求管理员角色：服务层仍逐个方法校验，这里是兜底，
+        // 防止以后新增接口漏写校验（2026-11 越权建号事件的成因）
+        registry.addInterceptor(new SaInterceptor(handle -> StpUtil.checkRole(UserPermissions.ROLE_ADMIN)))
+                .addPathPatterns("/apis/admin/**")
                 .order(1);
 
         registry.addInterceptor(new SaInterceptor(handle -> StpUtil.checkLogin()))
