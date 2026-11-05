@@ -1,10 +1,10 @@
 package com.guanghe.fs.storage.plugin.core.chunk;
 
-import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.IdUtil;
 import com.guanghe.fs.framework.common.exception.StorageOperationException;
 import com.guanghe.fs.storage.plugin.core.AbstractStorageOperationService;
 import com.guanghe.fs.storage.plugin.core.config.StorageConfig;
+import com.guanghe.fs.storage.plugin.core.utils.TempDirCleaner;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
@@ -15,12 +15,15 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * 分片先落本地临时目录的公共基类
@@ -195,11 +198,9 @@ public abstract class AbstractTempChunkStorageService extends AbstractStorageOpe
             log.error("{} 分片合并失败: objectKey={}, uploadId={}", getLogPrefix(), objectKey, uploadId, e);
             throw new StorageOperationException("分片合并失败: " + e.getMessage(), e);
         } finally {
-            // 无论成败都清理 temp 任务目录
-            try {
-                FileUtil.del(tempDir.toFile());
-            } catch (Exception e) {
-                log.warn("{} 清理分片临时目录失败: {}", getLogPrefix(), tempDir, e);
+            // 无论成败都清理 temp 任务目录，并回查目录确实消失
+            if (!TempDirCleaner.deleteWithRetry(tempDir)) {
+                log.warn("{} 分片临时目录未能删除，留待兜底扫描清理: {}", getLogPrefix(), tempDir);
             }
         }
     }
@@ -207,12 +208,55 @@ public abstract class AbstractTempChunkStorageService extends AbstractStorageOpe
     @Override
     public void abortMultipartUpload(String objectKey, String uploadId) {
         ensureNotPrototype();
-        try {
-            FileUtil.del(getTempTaskDir(uploadId).toFile());
-            log.info("{} 分片上传已中止: objectKey={}, uploadId={}", getLogPrefix(), objectKey, uploadId);
-        } catch (Exception e) {
-            throw new StorageOperationException("中止分片上传失败: " + e.getMessage(), e);
+        Path tempDir = getTempTaskDir(uploadId);
+        if (!TempDirCleaner.deleteWithRetry(tempDir)) {
+            log.warn("{} 分片临时目录未能删除，留待兜底扫描清理: uploadId={}, path={}",
+                    getLogPrefix(), uploadId, tempDir);
         }
+        log.info("{} 分片上传已中止: objectKey={}, uploadId={}", getLogPrefix(), objectKey, uploadId);
+    }
+
+    @Override
+    public int cleanupOrphanTempDirs(Set<String> liveUploadIds, Duration maxAge) {
+        Path tempRoot = Paths.get(getTempRoot());
+        if (Files.notExists(tempRoot)) {
+            return 0;
+        }
+        Instant deadline = Instant.now().minus(maxAge);
+        int deleted = 0;
+        try (Stream<Path> children = Files.list(tempRoot)) {
+            for (Path dir : children.filter(Files::isDirectory).toList()) {
+                if (liveUploadIds.contains(dir.getFileName().toString())) {
+                    continue;
+                }
+                if (Files.getLastModifiedTime(dir).toInstant().isAfter(deadline)) {
+                    // 可能仍在上传中，等下一轮
+                    continue;
+                }
+                if (TempDirCleaner.deleteWithRetry(dir)) {
+                    deleted++;
+                } else {
+                    log.warn("{} 清理孤儿分片目录失败，留待下次: {}", getLogPrefix(), dir);
+                }
+            }
+        } catch (IOException e) {
+            log.warn("{} 扫描分片临时目录失败: {}", getLogPrefix(), tempRoot, e);
+        }
+        return deleted;
+    }
+
+    @Override
+    public boolean cleanupResidualTempDir(String uploadId) {
+        if (uploadId == null || uploadId.isBlank()) {
+            return true;
+        }
+        Path tempDir = getTempTaskDir(uploadId);
+        boolean removed = TempDirCleaner.deleteWithRetry(tempDir);
+        if (!removed) {
+            log.warn("{} 分片临时目录未能删除，留待兜底扫描清理: uploadId={}, path={}",
+                    getLogPrefix(), uploadId, tempDir);
+        }
+        return removed;
     }
 
     @Override

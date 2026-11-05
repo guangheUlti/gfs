@@ -17,6 +17,8 @@ import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -68,6 +70,18 @@ public class StorageServiceFacade {
                 configId,
                 () -> loadConfigFromDatabase(configId)
         );
+    }
+
+    /**
+     * 兜底清理用的常驻存储服务集合：内置系统存储 + 已缓存的用户存储实例。
+     * <p>
+     * 只取已存在的实例、不新建，避免定时任务把休眠中的远程存储连起来。
+     */
+    public List<IStorageOperationService> getResidentStorageServices() {
+        List<IStorageOperationService> services = new ArrayList<>();
+        services.add(pluginManager.getLocalInstance());
+        services.addAll(pluginManager.getCachedInstances());
+        return services;
     }
 
     /**

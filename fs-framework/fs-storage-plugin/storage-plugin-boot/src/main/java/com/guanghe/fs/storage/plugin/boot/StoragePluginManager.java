@@ -57,6 +57,13 @@ public class StoragePluginManager implements DisposableBean {
     }
 
     /**
+     * 已缓存的用户存储实例快照（不创建实例，因此不会唤醒远程存储）
+     */
+    public List<IStorageOperationService> getCachedInstances() {
+        return instanceCache.snapshotInstances();
+    }
+
+    /**
      * 使配置失效（通过 configId 直接失效，不需要加载配置）
      *
      * @param configId 配置ID

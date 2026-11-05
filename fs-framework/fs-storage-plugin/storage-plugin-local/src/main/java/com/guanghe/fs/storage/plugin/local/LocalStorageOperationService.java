@@ -1,6 +1,5 @@
 package com.guanghe.fs.storage.plugin.local;
 
-import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.IdUtil;
 import com.guanghe.fs.framework.common.exception.StorageConfigException;
 import com.guanghe.fs.framework.common.exception.StorageOperationException;
@@ -8,6 +7,7 @@ import com.guanghe.fs.storage.plugin.core.AbstractStorageOperationService;
 import com.guanghe.fs.storage.plugin.core.annotation.StoragePlugin;
 import com.guanghe.fs.storage.plugin.core.config.StorageConfig;
 import com.guanghe.fs.storage.plugin.core.crypto.StreamCipherSupport;
+import com.guanghe.fs.storage.plugin.core.utils.TempDirCleaner;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.*;
@@ -15,7 +15,10 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
+import java.util.stream.Stream;
 
 /**
  * 系统存储插件实现
@@ -478,7 +481,7 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
             }
 
             // 清理临时目录
-            FileUtil.del(tempDir);
+            removeTempDir(tempDir, uploadId);
 
             log.info("系统存储分片上传完成: objectKey={}, uploadId={}", objectKey, uploadId);
 //            return getFileUrl(objectKey, null);
@@ -496,13 +499,70 @@ public class LocalStorageOperationService extends AbstractStorageOperationServic
         try {
             // 清理临时目录
             String tempDir = getTempDir(uploadId);
-            FileUtil.del(tempDir);
+            removeTempDir(tempDir, uploadId);
             log.info("系统存储分片上传已中止: objectKey={}, uploadId={}", objectKey, uploadId);
 
         } catch (Exception e) {
             log.error("中止系统存储分片上传失败, objectKey={}: {}", objectKey, e.getMessage(), e);
             throw new StorageOperationException("中止系统存储分片上传失败: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 删除分片临时目录并回查结果。
+     * <p>
+     * 合并时子文件多由其它线程刚写完关闭，Windows 上父目录会短暂不可移除，
+     * 而 Hutool 的 {@code FileUtil.del} 在这种情况下仍返回 true，因此必须自己校验目录已消失并重试。
+     */
+    private boolean removeTempDir(String tempDir, String uploadId) {
+        Path dir = Paths.get(tempDir);
+        if (TempDirCleaner.deleteWithRetry(dir)) {
+            return true;
+        }
+        log.warn("系统存储分片临时目录未能删除，留待凌晨兜底扫描清理: uploadId={}, path={}, 剩余文件={}",
+                uploadId, tempDir, Arrays.toString(dir.toFile().list()));
+        return false;
+    }
+
+    @Override
+    public boolean cleanupResidualTempDir(String uploadId) {
+        if (basePath == null || basePath.isBlank() || uploadId == null || uploadId.isBlank()) {
+            return true;
+        }
+        return removeTempDir(getTempDir(uploadId), uploadId);
+    }
+
+    @Override
+    public int cleanupOrphanTempDirs(Set<String> liveUploadIds, Duration maxAge) {
+        if (basePath == null || basePath.isBlank()) {
+            return 0;
+        }
+        Path tempRoot = Paths.get(getTempDir(""));
+        if (Files.notExists(tempRoot)) {
+            return 0;
+        }
+        Instant deadline = Instant.now().minus(maxAge);
+        int deleted = 0;
+        try (Stream<Path> children = Files.list(tempRoot)) {
+            for (Path dir : children.filter(Files::isDirectory).toList()) {
+                String uploadId = dir.getFileName().toString();
+                if (liveUploadIds.contains(uploadId)) {
+                    continue;
+                }
+                if (Files.getLastModifiedTime(dir).toInstant().isAfter(deadline)) {
+                    // 可能仍在上传中，等下一轮
+                    continue;
+                }
+                if (TempDirCleaner.deleteWithRetry(dir)) {
+                    deleted++;
+                } else {
+                    log.warn("清理孤儿分片目录失败，留待下次: {}", dir);
+                }
+            }
+        } catch (IOException e) {
+            log.warn("扫描分片临时目录失败: {}", tempRoot, e);
+        }
+        return deleted;
     }
 
     @Override

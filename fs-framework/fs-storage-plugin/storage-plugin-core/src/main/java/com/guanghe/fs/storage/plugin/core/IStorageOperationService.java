@@ -7,6 +7,7 @@ import com.guanghe.fs.storage.plugin.core.model.StorageObjectEntry;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -145,6 +146,38 @@ public interface IStorageOperationService extends Closeable {
      * @param uploadId  上传ID
      */
     void abortMultipartUpload(String objectKey, String uploadId);
+
+    /**
+     * 清理分片上传遗留的孤儿临时目录（兜底）。
+     * <p>
+     * 只有「分片先落到服务器本地临时目录」的插件需要实现：目录名即 uploadId，
+     * 名称不在 {@code liveUploadIds}（任务表里还有记录的分片会话）且最后修改时间早于
+     * {@code maxAge} 的目录直接删除。删除瞬间被文件句柄挡住时，本次会跳过，
+     * 下一轮再捞，不会留下永久垃圾。
+     * <p>
+     * 默认实现返回 0，表示该插件不在本地落分片。
+     *
+     * @return 实际删除的目录数
+     */
+    default int cleanupOrphanTempDirs(Set<String> liveUploadIds, Duration maxAge) {
+        return 0;
+    }
+
+    /**
+     * 删除某次分片上传留在服务器本地的临时目录，不访问远端。
+     * <p>
+     * 供任务记录即将删除时调用：uploadId 是找回临时目录的唯一线索，行一旦删除就再也找不到。
+     * 与 {@link #abortMultipartUpload} 的区别是本方法只动本地落盘，不会唤醒远程存储，
+     * 也不会对已完成的上传发出无效的远端请求。
+     * <p>
+     * 不在本地落分片的插件沿用默认实现。
+     *
+     * @param uploadId 分片上传ID（即临时目录名）
+     * @return 目录已不存在返回 true；仍被文件句柄挡住等原因残留返回 false
+     */
+    default boolean cleanupResidualTempDir(String uploadId) {
+        return true;
+    }
 
     /**
      * 获取存储底座当前可写入的剩余字节数。

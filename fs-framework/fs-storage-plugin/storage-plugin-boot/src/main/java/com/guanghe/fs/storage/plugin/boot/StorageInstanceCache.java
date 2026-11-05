@@ -190,6 +190,13 @@ public class StorageInstanceCache {
         return cache.size();
     }
 
+    /**
+     * 已缓存实例的快照：只读遍历用，不会创建实例，因此不会唤醒远程存储
+     */
+    public List<IStorageOperationService> snapshotInstances() {
+        return List.copyOf(cache.values());
+    }
+
     public boolean contains(String cacheKey) {
         return cache.containsKey(cacheKey);
     }
