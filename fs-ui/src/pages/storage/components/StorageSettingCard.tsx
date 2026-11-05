@@ -245,7 +245,7 @@ export function StorageSettingCard({
     }
   }
 
-  // 打开删除确认：先查文件占用，有文件时由弹窗提示将先清理这些文件
+  // 打开删除确认：先查文件记录数，有记录时由弹窗说明只卸载、不删真实文件
   const handleOpenDelete = async () => {
     setIsUsageLoading(true)
     try {
@@ -261,10 +261,7 @@ export function StorageSettingCard({
   const handleDelete = async () => {
     setIsLoading(true)
     try {
-      await deleteStorageSetting(
-        setting.id,
-        (deleteUsage?.fileCount ?? 0) > 0
-      )
+      await deleteStorageSetting(setting.id)
       toast.success(t('card.deleteOk', { name: setting.storagePlatform.name }))
       onRefresh()
       setDeleteDialogOpen(false)
@@ -645,15 +642,10 @@ export function StorageSettingCard({
         }
         desc={
           deleteUsage && deleteUsage.fileCount > 0
-            ? t(
-                deleteUsage.indexOnly
-                  ? 'card.deleteWithFilesIndexOnly'
-                  : 'card.deleteWithFilesPurge',
-                {
-                  name: setting.storagePlatform.name,
-                  count: deleteUsage.fileCount,
-                }
-              )
+            ? t('card.deleteWithFiles', {
+                name: setting.storagePlatform.name,
+                count: deleteUsage.fileCount,
+              })
             : t('card.deleteDesc', { name: setting.storagePlatform.name })
         }
         confirmText={isLoading ? t('card.deleting') : t('card.confirmDelete')}

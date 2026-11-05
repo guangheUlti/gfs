@@ -131,17 +131,16 @@ public class StorageController {
         return Result.ok();
     }
 
-    @Operation(summary = "删除存储平台配置", description = "purgeFiles=true 时先清理该存储下的全部文件，再删除配置")
+    @Operation(summary = "删除存储平台配置",
+            description = "等价于卸载接入存储：只回收该存储在 GFS 侧的记录（索引、收藏、分享、文件收集、传输任务），远端/真实目录的文件不会被删除")
     @DeleteMapping("/settings/{id}")
     @SaCheckPermission("storage:manage")
-    public Result<StorageSetting> saveOrUpdateStorageSetting(
-            @PathVariable String id,
-            @RequestParam(name = "purgeFiles", required = false, defaultValue = "false") boolean purgeFiles) {
+    public Result<StorageSetting> saveOrUpdateStorageSetting(@PathVariable String id) {
         StorageSetting setting = storageSettingService.getById(id);
-        storageSettingService.deleteStorageSettingById(id, purgeFiles);
+        storageSettingService.deleteStorageSettingById(id);
         operationLogService.recordSuccess(
                 OperationType.DELETE_STORAGE,
-                purgeFiles ? "删除存储配置（含文件清理）" : "删除存储配置",
+                "删除存储配置",
                 "STORAGE",
                 id,
                 setting == null ? id : setting.getRemark(),
@@ -150,7 +149,7 @@ public class StorageController {
         return Result.ok();
     }
 
-    @Operation(summary = "查询存储平台配置的文件占用情况", description = "删除前提示用：文件数量（含回收站）与清理方式")
+    @Operation(summary = "查询存储平台配置的文件占用情况", description = "删除前提示用：该存储下的文件记录数量（含回收站）")
     @GetMapping("/settings/{id}/file-usage")
     @SaCheckPermission("storage:manage")
     public Result<StorageFileUsageVO> getStorageFileUsage(@PathVariable String id) {

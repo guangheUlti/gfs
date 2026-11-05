@@ -97,7 +97,7 @@ public class StoragePlatformAutoRegister implements ApplicationRunner {
      * 清理孤儿平台行：平台行的真相来源是代码插件清单，
      * 插件被移除后残留的平台行（及其全部配置）一并清理，避免前端下拉出现已下线平台。
      * <p>
-     * 必须等挂载卸载回调注册完成后再跑：已下线平台的配置无法再加载实例，
+     * 必须等存储卸载回调注册完成后再跑：已下线平台的配置无法再加载实例，
      * 索引清理只能靠 fs-file 注入的回调，否则 file_info 会成为孤儿行。
      */
     @EventListener(ApplicationReadyEvent.class)

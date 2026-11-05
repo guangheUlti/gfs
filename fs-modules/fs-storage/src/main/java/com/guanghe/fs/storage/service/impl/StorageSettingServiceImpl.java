@@ -63,36 +63,16 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
     private static final String SECRET_MASK = "********";
 
     /**
-     * 挂载卸载回调（由 fs-file 在启动时注入，避免 fs-storage 反向依赖 fs-file）。
-     * 参数为挂载设置 ID；回调内负责持挂载锁并删除网盘索引。
+     * 存储卸载回调（由 fs-file 在启动时注入，避免 fs-storage 反向依赖 fs-file）。
+     * 参数为存储设置 ID；回调内负责持挂载锁并回收该存储在 GFS 侧的全部记录，绝不触碰真实文件。
      */
-    private volatile java.util.function.Consumer<String> mountUnmountConsumer;
+    private volatile java.util.function.Consumer<String> storageUnmounter;
 
-    public void setMountUnmountConsumer(java.util.function.Consumer<String> consumer) {
-        this.mountUnmountConsumer = consumer;
+    public void setStorageUnmounter(java.util.function.Consumer<String> consumer) {
+        this.storageUnmounter = consumer;
     }
 
-    /**
-     * 存储占用检查（由 fs-file 在启动时注入，避免 fs-storage 反向依赖 fs-file）。
-     * 返回 true 表示该配置下仍有文件索引，禁止删除。
-     */
-    private volatile java.util.function.Predicate<String> storageInUseChecker;
-
-    public void setStorageInUseChecker(java.util.function.Predicate<String> checker) {
-        this.storageInUseChecker = checker;
-    }
-
-    /**
-     * 存储文件清理（由 fs-file 在启动时注入）：删除配置前清理该存储下的全部文件。
-     * 直读存储只清索引，托管存储连物理文件一并删除。
-     */
-    private volatile java.util.function.Consumer<String> storageFilesPurger;
-
-    public void setStorageFilesPurger(java.util.function.Consumer<String> purger) {
-        this.storageFilesPurger = purger;
-    }
-
-    /** 存储文件占用统计（由 fs-file 在启动时注入）：删除前给前端提示文件数量与清理方式 */
+    /** 存储文件占用统计（由 fs-file 在启动时注入）：删除前给前端提示文件记录数量 */
     private volatile java.util.function.Function<String, StorageFileUsageVO> storageFileUsageProvider;
 
     public void setStorageFileUsageProvider(java.util.function.Function<String, StorageFileUsageVO> provider) {
@@ -474,7 +454,7 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
             @CacheEvict(value = "storageSettings", key = "'global'"),
             @CacheEvict(value = "storageActivePlatforms", key = "'global'")
     })
-    public void deleteStorageSettingById(String id, boolean purgeFiles) {
+    public void deleteStorageSettingById(String id) {
         // 内置系统存储是系统默认存储，禁止删除
         if (StorageUtils.LOCAL_PLATFORM_IDENTIFIER.equals(id)) {
             throw new BusinessException(I18nUtils.getMessage("storage.local.delete.forbidden"));
@@ -488,55 +468,37 @@ public class StorageSettingServiceImpl extends ServiceImpl<StorageSettingMapper,
         if (id.equals(cacheSettingId)) {
             throw new BusinessException(I18nUtils.getMessage("storage.config.in.use"));
         }
-        if (purgeFiles) {
-            // 先清理文件再删配置：清理走独立事务（REQUIRES_NEW），必须在存储实例仍可用时提交，
-            // 否则托管存储的物理对象删除会因实例已被移除而无法执行
-            java.util.function.Consumer<String> purger = this.storageFilesPurger;
-            if (purger == null) {
-                throw new BusinessException(I18nUtils.getMessage("storage.purge.unavailable"));
-            }
-            purger.accept(id);
-        } else {
-            // 该存储下仍有文件索引时禁止删除，防止文件永久失联
-            java.util.function.Predicate<String> inUseChecker = this.storageInUseChecker;
-            if (inUseChecker != null && inUseChecker.test(id)) {
-                throw new BusinessException(I18nUtils.getMessage("storage.delete.has.files"));
-            }
-        }
 
-        // 挂载/直读平台删除：先卸载索引（含挂载点与回收站记录），再删配置——
-        // 顺序不可颠倒：removeInstance 后实例无法加载，卸载回调会静默失败导致索引残留（孤煫行）。
-        // 卸载只清网盘索引，绝不碰真实文件（8.4-⑧）；若后续删配置失败，索引会在下次浏览/扫描时自重建。
-        try {
-            IStorageOperationService instance = storageServiceFacade.getStorageService(id);
-            if (instance != null && instance.isMountMode()) {
-                mountUnmountConsumer.accept(id);
-            }
-        } catch (Exception e) {
-            log.error("挂载卸载清理索引失败: settingId={}", id, e);
+        // 删除接入存储等价于卸载：只回收该存储在 GFS 侧的记录（索引、收藏、分享、收集、传输任务），
+        // 远端与真实目录里的文件一律不动。清理不依赖存储实例可加载——禁用中的配置同样留有历史记录；
+        // 失败时随本事务回滚，宁可拒绝删除也不能留下指向已删配置的孤儿行。
+        java.util.function.Consumer<String> unmounter = this.storageUnmounter;
+        if (unmounter == null) {
+            throw new BusinessException(I18nUtils.getMessage("storage.unmount.unavailable"));
         }
+        unmounter.accept(id);
 
         this.removeById(id);
         storageServiceFacade.removeInstance(id);
 
-        log.info("存储配置已删除并移除缓存: settingId={}", id);
+        log.info("存储配置已卸载并删除（仅清理 GFS 侧记录，未删除真实文件）: settingId={}", id);
     }
 
     /**
      * 清理已下线平台的配置行：插件已从代码移除，实例无法再加载，
-     * 因此不能按能力位判断，直接执行索引清理回调后删除配置。
+     * 卸载回调本身不依赖实例，直接执行后删除配置。
      */
     @Override
     public void purgeOrphanPlatformSetting(String settingId) {
-        java.util.function.Consumer<String> unmount = this.mountUnmountConsumer;
-        if (unmount != null) {
+        java.util.function.Consumer<String> unmounter = this.storageUnmounter;
+        if (unmounter != null) {
             try {
-                unmount.accept(settingId);
+                unmounter.accept(settingId);
             } catch (Exception e) {
-                log.error("已下线平台配置的索引清理失败: settingId={}", settingId, e);
+                log.error("已下线平台配置的 GFS 侧记录清理失败: settingId={}", settingId, e);
             }
         } else {
-            log.warn("挂载卸载回调尚未注册，跳过已下线平台配置的索引清理: settingId={}", settingId);
+            log.warn("卸载回调尚未注册，跳过已下线平台配置的记录清理: settingId={}", settingId);
         }
         this.removeById(settingId);
         storageServiceFacade.removeInstance(settingId);

@@ -61,12 +61,10 @@ export async function getStorageFileUsage(id: number) {
 /**
  * 删除存储平台配置
  *
- * @param purgeFiles 是否先清理该存储下的全部文件（直读存储只清索引，托管存储连物理文件一并删除）
+ * 等价于卸载接入存储：只清理 GFS 侧的网盘索引与收藏，远端/真实目录里的文件不会被删除
  */
-export function deleteStorageSetting(id: number, purgeFiles = false) {
-  return request.delete(`/apis/storage/settings/${id}`, {
-    params: { purgeFiles },
-  })
+export function deleteStorageSetting(id: number) {
+  return request.delete(`/apis/storage/settings/${id}`)
 }
 
 /**

@@ -16,7 +16,6 @@ import tools.jackson.core.type.TypeReference;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static com.guanghe.fs.file.domain.table.FileInfoTableDef.FILE_INFO;
 
@@ -157,25 +156,5 @@ public class MountPointService {
             }
             suffix++;
         }
-    }
-
-    /**
-     * 卸载：删除该挂载设置的全部 file_info 索引（含挂载点与回收站记录）。
-     * 绝不触碰真实文件（安全红线 8.4-⑧）。挂载记录 md5=NULL 不参与秒传引用，无引用计数副作用。
-     * 调用方负责持 MountLocks 并包裹事务。
-     */
-    public void unmount(String settingId) {
-        List<FileInfo> all = fileInfoService.list(new QueryWrapper()
-                .where(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.eq(settingId)));
-        if (all.isEmpty()) {
-            return;
-        }
-        // 断言：挂载子树记录 md5 恒为 NULL，不应存在对象引用行；如有异常数据先记日志再删
-        long md5Count = all.stream().filter(f -> StrUtil.isNotEmpty(f.getContentMd5())).count();
-        if (md5Count > 0) {
-            log.warn("挂载卸载发现非空 md5 记录（异常数据，仍将硬删索引）: settingId={}, count={}", settingId, md5Count);
-        }
-        fileInfoService.removeByIds(all.stream().map(FileInfo::getId).collect(Collectors.toList()));
-        log.info("挂载卸载完成，索引已清理（真实文件未动）: settingId={}, count={}", settingId, all.size());
     }
 }

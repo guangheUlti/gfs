@@ -135,15 +135,6 @@ public class FileUserFavoritesServiceImpl extends ServiceImpl<FileUserFavoritesM
     }
 
     @Override
-    public void removeByFileIds(Collection<String> fileIds) {
-        if (CollUtil.isEmpty(fileIds)) {
-            return;
-        }
-        this.remove(new QueryWrapper()
-                .where(FILE_USER_FAVORITES.FILE_ID.in(fileIds)));
-    }
-
-    @Override
     @Transactional(rollbackFor = Exception.class)
     public int removeByUserId(String userId) {
         if (userId == null || userId.isBlank()) {

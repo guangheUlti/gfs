@@ -30,8 +30,6 @@ export interface StorageSetting {
 export interface StorageFileUsage {
   /** 该存储下的文件记录数（含回收站） */
   fileCount: number
-  /** 删除时是否只清网盘索引（挂载式存储为 true，真实文件保留） */
-  indexOnly: boolean
 }
 
 /**

@@ -54,13 +54,15 @@ public interface StorageSettingService extends IService<StorageSetting> {
     void editStorageSetting(StorageSettingEditCmd cmd);
 
     /**
-     * 删除存储平台配置信息
+     * 删除存储平台配置信息（接入存储的「卸载」）
+     * <p>
+     * 只回收该存储在 GFS 侧的全部记录（网盘索引、收藏、分享、文件收集、传输任务）并删除配置行，
+     * 远端/真实目录里的文件一律不动；
+     * 物理文件删除只属于系统存储的文件删除操作，不在配置删除链路里发生。
      *
-     * @param id         配置ID
-     * @param purgeFiles 为 true 时先清理该存储下的全部文件（直读存储只清索引，托管存储连物理文件一并删除）再删除配置；
-     *                   为 false 时该存储下仍有文件索引则拒绝删除
+     * @param id 配置ID
      */
-    void deleteStorageSettingById(String id, boolean purgeFiles);
+    void deleteStorageSettingById(String id);
 
     /**
      * 查询存储配置的文件占用情况（删除前提示用）
@@ -72,7 +74,7 @@ public interface StorageSettingService extends IService<StorageSetting> {
 
     /**
      * 清理已下线平台的残留配置：插件已从代码移除，实例无法加载，
-     * 先经挂载卸载回调清掉索引，再删除配置行。
+     * 先经索引清理回调删掉该配置的网盘记录，再删除配置行。
      *
      * @param id 配置ID
      */
