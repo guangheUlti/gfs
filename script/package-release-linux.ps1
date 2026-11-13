@@ -214,10 +214,12 @@ foreach ($f in 'my.cnf', 'redis.conf', 'jvm-xmx.conf', 'jvm-restart.flag') {
 }
 
 # empty directory skeleton the launchers expect to exist; anything already in
-# there is a real run's data, so refuse instead of deleting it
+# there is a real run's data, so refuse instead of deleting it.
+# Only files count: the skeleton dirs created at the end of every run
+# (data\mysql, data\redis, ...) must not make the next run look dirty.
 $dirty = foreach ($d in 'data', 'logs', 'storage') {
     $p = Join-Path $PkgDir $d
-    if ((Test-Path $p) -and (Get-ChildItem $p -Force)) { $d }
+    if ((Test-Path $p) -and (Get-ChildItem $p -Force -Recurse -File)) { $d }
 }
 if ($dirty) {
     throw ("runtime data found in {0} ({1}) - move it away before packaging" -f $PkgDir, ($dirty -join ', '))
