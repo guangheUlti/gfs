@@ -653,18 +653,20 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
         String taskId = cmd.getTaskId();
         Integer chunkIndex = cmd.getChunkIndex();
         getAuthorizedTask(taskId);
-        // 异步上传分片
-        CompletableFuture.runAsync(() -> {
-            try {
-                doUploadChunk(fileBytes, cmd);
+        // 同步写入：分片真正落存储后才返回。
+        // 旧实现丢进虚拟线程池就 ACK，前端把「已受理」当「已写入」，进度先冲到 100%，
+        // 真正的写盘与合并全堆在后面，表现为长时间停在「正在处理文件...」，
+        // 同时服务端会积压成百上千个未写分片。写完再返回后，进度即真实落盘量，
+        // 客户端的分片并发也自然成了服务端写入的限流阀。合并仍走异步（不阻塞分片响应）。
+        try {
+            doUploadChunk(fileBytes, cmd);
 
-                // 检查是否所有分片都已上传完成
-                checkAndAutoMerge(taskId);
-            } catch (Exception e) {
-                log.error("分片上传失败: taskId={}, chunkIndex={}", taskId, cmd.getChunkIndex(), e);
-                exceptionHandler.handleChunkUploadFailed(taskId, chunkIndex, e.getMessage(), e);
-            }
-        }, chunkUploadExecutor);
+            // 检查是否所有分片都已上传完成
+            checkAndAutoMerge(taskId);
+        } catch (Exception e) {
+            log.error("分片上传失败: taskId={}, chunkIndex={}", taskId, cmd.getChunkIndex(), e);
+            exceptionHandler.handleChunkUploadFailed(taskId, chunkIndex, e.getMessage(), e);
+        }
     }
 
     /**

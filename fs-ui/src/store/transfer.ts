@@ -74,6 +74,8 @@ interface TransferStore {
   pauseTask: (taskId: string) => Promise<void>
   resumeTask: (taskId: string) => Promise<void>
   cancelTask: (taskId: string) => Promise<void>
+  /** 一键取消所有未完成的上传（含排队中），返回成功取消的数量 */
+  cancelAllUploads: () => Promise<number>
   retryTask: (taskId: string) => Promise<void>
   clearCompletedTasks: () => Promise<void>
   initSSE: (userId: string) => Promise<void>
@@ -220,12 +222,18 @@ async function cancelStaleInitializedTasks(): Promise<void> {
   if (hasActiveTransfer) return
 
   const now = Date.now()
-  const stale = tasks.filter(
-    (task) =>
-      task.status === 'initialized' &&
-      !localSessionTaskIds.has(task.taskId) &&
-      now - task.createdAt > STALE_INITIALIZED_TASK_MAX_AGE_MS
-  )
+  const stale = tasks.filter((task) => {
+    if (task.status !== 'initialized') return false
+    if (now - task.createdAt <= STALE_INITIALIZED_TASK_MAX_AGE_MS) return false
+    if (!localSessionTaskIds.has(task.taskId)) return true
+    // 本机发起的也要能收尾：既不在队列里、也没有执行器上下文和文件缓存，
+    // 说明发起它的页面刷新/崩溃过，本机再也传不动，留着只会永远停在「准备中」
+    return (
+      !store.uploadQueue.includes(task.taskId) &&
+      !uploadExecutor.getTaskContext(task.taskId) &&
+      !store.fileCache.has(task.taskId)
+    )
+  })
   if (stale.length === 0) return
 
   let cancelled = 0
@@ -530,6 +538,16 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
 
   fetchTasks: async () => {
     try {
+      // 请求是异步的：等待期间本地可能刚建好新的上传任务（文件夹批量上传会连发十几个 init），
+      // 服务端快照里还没有它们。整表覆盖会把这些刚入队的任务从本地抹掉，
+      // 随后 pumpUploadQueue 在队列里找不到任务记录而静默丢弃，
+      // 表现为任务永远停在「准备中」、服务端 uploaded_chunks 一直是 0。
+      const localActive = Array.from(get().tasks.values()).filter(
+        (task) =>
+          localSessionTaskIds.has(task.taskId) &&
+          !['completed', 'failed', 'cancelled'].includes(task.status)
+      )
+
       const taskVOs = await getTransferFiles()
 
       const newTasks = new Map<string, TransferTask>()
@@ -553,6 +571,11 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       tasks.forEach((vo) => {
         const task = convertVOToTask(vo)
         newTasks.set(task.taskId, task)
+      })
+
+      // 快照里没有、但本地刚建好的任务原样保留（不降级它们的本地状态）
+      localActive.forEach((task) => {
+        if (!newTasks.has(task.taskId)) newTasks.set(task.taskId, task)
       })
 
       set({ tasks: newTasks })
@@ -1289,16 +1312,21 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       useUserStore.getState().transferSetting?.concurrentUploadQuantity || 1
     )
 
-    for (;;) {
+    // 只检查本轮进来的队列项数：任务记录瞬时缺失时把它挪到队尾重试，
+    // 不能在队首反复取同一条而变成死循环
+    let probeBudget = get().uploadQueue.length
+    const retryLater: string[] = []
+
+    while (probeBudget-- > 0) {
       const { uploadQueue, tasks, fileCache } = get()
-      if (uploadQueue.length === 0) return
+      if (uploadQueue.length === 0) break
 
       const activeCount = Array.from(tasks.values()).filter(
         (task) =>
           task.taskType === 'upload' &&
           ['checking', 'uploading', 'merging'].includes(task.status)
       ).length
-      if (activeCount >= limit) return
+      if (activeCount >= limit) break
 
       const taskId = uploadQueue[0]
       const file = fileCache.get(taskId)
@@ -1306,8 +1334,15 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
 
       set({ uploadQueue: uploadQueue.slice(1) })
 
-      // 任务已被取消或文件缓存丢失：跳过，不占用本次名额
-      if (!file || !task) continue
+      if (!task) {
+        // 任务记录瞬时缺失（一次滞后的任务列表刷新可能把它覆盖掉）：
+        // 旧逻辑在这里直接 continue，队列项就此消失，服务端任务永远停在
+        // initialized，前端表现为「准备中」再也不动。文件还在缓存里就先留到队尾。
+        if (file) retryLater.push(taskId)
+        continue
+      }
+      // 文件缓存丢失（例如刷新过页面）无法续传，跳过不占名额
+      if (!file) continue
       if (
         ['completed', 'failed', 'cancelled', 'paused'].includes(task.status)
       ) {
@@ -1327,6 +1362,10 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
         .catch(() => {
           // Silent
         })
+    }
+
+    if (retryLater.length > 0) {
+      set({ uploadQueue: [...get().uploadQueue, ...retryLater] })
     }
   },
 
@@ -1449,6 +1488,22 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       get().transitionTo(taskId, task.status)
       throw error
     }
+  },
+
+  cancelAllUploads: async () => {
+    // 先清空排队队列：否则在逐个取消的过程中 pump 会把队列里剩下的任务又拉起来
+    set({ uploadQueue: [] })
+    const targets = get()
+      .getTaskList()
+      .filter(
+        (task) =>
+          task.taskType === 'upload' &&
+          ['initialized', 'checking', 'uploading', 'paused'].includes(task.status)
+      )
+    const results = await Promise.allSettled(
+      targets.map((task) => get().cancelTask(task.taskId))
+    )
+    return results.filter((result) => result.status === 'fulfilled').length
   },
 
   retryTask: async (taskId) => {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useTransferStore } from '@/store/transfer'
-import { RefreshCw, Upload, Trash2 } from 'lucide-react'
+import { RefreshCw, Upload, Trash2, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import TransferTable from './components/TransferTable'
 
 export default function TransferPage() {
@@ -25,6 +26,9 @@ export default function TransferPage() {
     initialTab === 'downloading' || initialTab === 'uploading' ? initialTab : 'uploading'
   )
   const [loading, setLoading] = useState(false)
+  // 一键取消全部上传：确认框 + 请求中禁用
+  const [cancelAllDialogOpen, setCancelAllDialogOpen] = useState(false)
+  const [cancelAllPending, setCancelAllPending] = useState(false)
 
   const {
     getUploadingTasks,
@@ -34,6 +38,7 @@ export default function TransferPage() {
     pauseTask,
     resumeTask,
     cancelTask,
+    cancelAllUploads,
     retryTask,
     clearCompletedTasks,
     sseConnected,
@@ -125,6 +130,17 @@ export default function TransferPage() {
     }
   }
 
+  const handleCancelAllUploads = async () => {
+    setCancelAllPending(true)
+    try {
+      const count = await cancelAllUploads()
+      if (count > 0) toast.success(t('page.toastCancelAllOk', { count }))
+    } finally {
+      setCancelAllPending(false)
+      setCancelAllDialogOpen(false)
+    }
+  }
+
   const handleRetry = async (taskId: string) => {
     try {
       await retryTask(taskId)
@@ -167,6 +183,18 @@ export default function TransferPage() {
         >
           <RefreshCw className='h-4 w-4' />
         </Button>
+
+        {activeTab === 'uploading' && uploadingTasks.length > 0 && (
+          <Button
+            variant='outline'
+            size='sm'
+            className='shrink-0 text-destructive hover:text-destructive'
+            onClick={() => setCancelAllDialogOpen(true)}
+          >
+            <XCircle className='mr-2 h-4 w-4' />
+            {t('page.cancelAllUploads')}
+          </Button>
+        )}
 
         {activeTab === 'completed' && completedTasks.length > 0 && (
           <Button
@@ -214,6 +242,18 @@ export default function TransferPage() {
       </div>
 
       {/* 主内容区域：不能带纵向 padding-top，否则吸顶表头钉在内边距下沿，行内容会从缝隙中穿出 */}
+      <ConfirmDialog
+        destructive
+        open={cancelAllDialogOpen}
+        onOpenChange={setCancelAllDialogOpen}
+        handleConfirm={handleCancelAllUploads}
+        isLoading={cancelAllPending}
+        title={t('page.cancelAllUploadsTitle')}
+        desc={t('page.cancelAllUploadsDesc', { count: uploadingTasks.length })}
+        confirmText={t('page.cancelAllUploads')}
+        cancelBtnText={tc('cancel')}
+      />
+
       <div className='flex-1 overflow-auto px-3 pb-3 sm:px-6 sm:pb-6'>
         {loading ? (
           <div className='flex h-full items-center justify-center'>
