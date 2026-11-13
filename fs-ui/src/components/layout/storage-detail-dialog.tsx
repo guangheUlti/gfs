@@ -18,88 +18,25 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 /** 使用率越高越醒目：与侧栏存储条同一套告警色 */
 function usageColor(percent: number): {
-  ring: string
   bar: string
   text: string
 } {
   if (percent >= 90) {
     return {
-      ring: 'stroke-red-500',
       bar: 'bg-red-500',
       text: 'text-red-500',
     }
   }
   if (percent >= 75) {
     return {
-      ring: 'stroke-amber-500',
       bar: 'bg-amber-500',
       text: 'text-amber-500',
     }
   }
   return {
-    ring: 'stroke-primary',
     bar: 'bg-primary',
     text: 'text-primary',
   }
-}
-
-/**
- * 使用率文案：只给百分比数字本身。
- * 不用 `<1%` / `>99%` 这类近似符号——真看不出来时给了也没有信息量，
- * 有占用就至少显示 1%（四舍五入为 0 会让「已用几百 MB」看起来像空盘）。
- */
-function formatPercent(percent: number, usedBytes: number): string {
-  if (!Number.isFinite(percent)) return '—'
-  if (usedBytes <= 0) return '0%'
-  return `${Math.min(100, Math.max(1, Math.round(percent)))}%`
-}
-
-/** 环形使用率（SVG 描边，12 点方向起画，避免 conic-gradient 的锯齿） */
-function UsageRing({
-  percent,
-  color,
-  label,
-  valueText,
-}: {
-  percent: number
-  color: string
-  label: string
-  valueText: string
-}) {
-  const radius = 42
-  const circumference = 2 * Math.PI * radius
-  const dash = (Math.min(100, Math.max(0, percent)) / 100) * circumference
-
-  return (
-    <div className='relative size-36 shrink-0'>
-      <svg viewBox='0 0 100 100' className='size-36 -rotate-90'>
-        <circle
-          cx='50'
-          cy='50'
-          r={radius}
-          fill='none'
-          strokeWidth='11'
-          className='stroke-muted'
-        />
-        <circle
-          cx='50'
-          cy='50'
-          r={radius}
-          fill='none'
-          strokeWidth='11'
-          strokeLinecap='round'
-          strokeDasharray={`${dash} ${circumference}`}
-          className={cn('transition-all duration-500', color)}
-        />
-      </svg>
-      <div className='absolute inset-0 flex flex-col items-center justify-center gap-0.5'>
-        <span className='text-2xl font-semibold tabular-nums'>{valueText}</span>
-        <span className='mt-0.5 text-[11px] text-muted-foreground'>
-          {label}
-        </span>
-      </div>
-    </div>
-  )
 }
 
 function StorageDetailBody({ open }: { open: boolean }) {
@@ -121,7 +58,6 @@ function StorageDetailBody({ open }: { open: boolean }) {
       ? Math.min(100, (usedBytes / totalBytes) * 100)
       : 0
   const color = usageColor(percent)
-  const percentText = capacityKnown ? formatPercent(percent, usedBytes) : '—'
   const freeBytes = capacityKnown
     ? Math.max(0, (totalBytes as number) - usedBytes)
     : null
@@ -133,20 +69,28 @@ function StorageDetailBody({ open }: { open: boolean }) {
 
   return (
     <div className='space-y-5'>
-      {/* 顶部：环形使用率 + 已用/总量摘要 + 线性进度 */}
-      <div className='rounded-xl border bg-card px-6 py-8'>
+      {/* 占用概况：铺满卡片宽度的矩形进度条，占用数据放在矩形条下方 */}
+      <div className='rounded-xl border bg-card px-6 py-6'>
         {capacityLoading ? (
-          <Skeleton className='h-36 w-full rounded-xl' />
+          <Skeleton className='h-14 w-full rounded-lg' />
         ) : (
-          <div className='space-y-6'>
-            <div className='flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-8'>
-              <UsageRing
-                percent={percent}
-                color={color.ring}
-                label={t('storageDialog.usedPercent')}
-                valueText={percentText}
+          <div className='space-y-4'>
+            <div
+              className='h-14 w-full overflow-hidden rounded-lg bg-muted'
+              role='progressbar'
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={capacityKnown ? Math.round(percent) : undefined}
+            >
+              <div
+                className={cn('h-full transition-all duration-500', color.bar)}
+                style={{ width: `${capacityKnown ? percent : 0}%` }}
               />
-              <div className='min-w-0 flex-1 space-y-2.5 text-center sm:text-start'>
+            </div>
+
+            {/* 矩形条下方：已用/总量摘要 + 构成占比 */}
+            <div className='space-y-2.5'>
+              <div className='flex flex-wrap items-baseline gap-x-6 gap-y-1'>
                 <p className='text-lg font-semibold tabular-nums'>
                   {capacityKnown && totalBytes !== null
                     ? t('sidebar.storage.usedOfTotal', {
@@ -165,30 +109,20 @@ function StorageDetailBody({ open }: { open: boolean }) {
                       })}
                 </p>
               </div>
-            </div>
 
-            {/* 进度条 + 构成占比：只给比例，字节数在上方摘要里 */}
-            <div className='flex items-center gap-5'>
-              <div className='h-2 flex-1 overflow-hidden rounded-full bg-muted'>
-                <div
-                  className={cn(
-                    'h-full rounded-full transition-all duration-500',
-                    color.bar
-                  )}
-                  style={{ width: `${capacityKnown ? percent : 0}%` }}
-                />
-              </div>
-              <div className='hidden shrink-0 items-center gap-5 sm:flex'>
+              <div className='flex flex-wrap items-center gap-x-5 gap-y-2'>
                 {[
                   {
                     color: color.bar,
                     label: t('storageDialog.used'),
                     share: usedShare,
+                    shareColor: color.text,
                   },
                   {
                     color: 'bg-muted-foreground/40',
                     label: t('storageDialog.free'),
                     share: freeShare,
+                    shareColor: 'text-foreground',
                   },
                 ].map((item) => (
                   <div key={item.label} className='flex items-center gap-2'>
@@ -201,7 +135,12 @@ function StorageDetailBody({ open }: { open: boolean }) {
                     <span className='text-xs text-muted-foreground'>
                       {item.label}
                     </span>
-                    <span className='text-sm font-semibold tabular-nums'>
+                    <span
+                      className={cn(
+                        'text-sm font-semibold tabular-nums',
+                        item.shareColor
+                      )}
+                    >
                       {capacityKnown ? `${item.share}%` : '—'}
                     </span>
                   </div>
