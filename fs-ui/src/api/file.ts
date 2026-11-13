@@ -93,17 +93,29 @@ export function updateTextContent(fileId: string, content: string) {
 }
 
 /**
+ * 删除/永久删除可能很慢：大目录要递归收集子项，挂载式存储还要逐个清远端条目。
+ * 默认 30s 超时会让「服务器仍在删、前端已报失败」，删除请求单独放宽。
+ */
+const DELETE_TIMEOUT_MS = 120000
+
+/**
  * 删除文件（移到回收站）
  */
 export function deleteFiles(fileIds: string[]) {
-  return request.delete('/apis/file', { data: fileIds })
+  return request.delete('/apis/file', {
+    data: fileIds,
+    timeout: DELETE_TIMEOUT_MS,
+  })
 }
 
 /**
  * 永久删除文件（不经回收站，不可恢复）
  */
 export function permanentlyDeleteFiles(fileIds: string[]) {
-  return request.delete('/apis/file/permanent', { data: fileIds })
+  return request.delete('/apis/file/permanent', {
+    data: fileIds,
+    timeout: DELETE_TIMEOUT_MS,
+  })
 }
 
 /**
@@ -140,14 +152,19 @@ export function restoreFiles(fileIds: string[]) {
  * 彻底删除文件
  */
 export function permanentDeleteFiles(fileIds: string[]) {
-  return request.delete('/apis/file/recycles', { data: fileIds })
+  return request.delete('/apis/file/recycles', {
+    data: fileIds,
+    timeout: DELETE_TIMEOUT_MS,
+  })
 }
 
 /**
  * 清空回收站
  */
 export function clearRecycle() {
-  return request.delete('/apis/file/recycles/clear')
+  return request.delete('/apis/file/recycles/clear', {
+    timeout: 300000,
+  })
 }
 
 /**

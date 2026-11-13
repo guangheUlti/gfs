@@ -352,13 +352,17 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
             return;
         }
 
-        // 批量标记为删除
-        toDeleteList.forEach(fileInfo -> {
-            fileInfo.setIsDeleted(true);
-            fileInfo.setDeletedTime(now);
-        });
-
-        this.updateBatch(toDeleteList);
+        // 批量标记为删除：一条 UPDATE ... WHERE id IN (...) 落库，替代逐行 updateBatch。
+        // 大目录树上千行时逐行更新会把事务拖到数十秒，前端请求先超时、删除却在后台继续，
+        // 于是出现「提示删除失败、过一会文件又真的没了」；分批只为控制 IN 列表长度。
+        List<String> deleteIds = toDeleteList.stream().map(FileInfo::getId).toList();
+        for (List<String> batch : CollUtil.split(deleteIds, 500)) {
+            UpdateChain.of(FileInfo.class)
+                    .set(FileInfo::getIsDeleted, true)
+                    .set(FileInfo::getDeletedTime, now)
+                    .where(FILE_INFO.ID.in(batch))
+                    .update();
+        }
     }
 
 

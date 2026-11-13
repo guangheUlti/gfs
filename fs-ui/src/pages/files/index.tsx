@@ -892,6 +892,7 @@ export default function FilesPage() {
         onOpenChange={operations.setDeleteDialogVisible}
         files={operations.deletingFiles}
         onConfirm={operations.handleDelete}
+        isLoading={operations.deletePending}
       />
 
       <PermanentDeleteConfirmDialog
@@ -899,6 +900,7 @@ export default function FilesPage() {
         onOpenChange={operations.setPermanentDeleteDialogVisible}
         files={operations.permanentlyDeletingFiles}
         onConfirm={operations.handlePermanentDelete}
+        isLoading={operations.permanentDeletePending}
       />
 
       <FileDetailModal

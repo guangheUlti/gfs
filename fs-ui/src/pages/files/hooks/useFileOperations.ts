@@ -53,6 +53,12 @@ export function useFileOperations(
   const [permanentlyDeletingFiles, setPermanentlyDeletingFiles] = useState<
     FileItem[]
   >([])
+  /**
+   * 删除请求进行中：确认按钮置 loading/禁用，避免连点重复提交。
+   * 同一批文件第二次删除会撞上「文件不存在」（第一批已标记删除），界面看着像删除失败。
+   */
+  const [deletePending, setDeletePending] = useState(false)
+  const [permanentDeletePending, setPermanentDeletePending] = useState(false)
   const [detailFile, setDetailFile] = useState<FileItem | null>(null)
 
   /**
@@ -227,10 +233,13 @@ export function useFileOperations(
    * 删除文件：回收站开启→移入回收站；关闭→直接永久删除
    */
   const handleDelete = useCallback(async () => {
+    // 同一批只发一个请求：连点会让第二个请求在第一批已标记删除后报「文件不存在」
+    if (deletePending) return
     const fileIds = deletingFiles.map((f) => f.id)
     // 无状态远程文件不落库，没有回收站，直接永久删除
     const recycleEnabled =
       isRecycleEnabled() && !deletingFiles.some((f) => isVirtualFileId(f.id))
+    setDeletePending(true)
     try {
       if (recycleEnabled) {
         await deleteFiles(fileIds)
@@ -257,9 +266,14 @@ export function useFileOperations(
       }
     } catch (error) {
       toast.error(recycleEnabled ? t('operations.trashFail') : t('operations.deleteForeverFail'))
+      // 失败多为请求超时，服务端可能已经删完：静默刷新一次，别让列表和真实状态对不上
+      refreshCallback()
+    } finally {
+      setDeletePending(false)
     }
   }, [
     deletingFiles,
+    deletePending,
     refreshCallback,
     clearSelectionCallback,
     removeFileItemsCallback,
@@ -305,7 +319,10 @@ export function useFileOperations(
    * 永久删除文件（不经回收站，不可恢复）
    */
   const handlePermanentDelete = useCallback(async () => {
+    // 同 handleDelete：连点会发多个删除请求，后到的那个只能报「文件不存在」
+    if (permanentDeletePending) return
     const fileIds = permanentlyDeletingFiles.map((f) => f.id)
+    setPermanentDeletePending(true)
     try {
       await permanentlyDeleteFiles(fileIds)
       const successMsg =
@@ -323,9 +340,14 @@ export function useFileOperations(
       }
     } catch (error) {
       toast.error(t('operations.deleteForeverFail'))
+      // 超时也可能已经删掉：静默刷新一次，服务端状态为准
+      refreshCallback()
+    } finally {
+      setPermanentDeletePending(false)
     }
   }, [
     permanentlyDeletingFiles,
+    permanentDeletePending,
     refreshCallback,
     clearSelectionCallback,
     removeFileItemsCallback,
@@ -421,6 +443,8 @@ export function useFileOperations(
     sharingFiles,
     deletingFiles,
     permanentlyDeletingFiles,
+    deletePending,
+    permanentDeletePending,
     detailFile,
 
     // 操作方法
