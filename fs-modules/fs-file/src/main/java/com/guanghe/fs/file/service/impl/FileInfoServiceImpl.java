@@ -51,6 +51,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.text.Collator;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -73,6 +74,22 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     /** 在线文本编辑仅支持的后缀与大小上限（1 MB，读/写两侧共用） */
     private static final String TEXT_SUFFIX = "txt";
     private static final long MAX_TEXT_EDIT_SIZE = 1024 * 1024;
+
+    /**
+     * 中文名称排序规则（拼音序）：MySQL 8 自带的 utf8mb4_zh_0900_as_cs。
+     * 汉字按拼音 a-z 排列，且整体排在字母/数字之后，与 Windows 资源管理器一致。
+     */
+    private static final String PINYIN_COLLATION = "utf8mb4_zh_0900_as_cs";
+
+    /**
+     * 中文名称比较器（拼音序），供内存排序使用，与 SQL 侧 {@link #PINYIN_COLLATION} 对齐。
+     * Collator 非线程安全，按线程缓存；PRIMARY 强度忽略大小写与重音，等价于 SQL 侧先 LOWER()。
+     */
+    private static final ThreadLocal<Collator> NAME_COLLATOR = ThreadLocal.withInitial(() -> {
+        Collator collator = Collator.getInstance(Locale.SIMPLIFIED_CHINESE);
+        collator.setStrength(Collator.PRIMARY);
+        return collator;
+    });
 
     @Autowired
     private Converter converter;
@@ -1593,12 +1610,14 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
             wrapper.orderBy(FILE_INFO.IS_DIR.desc());
             if ("display_name".equals(orderByField)) {
                 // 逐段按数值比较名称中的数字，避免 1、10、2，以及 2 (1)、2 (10)、2 (2)。
+                // 文本段套用拼音排序规则：汉字按拼音排列且整体排在字母/数字之后，与 Windows 资源管理器一致。
                 wrapper.orderBy("CASE WHEN display_name REGEXP '[0-9]' THEN 0 ELSE 1 END", isAsc)
-                        .orderBy("LOWER(REGEXP_SUBSTR(display_name, '^[^0-9]*'))", isAsc)
+                        .orderBy("CASE WHEN display_name REGEXP '^[一-鿿]' THEN 1 ELSE 0 END", isAsc)
+                        .orderBy(pinyinSortable("REGEXP_SUBSTR(display_name, '^[^0-9]*')"), isAsc)
                         .orderBy("CAST(REGEXP_SUBSTR(display_name, '[0-9]+', 1, 1) AS UNSIGNED)", isAsc)
                         .orderBy("CAST(REGEXP_SUBSTR(display_name, '[0-9]+', 1, 2) AS UNSIGNED)", isAsc)
                         .orderBy("CAST(REGEXP_SUBSTR(display_name, '[0-9]+', 1, 3) AS UNSIGNED)", isAsc)
-                        .orderBy("LOWER(display_name)", isAsc);
+                        .orderBy(pinyinSortable("display_name"), isAsc);
             } else {
                 wrapper.orderBy(orderByField, isAsc);
             }
@@ -1719,16 +1738,28 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
                     return cmp;
                 }
             } else {
-                char la = Character.toLowerCase(ca);
-                char lb = Character.toLowerCase(cb);
-                if (la != lb) {
-                    return Character.compare(la, lb);
+                // 非数字段整体按中文拼音排序规则比较（汉字按拼音、字母/数字在前），
+                // 逐字符比较会把汉字退化成码位序，与文件列表的 SQL 排序不一致。
+                int startA = i;
+                int startB = j;
+                while (i < a.length() && !Character.isDigit(a.charAt(i))) {
+                    i++;
                 }
-                i++;
-                j++;
+                while (j < b.length() && !Character.isDigit(b.charAt(j))) {
+                    j++;
+                }
+                int cmp = NAME_COLLATOR.get().compare(a.substring(startA, i), b.substring(startB, j));
+                if (cmp != 0) {
+                    return cmp;
+                }
             }
         }
         return Integer.compare(a.length() - i, b.length() - j);
+    }
+
+    /** 将名称表达式包成拼音可排序形式（统一转 utf8mb4，避免列排序规则影响汉字顺序） */
+    private static String pinyinSortable(String expression) {
+        return "LOWER(CONVERT(" + expression + " USING utf8mb4)) COLLATE " + PINYIN_COLLATION;
     }
 
     /** 无状态远程的文件类型过滤（与库内后缀过滤语义一致） */
