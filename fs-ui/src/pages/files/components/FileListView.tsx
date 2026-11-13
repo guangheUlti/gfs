@@ -380,6 +380,20 @@ export function FileListView({
             )
             const hasUnfavorited = selectedFiles.some((f) => !f.isFavorite)
             const downloadableFiles = selectedFiles.filter((f) => !f.isDir)
+            // 分组横线只在其上方确有菜单项时渲染：
+            // 文件夹菜单没有预览/编辑/下载/分享/收藏时，无条件渲染会在菜单顶部多出一条横线
+            const hasMultiMenuTopItems =
+              (canRead && downloadableFiles.length > 0) ||
+              (canShare && !!onBatchShare) ||
+              (favoriteEnabled && canWrite)
+            const hasSingleMenuTopItems =
+              (!file.isDir && canRead) ||
+              (!file.isDir &&
+                canWrite &&
+                !!onEdit &&
+                isEditableSuffix(file.suffix)) ||
+              canShare ||
+              (favoriteEnabled && canWrite)
             return (
               <ContextMenu key={file.id}>
                 <ContextMenuTrigger asChild>
@@ -661,7 +675,9 @@ export function FileListView({
                             : t('rowMenu.unfavorite')}
                         </ContextMenuItem>
                       )}
-                      {canWrite && <ContextMenuSeparator />}
+                      {canWrite && hasMultiMenuTopItems && (
+                        <ContextMenuSeparator />
+                      )}
                       {canWrite && onBatchMove && (
                         <ContextMenuItem
                           onClick={(e) => {
@@ -752,7 +768,9 @@ export function FileListView({
                             : t('rowMenu.favorite')}
                         </ContextMenuItem>
                       )}
-                      {canWrite && <ContextMenuSeparator />}
+                      {canWrite && hasSingleMenuTopItems && (
+                        <ContextMenuSeparator />
+                      )}
                       {canWrite && (
                         <ContextMenuItem
                           onClick={(e) => {

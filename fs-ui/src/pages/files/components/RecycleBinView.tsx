@@ -140,6 +140,21 @@ export default function RecycleBinView() {
     }
   }, [searchKeyword, pagination.pageIndex, pagination.pageSize])
 
+  /**
+   * 本地移除已恢复/已彻底删除的行：不重拉整页，避免整表重绘把滚动位置弹回顶部。
+   * 合计同步递减，页码保持不变（本页少几行，下次翻页自然补齐）。
+   */
+  const removeRows = useCallback(
+    (ids: string[]) => {
+      const removing = new Set(ids)
+      const removed = fileList.filter((f) => removing.has(f.id)).length
+      if (removed === 0) return
+      setFileList((prev) => prev.filter((f) => !removing.has(f.id)))
+      setTotal((prev) => Math.max(0, prev - removed))
+    },
+    [fileList]
+  )
+
   const handleRestoreSingle = (fileId: string, fileName: string) => {
     setOperatingItem({ id: fileId, name: fileName })
     setRestoreDialogOpen(true)
@@ -154,7 +169,7 @@ export default function RecycleBinView() {
       toast.success(t('recycle.toastRestoreMany', { count: ids.length }))
       setSelectedIds([])
       setOperatingItem(null)
-      void fetchRecyclePage()
+      removeRows(ids)
     } finally {
       // noop
     }
@@ -180,7 +195,7 @@ export default function RecycleBinView() {
       toast.success(t('recycle.toastDeleteMany', { count: ids.length }))
       setSelectedIds([])
       setOperatingItem(null)
-      void fetchRecyclePage()
+      removeRows(ids)
     } finally {
       // noop
     }

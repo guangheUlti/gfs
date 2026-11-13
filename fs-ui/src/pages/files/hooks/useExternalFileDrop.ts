@@ -2,7 +2,12 @@ import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useTransferStore } from '@/store/transfer'
-import { navigateToTransferIfEnabled } from '@/services/auto-navigate'
+import {
+  beginTransferLaunch,
+  endTransferLaunch,
+  navigateBackFromAutoTransferIfIdle,
+  navigateToTransferIfEnabled,
+} from '@/services/auto-navigate'
 import {
   hasExternalFiles,
   readDataTransferFiles,
@@ -86,7 +91,16 @@ export function useExternalFileDrop({
         (f) => f.webkitRelativePath && f.webkitRelativePath !== f.name
       )
 
+      // 先跳转再建任务：拖入文件夹要逐层建目录、再逐个初始化上传，耗时可达数秒，
+      // 放在建任务之后跳会让用户以为没反应；中途某个文件初始化失败还会整个跳过跳转。
+      // 本批全部传完后由 navigateBackFromAutoTransferIfIdle 自动回到文件页
+      navigateToTransferIfEnabled('uploading')
+
       startUploadSession()
+      // 建任务期间（尤其拖文件夹要逐层建目录）任务队列会短暂为空，
+      // 期间禁止「全部完成→自动回文件页」，否则刚跳过去就被弹回来
+      beginTransferLaunch()
+      let failed = false
       try {
         if (hasDirectory) {
           await createTasksWithDirectory(files, parentId)
@@ -94,15 +108,20 @@ export function useExternalFileDrop({
           await Promise.all(files.map((file) => createTask(file, parentId)))
         }
       } catch {
-        // 超限等错误由 transfer store 内部 toast 提示，这里不重复
+        failed = true
+      } finally {
+        endTransferLaunch()
+      }
+      if (failed) {
+        // 超限等错误由 transfer store 内部 toast 提示，这里不重复；
+        // 前面已经跳转，若一个任务都没建出来就退回文件页，别让用户停在空列表
+        navigateBackFromAutoTransferIfIdle()
         return
       }
 
       toast.success(t('operations.uploadFileAdded'), {
         description: t('operations.uploadCheckProgress'),
       })
-      // 传输设置开了「自动跳转」时前往传输页；否则留在文件页
-      navigateToTransferIfEnabled()
     },
     [
       enabled,

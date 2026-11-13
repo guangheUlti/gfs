@@ -25,7 +25,8 @@ export function useFileOperations(
   refreshCallback: () => void,
   clearSelectionCallback?: () => void,
   onCreateFolderSuccess?: () => void,
-  updateFileItemsCallback?: (ids: string[], patch: Partial<FileItem>) => void
+  updateFileItemsCallback?: (ids: string[], patch: Partial<FileItem>) => void,
+  removeFileItemsCallback?: (ids: string[]) => void
 ) {
   const { t } = useTranslation('files')
   // 模态框状态
@@ -247,11 +248,24 @@ export function useFileOperations(
       setDeleteDialogVisible(false)
       setDeletingFiles([])
       clearSelectionCallback?.()
-      refreshCallback()
+      // 直接摘掉这几行，不重拉列表：整表重绘会让滚动位置弹回顶部，
+      // 也会把已经翻到的后续页丢掉（刷新只取第一页）
+      if (removeFileItemsCallback) {
+        removeFileItemsCallback(fileIds)
+      } else {
+        refreshCallback()
+      }
     } catch (error) {
       toast.error(recycleEnabled ? t('operations.trashFail') : t('operations.deleteForeverFail'))
     }
-  }, [deletingFiles, refreshCallback, clearSelectionCallback, t, isRecycleEnabled])
+  }, [
+    deletingFiles,
+    refreshCallback,
+    clearSelectionCallback,
+    removeFileItemsCallback,
+    t,
+    isRecycleEnabled,
+  ])
 
   /**
    * 打开删除确认对话框
@@ -302,11 +316,21 @@ export function useFileOperations(
       setPermanentDeleteDialogVisible(false)
       setPermanentlyDeletingFiles([])
       clearSelectionCallback?.()
-      refreshCallback()
+      if (removeFileItemsCallback) {
+        removeFileItemsCallback(fileIds)
+      } else {
+        refreshCallback()
+      }
     } catch (error) {
       toast.error(t('operations.deleteForeverFail'))
     }
-  }, [permanentlyDeletingFiles, refreshCallback, clearSelectionCallback, t])
+  }, [
+    permanentlyDeletingFiles,
+    refreshCallback,
+    clearSelectionCallback,
+    removeFileItemsCallback,
+    t,
+  ])
 
   /**
    * 下载文件：走任务式分片下载，进度在「传输列表-下载中」展示

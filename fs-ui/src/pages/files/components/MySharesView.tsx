@@ -341,6 +341,21 @@ export function MySharesView() {
     }
   }
 
+  /**
+   * 本地移除已取消的分享行：不重拉整页，避免整表重绘把滚动位置弹回顶部。
+   * 合计同步递减，页码保持不变。
+   */
+  const removeShareRows = useCallback(
+    (ids: string[]) => {
+      const removing = new Set(ids)
+      const removed = shareList.filter((s) => removing.has(s.id)).length
+      if (removed === 0) return
+      setShareList((prev) => prev.filter((s) => !removing.has(s.id)))
+      setTotal((prev) => Math.max(0, prev - removed))
+    },
+    [shareList]
+  )
+
   const handleCancelShare = (share: ShareItem) => {
     setDeletingShare(share)
     setDeleteDialogVisible(true)
@@ -353,7 +368,7 @@ export function MySharesView() {
       toast.success(t('myShares.toastCancelOk'))
       setDeleteDialogVisible(false)
       setDeletingShare(null)
-      void fetchSharePage()
+      removeShareRows([deletingShare.id])
     } finally {
       // 无需处理
     }
@@ -374,8 +389,8 @@ export function MySharesView() {
         t('myShares.toastCancelMany', { count: selectedKeys.length })
       )
       setBatchDeleteDialogVisible(false)
+      removeShareRows(selectedKeys)
       setSelectedKeys([])
-      void fetchSharePage()
     } finally {
       // 无需处理
     }

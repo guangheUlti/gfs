@@ -2,7 +2,11 @@ import { useState, useEffect, useCallback, useRef, memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { readDataTransferFiles, type FileWithPath } from '@/utils/data-transfer'
 import { useTransferStore } from '@/store/transfer'
-import { navigateToTransferIfEnabled } from '@/services/auto-navigate'
+import {
+  beginTransferLaunch,
+  endTransferLaunch,
+  navigateToTransferIfEnabled,
+} from '@/services/auto-navigate'
 import { Upload, X, FileIcon, FolderUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -125,20 +129,25 @@ export default function UploadModal({
     }
 
     startUploadSession()
+    // 建任务期间禁止自动返回：小文件可能在建后续任务时就把队列清空了
+    beginTransferLaunch()
     try {
       // 混合输入安全：无相对路径的文件落到当前目录，带路径的按目录结构创建
       await createTasksWithDirectory(fileList, parentId)
     } catch {
       // 大小/深度等超限由 transfer store 内部 toast 提示，弹窗保持打开
       return
+    } finally {
+      endTransferLaunch()
     }
 
     onOpenChange(false)
     toast.success(t('operations.uploadFileAdded'), {
       description: t('operations.uploadCheckProgress'),
     })
-    // 传输设置开了「自动跳转」时前往传输页；否则留在文件页
-    navigateToTransferIfEnabled()
+    // 传输设置开了「自动跳转」时前往传输页；否则留在文件页。
+    // 本批全部传完后由 navigateBackFromAutoTransferIfIdle 自动回到文件页
+    navigateToTransferIfEnabled('uploading')
   }
 
   // 拖入的文件夹显示完整相对路径，顶层文件只显示文件名

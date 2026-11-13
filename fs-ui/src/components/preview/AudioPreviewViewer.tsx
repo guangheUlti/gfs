@@ -193,63 +193,8 @@ function AudioPreviewBody({ file, files, index, onSwitch, resumePlayback }: Audi
 
       {/* 手机竖屏上下布局（控制区在上、列表收底部），sm 起恢复左右分栏 */}
       <div className='flex min-h-0 flex-1 flex-col sm:flex-row'>
-        {/* 曲目列表（对齐视频预览：列表头 = 播放列表 + 数量 + 播放模式） */}
-        <div className='order-2 flex h-44 w-full shrink-0 flex-col border-t bg-card sm:order-1 sm:h-auto sm:w-72 sm:border-r sm:border-t-0'>
-          <div className='flex items-center justify-between gap-2 border-b px-3 py-2.5'>
-            <span className='text-sm text-foreground'>
-              {t('preview.playlist')}
-              <span className='ml-2 text-xs text-muted-foreground tabular-nums'>
-                {files.length}
-              </span>
-            </span>
-            <div className='flex items-center gap-1.5'>
-              <span className='text-xs text-muted-foreground'>
-                {t('preview.playMode')}
-              </span>
-              <Button
-                variant='ghost'
-                size='icon'
-                className='h-7 w-7 text-muted-foreground hover:text-foreground'
-                title={playModeTitle}
-                onClick={cyclePlayMode}
-              >
-                {playMode === 'sequential' && <ListMusic className='h-4 w-4' />}
-                {playMode === 'play-once' && <ArrowRightToLine className='h-4 w-4' />}
-                {playMode === 'repeat-one' && <Repeat1 className='h-4 w-4' />}
-                {playMode === 'shuffle' && <Shuffle className='h-4 w-4' />}
-              </Button>
-            </div>
-          </div>
-          <ul
-            ref={listRef}
-            className='min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2'
-          >
-            {files.map((item, i) => (
-              <li
-                key={item.id}
-                data-active={i === index}
-                title={item.displayName}
-                onClick={() => switchTo(i)}
-                className={`flex cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm ${
-                  i === index
-                    ? 'bg-accent text-accent-foreground'
-                    : 'hover:bg-accent/40'
-                }`}
-              >
-                <span className='w-5 shrink-0 text-center text-xs tabular-nums'>
-                  {i === index ? (playing ? '♪' : '❚❚') : i + 1}
-                </span>
-                <span className='min-w-0 flex-1 truncate'>{item.displayName}</span>
-                <span className='shrink-0 text-xs text-muted-foreground'>
-                  {formatFileSize(item.size)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
         {/* 主控区 */}
-        <div className='order-1 flex min-w-0 flex-1 flex-col items-center justify-center gap-4 bg-background px-4 text-foreground sm:order-2 sm:gap-8 sm:px-8'>
+        <div className='flex min-w-0 flex-1 flex-col items-center justify-center gap-4 bg-background px-4 text-foreground sm:gap-8 sm:px-8'>
           {audioSrc && (
             <audio
               ref={audioRef}
@@ -356,6 +301,62 @@ function AudioPreviewBody({ file, files, index, onSwitch, resumePlayback }: Audi
             </Button>
           </div>
         </div>
+
+        {/* 曲目列表（对齐视频预览：列表头 = 播放列表 + 数量 + 播放模式） */}
+        <div className='flex h-44 w-full shrink-0 flex-col border-t bg-card sm:h-auto sm:w-72 sm:border-t-0 sm:border-l'>
+          <div className='flex items-center justify-between gap-2 border-b px-3 py-2.5'>
+            <span className='text-sm text-foreground'>
+              {t('preview.playlist')}
+              <span className='ml-2 text-xs text-muted-foreground tabular-nums'>
+                {files.length}
+              </span>
+            </span>
+            <div className='flex items-center gap-1.5'>
+              <span className='text-xs text-muted-foreground'>
+                {t('preview.playMode')}
+              </span>
+              <Button
+                variant='ghost'
+                size='icon'
+                className='h-7 w-7 text-muted-foreground hover:text-foreground'
+                title={playModeTitle}
+                onClick={cyclePlayMode}
+              >
+                {playMode === 'sequential' && <ListMusic className='h-4 w-4' />}
+                {playMode === 'play-once' && <ArrowRightToLine className='h-4 w-4' />}
+                {playMode === 'repeat-one' && <Repeat1 className='h-4 w-4' />}
+                {playMode === 'shuffle' && <Shuffle className='h-4 w-4' />}
+              </Button>
+            </div>
+          </div>
+          <ul
+            ref={listRef}
+            className='min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2'
+          >
+            {files.map((item, i) => (
+              <li
+                key={item.id}
+                data-active={i === index}
+                title={item.displayName}
+                onClick={() => switchTo(i)}
+                className={`flex cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm ${
+                  i === index
+                    ? 'bg-accent text-accent-foreground'
+                    : 'hover:bg-accent/40'
+                }`}
+              >
+                <span className='w-5 shrink-0 text-center text-xs tabular-nums'>
+                  {i === index ? (playing ? '♪' : '❚❚') : i + 1}
+                </span>
+                <span className='min-w-0 flex-1 truncate'>{item.displayName}</span>
+                <span className='shrink-0 text-xs text-muted-foreground'>
+                  {formatFileSize(item.size)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
       </div>
     </div>
   )

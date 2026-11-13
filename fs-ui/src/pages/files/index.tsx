@@ -117,7 +117,8 @@ export default function FilesPage() {
     })
 
   const operations = useFileOperations(
-    fileList.refresh,
+    // 操作后的列表校准走静默刷新：不进入 loading 态、不重建整表，滚动位置不跳回顶部
+    fileList.refreshSilent,
     clearSelection,
     () => {
       // 在特殊视图中创建文件夹后，返回全部文件页面
@@ -125,7 +126,8 @@ export default function FilesPage() {
         navigate(`/files?viewMode=${viewMode}`)
       }
     },
-    fileList.updateFileItems
+    fileList.updateFileItems,
+    fileList.removeFileItems
   )
 
   // 计算当前视图类型
@@ -256,9 +258,9 @@ export default function FilesPage() {
       const customEvent = event as CustomEvent<{ parentId?: string }>
       const { parentId } = customEvent.detail
 
-      // 如果是当前目录的文件，刷新列表
+      // 如果是当前目录的文件，静默刷新列表（不闪白、不跳顶）
       if (parentId === fileList.currentParentId) {
-        fileList.refresh()
+        fileList.refreshSilent()
       }
     }
 
@@ -267,7 +269,7 @@ export default function FilesPage() {
     return () => {
       window.removeEventListener('file-upload-complete', handleUploadComplete)
     }
-  }, [fileList.currentParentId, fileList.refresh])
+  }, [fileList.currentParentId, fileList.refreshSilent])
 
   /**
    * 打开上传弹窗
@@ -275,6 +277,24 @@ export default function FilesPage() {
   const handleOpenUploadModal = () => {
     if (!canWrite) return
     setUploadModalOpen(true)
+  }
+
+  /**
+   * 搜索按钮/回车：有关键词就按关键词搜；
+   * 搜索框为空时当刷新用（原 commitSearch('') 在无生效搜索时不改 URL，点了等于没反应）；
+   * 有生效中的搜索但输入被清空时，仍然走清空恢复全量。
+   */
+  const handleSearch = (keyword: string) => {
+    const kw = keyword.trim()
+    if (kw) {
+      fileList.commitSearch(kw)
+      return
+    }
+    if (fileList.searchKeyword) {
+      fileList.commitSearch('')
+      return
+    }
+    fileList.refresh()
   }
 
   /**
@@ -497,7 +517,7 @@ export default function FilesPage() {
         <Toolbar
           searchKeyword={fileList.searchInput}
           onSearchChange={fileList.setSearchInput}
-          onSearch={fileList.commitSearch}
+          onSearch={handleSearch}
           onUpload={handleOpenUploadModal}
           onCreateFolder={operations.openCreateFolderModal}
           onCreateText={operations.openCreateTextModal}

@@ -229,6 +229,14 @@ export function useFileList() {
   }, [fetchInitial])
 
   /**
+   * 静默刷新：不进入 loading 态，列表不会被加载占位替换，
+   * 滚动位置保持不变（新建/重命名/移动等操作后的列表校准走这里）。
+   */
+  const refreshSilent = useCallback(() => {
+    fetchInitial({ silent: true })
+  }, [fetchInitial])
+
+  /**
    * 持续记录当前位置与列表快照（全部文件视图）。
    * 用 ref 同步而非卸载闭包：卸载时 effect 闭包里的 fileList 是过期值。
    * 离开页面时 store 里就是最新位置，回到裸 /files 由 router loader 恢复。
@@ -282,6 +290,21 @@ export function useFileList() {
     },
     []
   )
+
+  /**
+   * 本地移除若干行（删除/移出当前目录）：只摘掉这几行并同步总数，
+   * 不重拉列表，因此不会重建整表、也不会把滚动位置弹回顶部。
+   */
+  const removeFileItems = useCallback((ids: string[]) => {
+    if (ids.length === 0) return
+    const removing = new Set(ids)
+    const removedCount = fileListRef.current.filter((f) =>
+      removing.has(f.id)
+    ).length
+    if (removedCount === 0) return
+    setFileList((prev) => prev.filter((f) => !removing.has(f.id)))
+    setTotal((prev) => Math.max(0, prev - removedCount))
+  }, [])
 
   const handleSortChange = useCallback(
     (field: string, direction: SortOrder) => {
@@ -337,7 +360,9 @@ export function useFileList() {
     enterFolder,
     navigateToFolder,
     refresh,
+    refreshSilent,
     updateFileItems,
+    removeFileItems,
     commitSearch,
     orderBy,
     orderDirection,

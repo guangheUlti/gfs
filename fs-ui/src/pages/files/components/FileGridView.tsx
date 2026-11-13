@@ -220,6 +220,20 @@ export function FileGridView({
           )
           const isDropTarget = file.isDir && dragState.dropTargetId === file.id
           const isMultiSelected = selectedKeys.length > 1 && isSelected
+          // 分组横线只在其上方确有菜单项时渲染：
+          // 文件夹菜单没有预览/编辑/下载/分享/收藏时，无条件渲染会在菜单顶部多出一条横线
+          const hasMultiMenuTopItems =
+            (canRead && downloadableFiles.length > 0) ||
+            (canShare && !!onBatchShare) ||
+            (favoriteEnabled && canWrite)
+          const hasSingleMenuTopItems =
+            (!file.isDir && canRead) ||
+            (!file.isDir &&
+              canWrite &&
+              !!onEdit &&
+              isEditableSuffix(file.suffix)) ||
+            canShare ||
+            (favoriteEnabled && canWrite)
 
           return (
             <ContextMenu key={file.id}>
@@ -338,7 +352,9 @@ export function FileGridView({
                             {t('rowMenu.download')}
                           </DropdownMenuItem>
                         )}
-                        {canWrite && <DropdownMenuSeparator />}
+                        {canWrite && hasSingleMenuTopItems && (
+                          <DropdownMenuSeparator />
+                        )}
                         {canWrite && (
                           <DropdownMenuItem
                             onClick={(e) => {
@@ -475,7 +491,9 @@ export function FileGridView({
                           : t('rowMenu.unfavorite')}
                       </ContextMenuItem>
                     )}
-                    {canWrite && <ContextMenuSeparator />}
+                    {canWrite && hasMultiMenuTopItems && (
+                      <ContextMenuSeparator />
+                    )}
                     {canWrite && onBatchMove && (
                       <ContextMenuItem
                         onClick={(e) => {
@@ -566,7 +584,9 @@ export function FileGridView({
                         {t('rowMenu.download')}
                       </ContextMenuItem>
                     )}
-                    {canWrite && <ContextMenuSeparator />}
+                    {canWrite && hasSingleMenuTopItems && (
+                      <ContextMenuSeparator />
+                    )}
                     {canWrite && (
                       <ContextMenuItem
                         onClick={(e) => {
