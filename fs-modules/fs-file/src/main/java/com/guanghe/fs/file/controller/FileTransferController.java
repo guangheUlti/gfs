@@ -13,6 +13,7 @@ import com.guanghe.fs.file.domain.vo.FileDownloadVO;
 import com.guanghe.fs.file.domain.vo.FileTransferTaskVO;
 import com.guanghe.fs.file.domain.vo.FolderDownloadTaskVO;
 import com.guanghe.fs.file.domain.vo.InitDownloadResultVO;
+import com.guanghe.fs.file.domain.vo.InitUploadResultVO;
 import com.guanghe.fs.file.service.FileTransferTaskService;
 import com.guanghe.fs.file.serving.FileServingPipeline;
 import com.guanghe.fs.framework.common.domain.Result;
@@ -87,10 +88,31 @@ public class FileTransferController {
     }
 
     @PostMapping("/init")
-    @Operation(summary = "初始化文件上传", description = "初始化上传环境，返回taskId用于后续分片上传")
-    public Result<String> initUpload(@RequestBody @Validated InitUploadCmd cmd) {
-        String taskId = fileTransferTaskService.initUpload(cmd);
-        return Result.ok(taskId, "初始化成功");
+    @Operation(summary = "初始化文件上传", description = "初始化上传环境，返回taskId与当前存储是否支持去重（秒传）")
+    public Result<InitUploadResultVO> initUpload(@RequestBody @Validated InitUploadCmd cmd) {
+        InitUploadResultVO result = fileTransferTaskService.initUpload(cmd);
+        return Result.ok(result, "初始化成功");
+    }
+
+    @PostMapping("/upload-once")
+    @Operation(summary = "一次性上传小文件", description = "不超过一个分片的文件：init + 校验 + 写入 + 合并合成一次请求，MD5 由服务端计算")
+    public Result<CheckUploadResultVO> uploadOnce(
+            @RequestPart("file") MultipartFile file,
+            @RequestParam("fileName") String fileName,
+            @RequestParam("fileSize") Long fileSize,
+            @RequestParam(value = "parentId", required = false) String parentId,
+            @RequestParam(value = "chunkSize", required = false) Long chunkSize,
+            @RequestParam(value = "mimeType", required = false) String mimeType
+    ) throws Exception {
+        InitUploadCmd cmd = new InitUploadCmd();
+        cmd.setFileName(fileName);
+        cmd.setFileSize(fileSize);
+        cmd.setParentId(parentId);
+        cmd.setTotalChunks(1);
+        cmd.setChunkSize(chunkSize != null && chunkSize > 0 ? chunkSize : Math.max(1, fileSize));
+        cmd.setMimeType(mimeType != null && !mimeType.isBlank() ? mimeType : "application/octet-stream");
+        CheckUploadResultVO result = fileTransferTaskService.uploadOnce(cmd, file.getBytes());
+        return Result.ok(result, "上传完成");
     }
 
     @PostMapping("/check")

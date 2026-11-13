@@ -3,6 +3,7 @@ package com.guanghe.fs.file.service.impl;
 import cn.dev33.satoken.stp.StpUtil;
 
 import cn.hutool.core.util.IdUtil;
+import cn.hutool.crypto.digest.DigestUtil;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.guanghe.fs.file.cache.TransferTaskCacheManager;
@@ -18,6 +19,7 @@ import com.guanghe.fs.file.domain.vo.FileDownloadVO;
 import com.guanghe.fs.file.domain.vo.FileTransferTaskVO;
 import com.guanghe.fs.file.domain.vo.FolderDownloadTaskVO;
 import com.guanghe.fs.file.domain.vo.InitDownloadResultVO;
+import com.guanghe.fs.file.domain.vo.InitUploadResultVO;
 import com.guanghe.fs.file.enums.TransferTaskType;
 import com.guanghe.fs.file.handler.UploadTaskExceptionHandler;
 import com.guanghe.fs.file.handler.DownloadTaskExceptionHandler;
@@ -259,7 +261,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public String initUpload(InitUploadCmd cmd) {
+    public InitUploadResultVO initUpload(InitUploadCmd cmd) {
         String userId = StpUtil.getLoginIdAsString();
         String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
         try {
@@ -275,8 +277,14 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                     storagePlatformSettingId
             );
             // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地存储）：objectKey 即远端相对路径，不落 file_info
+            boolean stateless = remoteMountService.isStatelessSetting(storagePlatformSettingId);
+            boolean mount = !stateless && isMountStorage(storagePlatformSettingId);
+            // 去重（秒传）前提：非挂载式（引用按 platform+objectKey 记账）、非落盘加密（同一内容密文每次不同）。
+            // 不满足时告知前端不要算整文件 MD5，省掉一次全量哈希
+            boolean dedupeSupported = !stateless && !mount && !storageServiceFacade
+                    .getStorageService(storagePlatformSettingId).isEncryptionEnabled();
             String objectKey;
-            if (remoteMountService.isStatelessSetting(storagePlatformSettingId)) {
+            if (stateless) {
                 String parentPath = "";
                 if (StringUtils.isNotBlank(cmd.getParentId())) {
                     FileInfo parent = fileInfoService.getAuthorizedFile(cmd.getParentId());
@@ -286,7 +294,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                     parentPath = remoteMountService.relativePath(parent);
                 }
                 objectKey = remoteMountService.childPath(parentPath, displayName);
-            } else if (isMountStorage(storagePlatformSettingId)) {
+            } else if (mount) {
                 if (StringUtils.isNotBlank(cmd.getParentId())) {
                     FileInfo parent = fileInfoService.getAuthorizedFile(cmd.getParentId());
                     if (!storagePlatformSettingId.equals(parent.getStoragePlatformSettingId())) {
@@ -324,11 +332,60 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             transferSseService.sendStatusEvent(userId, taskId,
                     TransferTaskStatus.initialized.name(), I18nUtils.getMessage("task.init.success"));
 
-            log.info("初始化上传成功: fileName={}", cmd.getFileName());
-            return task.getTaskId();
+            log.info("初始化上传成功: fileName={}, dedupeSupported={}", cmd.getFileName(), dedupeSupported);
+            return InitUploadResultVO.builder()
+                    .taskId(task.getTaskId())
+                    .dedupeSupported(dedupeSupported)
+                    .build();
         } catch (Exception e) {
             log.error("初始化上传失败: fileName={}", cmd.getFileName(), e);
             throw new StorageOperationException(I18nUtils.getMessage("task.init.failed", new Object[]{e.getMessage()}), e);
+        }
+    }
+
+    /**
+     * 一次性上传（init + check + 分片写入 + 合并）。
+     * <p>
+     * 适用于不超过一个分片的小文件：把原本 4 次往返压成 1 次，且 MD5 由服务端在内存里算，
+     * 前端无需先做全量哈希。内部完全复用分片路径的存储逻辑（含挂载/加密分支），不新增存储代码。
+     */
+    @Override
+    public CheckUploadResultVO uploadOnce(InitUploadCmd cmd, byte[] bytes) {
+        String taskId = initUpload(cmd).getTaskId();
+        try {
+            String fileMd5 = DigestUtil.md5Hex(bytes);
+
+            CheckUploadCmd checkCmd = new CheckUploadCmd();
+            checkCmd.setTaskId(taskId);
+            checkCmd.setFileMd5(fileMd5);
+            CheckUploadResultVO checkResult = checkUpload(checkCmd);
+            if (Boolean.TRUE.equals(checkResult.getIsQuickUpload())) {
+                return checkResult;
+            }
+
+            UploadChunkCmd chunkCmd = new UploadChunkCmd();
+            chunkCmd.setTaskId(taskId);
+            chunkCmd.setChunkIndex(0);
+            chunkCmd.setChunkMd5(fileMd5);
+            doUploadChunk(bytes, chunkCmd);
+
+            FileInfo merged = doMergeChunks(taskId);
+            return CheckUploadResultVO.builder()
+                    .isQuickUpload(false)
+                    .fileId(merged != null ? merged.getId() : null)
+                    .taskId(taskId)
+                    .message(I18nUtils.getMessage("task.check.complete"))
+                    .build();
+        } catch (Exception e) {
+            log.error("一次性上传失败: taskId={}", taskId, e);
+            String message = ErrorMessageUtils.extractUserFriendlyMessage(e);
+            try {
+                // 与分片路径一致：失败落任务终态，前端轮询/SSE 都能收敛
+                exceptionHandler.handleTaskFailed(taskId, message, e);
+            } catch (Exception ignore) {
+                log.warn("标记一次性上传任务失败态出错: taskId={}", taskId, ignore);
+            }
+            throw new StorageOperationException(I18nUtils.getMessage("task.upload.failed", new Object[]{message}), e);
         }
     }
 

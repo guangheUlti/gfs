@@ -13,6 +13,7 @@ import com.guanghe.fs.file.domain.vo.FileDownloadVO;
 import com.guanghe.fs.file.domain.vo.FileTransferTaskVO;
 import com.guanghe.fs.file.domain.vo.FolderDownloadTaskVO;
 import com.guanghe.fs.file.domain.vo.InitDownloadResultVO;
+import com.guanghe.fs.file.domain.vo.InitUploadResultVO;
 
 import java.io.InputStream;
 import java.util.List;
@@ -31,9 +32,20 @@ public interface FileTransferTaskService extends IService<FileTransferTask> {
      * 初始化上传
      *
      * @param cmd 初始化上传命令
-     * @return 任务ID
+     * @return 任务ID + 当前存储是否支持去重
      */
-    String initUpload(InitUploadCmd cmd);
+    InitUploadResultVO initUpload(InitUploadCmd cmd);
+
+    /**
+     * 一次性上传单个分片的文件（init + check + chunk + merge 合成一次请求）。
+     * <p>
+     * 小文件（不超过一个分片）走这里可以把 4 次往返压成 1 次；MD5 由服务端在内存里算，
+     * 前端不必先做全量哈希。响应复用 {@link CheckUploadResultVO}，isQuickUpload=true 表示秒传命中。
+     *
+     * @param cmd   初始化上传命令（分片数与分片大小由调用方按实际传入）
+     * @param bytes 文件内容
+     */
+    CheckUploadResultVO uploadOnce(InitUploadCmd cmd, byte[] bytes);
 
     /**
      * 资源校验
