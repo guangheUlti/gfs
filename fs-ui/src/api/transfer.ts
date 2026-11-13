@@ -1,6 +1,8 @@
 import type {
   FileTransferTaskVO,
   InitUploadCmd,
+  InitUploadResultVO,
+  UploadOnceResultVO,
   CheckUploadCmd,
   CheckUploadResultVO,
   InitDownloadCmd,
@@ -14,10 +16,37 @@ import { request, service } from './request'
  * 并发上传带宽饱和时，init 需等服务端建任务记录，留足超时避免误报
  */
 export function initUpload(params: InitUploadCmd) {
-  return request.post<string>('/apis/transfer/init', params, {
+  return request.post<InitUploadResultVO>('/apis/transfer/init', params, {
     timeout: 30000,
     // 传输分片/控制请求的错误由执行器统一上报（含取消竞态过滤），
     // 拦截器层静默，避免取消瞬间每个在途分片都弹一个「任务不存在」
+    showErrorMessage: false,
+  })
+}
+
+/**
+ * 一次性上传单个分片的文件：init + 校验 + 写入 + 合并合成一次请求。
+ * MD5 由服务端计算，小文件不必在上传前做全量哈希。
+ */
+export function uploadOnce(
+  file: File,
+  params: {
+    fileName: string
+    parentId?: string
+    chunkSize: number
+    mimeType: string
+  }
+) {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('fileName', params.fileName)
+  formData.append('fileSize', String(file.size))
+  if (params.parentId) formData.append('parentId', params.parentId)
+  formData.append('chunkSize', String(params.chunkSize))
+  formData.append('mimeType', params.mimeType)
+  return request.post<UploadOnceResultVO>('/apis/transfer/upload-once', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000,
     showErrorMessage: false,
   })
 }

@@ -123,6 +123,25 @@ export interface InitUploadCmd {
 }
 
 /**
+ * 初始化上传响应结果
+ */
+export interface InitUploadResultVO {
+  taskId: string
+  /** 当前存储是否支持按内容去重（秒传）；false 时不必算整文件 MD5 */
+  dedupeSupported: boolean
+}
+
+/**
+ * 一次性上传（单分片）响应结果，字段与校验结果一致
+ */
+export interface UploadOnceResultVO {
+  isQuickUpload: boolean
+  fileId?: string
+  taskId: string
+  message?: string
+}
+
+/**
  * 校验上传请求参数
  */
 export interface CheckUploadCmd {

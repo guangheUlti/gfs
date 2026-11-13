@@ -16,6 +16,7 @@ import {
   resumeUpload,
   cancelUpload,
   initUpload,
+  uploadOnce,
   clearCompletedTasks as clearCompletedTasksApi,
 } from '@/api/transfer'
 import { createFolder } from '@/api/file'
@@ -111,11 +112,26 @@ let sseConnectionUnsubscribe: (() => void) | null = null
 let callbacksInitialized = false
 let downloadCallbacksInitialized = false
 let hasCheckedUnfinishedTasks = false
+let hasCleanedStaleTasks = false
 let pollingTimerId: number | null = null
 let beforeUnloadWarningSetup = false
 const POLLING_INTERVAL = 3000
 
+/**
+ * 「准备中」停留超过该时长且账号内没有任何进行中的传输，即视为已被中断。
+ * 只有发起它的标签页能推进该状态（初始化后立刻进校验/上传），
+ * 超过这个时长还是 initialized，说明发起端已关闭页面或进程已被杀。
+ */
+const STALE_INITIALIZED_TASK_MAX_AGE_MS = 10 * 60 * 1000
+
 const LOCAL_SESSION_TASKS_KEY = 'gfsLocalSessionTaskIds'
+
+/**
+ * 目标存储不支持去重的上传任务。
+ * 服务端在 init 里告知（挂载式/落盘加密存储），这些任务根本不会命中秒传，
+ * 执行器据此跳过整文件 MD5，免去一次无意义的全量哈希
+ */
+const dedupeUnsupportedTasks = new Set<string>()
 
 function loadLocalSessionTaskIds(): Set<string> {
   try {
@@ -179,6 +195,56 @@ function convertVOToTask(vo: FileTransferTaskVO): TransferTask {
     totalChunks: vo.totalChunks,
     uploadedChunks: vo.uploadedChunks,
     chunkSize: vo.chunkSize,
+  }
+}
+
+/**
+ * 清理遗留的「准备中」上传任务。
+ *
+ * 这类任务（初始化成功但从未开始传分片）只会出现在发起端异常退出时：页面关闭、
+ * 浏览器崩溃或后端重启。它们不属于本机会话（SessionStorage 已清），
+ * 既不会被续传也不会被取消，却会永远留在「上传中」并让前端轮询不停。
+ *
+ * 安全前提：账号内没有任何进行中的传输才动手——若还有上传/下载在跑，
+ * 这些 initialized 很可能是别端排队中的任务，误杀会中断另一台设备的上传。
+ */
+async function cancelStaleInitializedTasks(): Promise<void> {
+  if (hasCleanedStaleTasks) return
+  hasCleanedStaleTasks = true
+
+  const store = useTransferStore.getState()
+  const tasks = store.getTaskList()
+  const hasActiveTransfer = tasks.some((task) =>
+    ['checking', 'uploading', 'downloading', 'merging'].includes(task.status)
+  )
+  if (hasActiveTransfer) return
+
+  const now = Date.now()
+  const stale = tasks.filter(
+    (task) =>
+      task.status === 'initialized' &&
+      !localSessionTaskIds.has(task.taskId) &&
+      now - task.createdAt > STALE_INITIALIZED_TASK_MAX_AGE_MS
+  )
+  if (stale.length === 0) return
+
+  let cancelled = 0
+  for (const task of stale) {
+    try {
+      await cancelUpload(task.taskId)
+      store.transitionTo(task.taskId, 'cancelled')
+      cancelled += 1
+    } catch (error: any) {
+      const message = `${error?.message ?? ''}${error?.response?.data?.message ?? ''}`
+      // 后端已无此任务（记录被删除）：目标已达成，不算失败
+      if (!message.includes('任务不存在')) {
+        console.error('清理中断的上传任务失败:', task.taskId, error)
+      }
+    }
+  }
+
+  if (cancelled > 0) {
+    toast.info(`已清理 ${cancelled} 个已中断的上传任务`)
   }
 }
 
@@ -262,6 +328,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       // 本机会话标记随终态释放，避免集合无限增长
       if (['completed', 'failed', 'cancelled'].includes(newStatus)) {
         unmarkLocalSessionTask(taskId)
+        dedupeUnsupportedTasks.delete(taskId)
       }
 
       if (newStatus === 'completed' && !completedActionsTriggered.has(taskId)) {
@@ -277,6 +344,15 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       }
 
       get().checkAndStartPolling()
+
+      // 上传批次以失败/取消收尾时同样要能自动回到文件页
+      // （成功路径由 triggerCompletedActions 里的回调负责）
+      if (
+        ['failed', 'cancelled'].includes(newStatus) &&
+        updatedTask.taskType === 'upload'
+      ) {
+        navigateBackFromAutoTransferIfIdle()
+      }
       return true
     }
 
@@ -482,6 +558,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       set({ tasks: newTasks })
 
       await get().checkUnfinishedTasks()
+      await cancelStaleInitializedTasks()
     } catch (error) {
       console.error('获取传输任务列表失败:', error)
       // 静默失败，不抛出错误
@@ -769,7 +846,72 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
 
     const totalChunks = Math.ceil(file.size / chunkSize)
 
-    const taskId = await initUpload({
+    // 单分片小文件：一次请求跑完 init + 校验 + 写入 + 合并，省掉 3 次往返。
+    // 0 字节文件（totalChunks=0）仍走分片路径，服务端有空文件专用逻辑
+    if (totalChunks === 1) {
+      const mimeType = file.type || 'application/octet-stream'
+      let result
+      try {
+        result = await uploadOnce(file, {
+          fileName: file.name,
+          parentId,
+          chunkSize,
+          mimeType,
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '上传失败'
+        toast.error(
+          i18n.t('files:uploadPanel.toastFileFailed', {
+            name: file.name,
+            message,
+          })
+        )
+        throw error
+      }
+
+      const singleTaskId = result.taskId
+      markLocalSessionTask(singleTaskId)
+      const now = Date.now()
+      const singleTask: TransferTask = {
+        taskId: singleTaskId,
+        taskType: 'upload',
+        fileName: file.name,
+        fileSize: file.size,
+        status: 'idle',
+        progress: 100,
+        uploadedBytes: file.size,
+        speed: 0,
+        remainingTime: 0,
+        createdAt: now,
+        updatedAt: now,
+        parentId,
+        mimeType,
+        totalChunks: 1,
+        uploadedChunks: 1,
+        chunkSize,
+      }
+
+      const singleState = get()
+      const singleTasks = new Map(singleState.tasks)
+      singleTasks.set(singleTaskId, singleTask)
+      const singleSessionTasks = new Map(singleState.sessionTasks)
+      const singleTargetSessionId = sessionId || singleState.currentSessionId
+      if (singleTargetSessionId) {
+        const list = singleSessionTasks.get(singleTargetSessionId) || []
+        list.push(singleTaskId)
+        singleSessionTasks.set(singleTargetSessionId, list)
+      }
+      set({ tasks: singleTasks, sessionTasks: singleSessionTasks })
+
+      // 服务端已经写完了：本地把状态机走完，复用完成回调
+      // （toast、文件列表刷新、自动返回文件页都由 triggerCompletedActions 负责）
+      get().transitionTo(singleTaskId, 'initialized')
+      get().transitionTo(singleTaskId, 'checking')
+      get().transitionTo(singleTaskId, 'completed')
+      return singleTaskId
+    }
+
+    const initResult = await initUpload({
       fileName: file.name,
       fileSize: file.size,
       parentId,
@@ -777,6 +919,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       chunkSize,
       mimeType: file.type || 'application/octet-stream',
     })
+    const taskId = initResult.taskId
     markLocalSessionTask(taskId)
 
     const now = Date.now()
@@ -824,6 +967,9 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     get().transitionTo(taskId, 'initialized')
 
     set({ uploadQueue: [...get().uploadQueue, taskId] })
+    if (initResult.dedupeSupported === false) {
+      dedupeUnsupportedTasks.add(taskId)
+    }
     get().pumpUploadQueue()
 
     return taskId
@@ -1175,7 +1321,8 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
           taskId,
           file,
           uploadExecutor.DEFAULT_CONCURRENCY,
-          settings?.chunkSize || 5 * 1024 * 1024
+          settings?.chunkSize || 5 * 1024 * 1024,
+          { skipFileMd5: dedupeUnsupportedTasks.has(taskId) }
         )
         .catch(() => {
           // Silent

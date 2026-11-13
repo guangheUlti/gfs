@@ -18,6 +18,11 @@ interface UploadTaskContext {
   activeUploads: Map<number, AbortController>
   retryCount: Map<number, number>
   concurrency: number
+  /**
+   * 跳过整文件 MD5（该存储不支持去重/秒传时用）
+   * 避免为一次无意义的查重做全量哈希
+   */
+  skipFileMd5: boolean
 }
 
 export interface ProgressUpdateData {
@@ -119,7 +124,8 @@ class UploadExecutor {
     taskId: string,
     file: File,
     concurrency?: number,
-    chunkSize?: number
+    chunkSize?: number,
+    options?: { skipFileMd5?: boolean }
   ): Promise<void> {
     const taskChunkSize = chunkSize ?? this.CHUNK_SIZE
     const totalChunks = this.calculateChunkCount(file.size, taskChunkSize)
@@ -136,6 +142,7 @@ class UploadExecutor {
       activeUploads: new Map(),
       retryCount: new Map(),
       concurrency: taskConcurrency,
+      skipFileMd5: options?.skipFileMd5 === true,
     }
 
     this.taskContexts.set(taskId, context)
@@ -143,7 +150,9 @@ class UploadExecutor {
     try {
       this.notifyTransition(taskId, 'checking')
 
-      const fileMd5 = await calculateFileMD5(file)
+      // 存储不支持去重时不算整文件 MD5：服务端查重也会直接跳过，
+      // 白算一道哈希（大文件可达秒级）没有意义
+      const fileMd5 = context.skipFileMd5 ? '' : await calculateFileMD5(file)
 
       if (context.isCancelled || context.isPaused) {
         return
