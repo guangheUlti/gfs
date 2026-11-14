@@ -8,6 +8,8 @@ import type {
   InitDownloadCmd,
   InitDownloadResultVO,
   FolderDownloadTaskVO,
+  ConflictPolicy,
+  FileConflictVO,
 } from '@/types/transfer'
 import { request, service } from './request'
 
@@ -35,6 +37,7 @@ export function uploadOnce(
     parentId?: string
     chunkSize: number
     mimeType: string
+    conflictPolicy?: ConflictPolicy
   }
 ) {
   const formData = new FormData()
@@ -44,11 +47,29 @@ export function uploadOnce(
   if (params.parentId) formData.append('parentId', params.parentId)
   formData.append('chunkSize', String(params.chunkSize))
   formData.append('mimeType', params.mimeType)
+  if (params.conflictPolicy) {
+    formData.append('conflictPolicy', params.conflictPolicy)
+  }
   return request.post<UploadOnceResultVO>('/apis/transfer/upload-once', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 120000,
     showErrorMessage: false,
   })
+}
+
+/**
+ * 批量检测目标目录中的同名文件/目录，用于上传前询问「替换 / 保留两者」
+ */
+export function checkUploadConflicts(
+  parentId: string | undefined,
+  fileNames: string[],
+  dirNames: string[] = []
+) {
+  return request.post<FileConflictVO[]>(
+    '/apis/transfer/conflicts',
+    { parentId, fileNames, dirNames },
+    { timeout: 30000, showErrorMessage: false }
+  )
 }
 
 /**
@@ -68,7 +89,8 @@ export function uploadChunk(
   file: Blob,
   taskId: string,
   chunkIndex: number,
-  chunkMd5: string
+  chunkMd5: string,
+  signal?: AbortSignal
 ) {
   const formData = new FormData()
   formData.append('file', file)
@@ -80,8 +102,10 @@ export function uploadChunk(
     headers: {
       'Content-Type': 'multipart/form-data',
     },
-    timeout: 60000,
+    // 分片档位最大 1GB 且服务端同步写入：慢链路下单请求可能远超 60s
+    timeout: 30 * 60 * 1000,
     showErrorMessage: false,
+    signal,
   })
 }
 
@@ -164,7 +188,8 @@ export function downloadChunk(
     params: { taskId, chunkIndex },
     responseType: 'blob',
     signal,
-    timeout: 120000,
+    // 下载分片服务端回退到最大 64MB，慢链路 + 限速时 120s 不够
+    timeout: 10 * 60 * 1000,
     // axios 原生调用，拦截器 toast 不生效，但保持配置一致
     showErrorMessage: false,
   } as any)

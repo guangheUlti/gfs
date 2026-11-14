@@ -15,6 +15,8 @@ interface UploadTaskContext {
   uploadedChunks: Set<number>
   isPaused: boolean
   isCancelled: boolean
+  /** 任一分片重试耗尽：同任务其它分片立即停手，避免整批空跑 */
+  hasFailed: boolean
   activeUploads: Map<number, AbortController>
   retryCount: Map<number, number>
   concurrency: number
@@ -45,6 +47,7 @@ function isNetworkError(error: unknown): boolean {
       message.includes('network') ||
       message.includes('timeout') ||
       message.includes('abort') ||
+      message.includes('cancel') ||
       message.includes('connection') ||
       message.includes('fetch')
     )
@@ -139,6 +142,7 @@ class UploadExecutor {
       uploadedChunks: new Set(),
       isPaused: false,
       isCancelled: false,
+      hasFailed: false,
       activeUploads: new Map(),
       retryCount: new Map(),
       concurrency: taskConcurrency,
@@ -216,6 +220,10 @@ class UploadExecutor {
     const context = this.taskContexts.get(taskId)
     if (!context) return
     context.isPaused = true
+    // 断掉在途分片请求：只翻标志位的话，单分片最长要等满 60s 超时才让出，
+    // 用户点了暂停还会看到进度在走
+    context.activeUploads.forEach((controller) => controller.abort())
+    context.activeUploads.clear()
   }
 
   public async resume(taskId: string): Promise<void> {
@@ -223,6 +231,7 @@ class UploadExecutor {
     if (!context) return
 
     context.isPaused = false
+    context.hasFailed = false
 
     try {
       if (context.isCancelled) {
@@ -343,7 +352,7 @@ class UploadExecutor {
     let currentIndex = 0
 
     const uploadWorker = async (): Promise<void> => {
-      while (currentIndex < chunksToUpload.length) {
+      while (currentIndex < chunksToUpload.length && !context.hasFailed) {
         if (context.isPaused || context.isCancelled) {
           break
         }
@@ -363,6 +372,11 @@ class UploadExecutor {
           uploadedChunks.add(chunkIndex)
           this.notifyProgress(taskId, context)
         } else if (!context.isCancelled && !context.isPaused) {
+          // 首个失败分片：先掐掉兄弟分片的在途请求再抛出，
+          // 否则 Promise.all 立即 reject，其它 worker 却还在把剩余分片传完
+          context.hasFailed = true
+          context.activeUploads.forEach((controller) => controller.abort())
+          context.activeUploads.clear()
           throw new Error(result.error || `分片 ${chunkIndex} 上传失败`)
         }
       }
@@ -383,7 +397,7 @@ class UploadExecutor {
     let retryCount = context.retryCount.get(chunkIndex) || 0
 
     while (retryCount <= this.MAX_RETRY_COUNT) {
-      if (context.isPaused || context.isCancelled) {
+      if (context.isPaused || context.isCancelled || context.hasFailed) {
         return { chunkIndex, success: false, error: '任务已暂停或取消' }
       }
 
@@ -397,7 +411,7 @@ class UploadExecutor {
 
         const chunkMd5 = await calculateBlobMD5(chunkBlob)
 
-        if (context.isCancelled) {
+        if (context.isCancelled || context.isPaused || context.hasFailed) {
           context.activeUploads.delete(chunkIndex)
           return { chunkIndex, success: false, error: '任务已取消' }
         }
@@ -405,10 +419,16 @@ class UploadExecutor {
         // 全局信号量限流：拿到空位后二次确认任务状态，避免暂停/取消后仍发出请求
         await this.acquireChunkSlot()
         try {
-          if (context.isCancelled || context.isPaused) {
+          if (context.isCancelled || context.isPaused || context.hasFailed) {
             return { chunkIndex, success: false, error: '任务已暂停或取消' }
           }
-          await uploadChunk(chunkBlob, taskId, chunkIndex, chunkMd5)
+          await uploadChunk(
+            chunkBlob,
+            taskId,
+            chunkIndex,
+            chunkMd5,
+            abortController.signal
+          )
         } finally {
           this.releaseChunkSlot()
         }
@@ -420,8 +440,9 @@ class UploadExecutor {
       } catch (error) {
         context.activeUploads.delete(chunkIndex)
 
-        if (context.isCancelled) {
-          return { chunkIndex, success: false, error: '任务已取消' }
+        // 暂停/取消/兄弟分片失败会主动 abort 在途请求，这类异常不参与重试
+        if (context.isCancelled || context.isPaused || context.hasFailed) {
+          return { chunkIndex, success: false, error: '任务已暂停或取消' }
         }
 
         retryCount += 1

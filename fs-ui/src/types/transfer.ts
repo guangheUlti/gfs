@@ -120,6 +120,37 @@ export interface InitUploadCmd {
   totalChunks: number
   chunkSize: number
   mimeType: string
+  /** 同名冲突策略：replace 覆盖原文件；keepBoth/空 自动重命名保留两者 */
+  conflictPolicy?: ConflictPolicy
+}
+
+/**
+ * 上传同名冲突策略
+ * - keepBoth：保留两者，服务端自动生成「name(1).ext」
+ * - replace：覆盖目标目录中的同名文件（文件 ID 不变）
+ */
+export type ConflictPolicy = 'replace' | 'keepBoth'
+
+/**
+ * 目标目录中已存在的同名项
+ */
+export interface FileConflictVO {
+  fileName: string
+  fileId: string
+  size: number | null
+  uploadTime?: string
+  /** true 表示同名项是已存在的目录 */
+  isDir?: boolean
+}
+
+/**
+ * 上传前冲突询问的结果
+ * - policy 为 null 表示用户取消上传
+ * - existingDirIds 仅在选择「替换」时填充：顶层同名目录名 → 已存在目录 ID，用于合并上传
+ */
+export interface UploadConflictDecision {
+  policy: ConflictPolicy
+  existingDirIds: Record<string, string>
 }
 
 /**

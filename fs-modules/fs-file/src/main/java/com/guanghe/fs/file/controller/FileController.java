@@ -172,7 +172,7 @@ public class FileController {
     @PostMapping("/text")
     @Operation(summary = "新建纯文本文件", description = "在指定目录下新建 .txt 文本文件")
     @SaCheckPermission("file:write")
-    public Result<?> createTextFile(@RequestBody @Validated CreateTextFileCmd cmd) {
+    public Result<String> createTextFile(@RequestBody @Validated CreateTextFileCmd cmd) {
         FileInfo fileInfo = fileInfoService.createTextFile(cmd);
         operationLogService.recordSuccess(
                 OperationType.CREATE_TEXT,
@@ -182,8 +182,8 @@ public class FileController {
                 fileInfo.getDisplayName(),
                 "父目录: " + (fileInfo.getParentId() == null ? "根目录" : fileInfo.getParentId())
         );
-        // 与 copies 一致，不返回完整实体，避免暴露对象存储键等内部字段
-        return Result.ok();
+        // 与 copies 一致，只返回 ID（供前端撤销新建），不暴露对象存储键等内部字段
+        return Result.ok(fileInfo.getId());
     }
 
     @GetMapping("/{fileId}/content")
@@ -255,7 +255,7 @@ public class FileController {
     @PostMapping("/copies")
     @Operation(summary = "复制文件", description = "复制文件或文件夹到指定目录")
     @SaCheckPermission("file:write")
-    public Result<?> copyFiles(@RequestBody @Validated CopyFileCmd cmd) {
+    public Result<List<String>> copyFiles(@RequestBody @Validated CopyFileCmd cmd) {
         List<FileInfo> sources = getAuthorizedFiles(cmd.getFileIds());
         List<FileInfo> copies = fileInfoService.copyFiles(cmd);
         String targetName = "根目录";
@@ -270,8 +270,8 @@ public class FileController {
                 summarizeNames(copies),
                 "从 " + summarizeNames(sources) + " 复制到: " + targetName
         );
-        // 不返回完整文件实体，避免把对象存储键等内部字段暴露给客户端。
-        return Result.ok();
+        // 只回传副本 ID（供前端撤销粘贴），不暴露对象存储键等内部字段。
+        return Result.ok(copies.stream().map(FileInfo::getId).toList());
     }
 
     @GetMapping("/directory/{dirId}/path")

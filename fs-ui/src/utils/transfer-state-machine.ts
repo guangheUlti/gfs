@@ -5,9 +5,19 @@ import type { TaskStatus, TransferTask } from '@/types/transfer'
  */
 export const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   idle: ['initialized', 'cancelled'],
-  initialized: ['checking', 'downloading', 'failed', 'cancelled'],
-  checking: ['uploading', 'completed', 'failed', 'cancelled'],
-  uploading: ['paused', 'merging', 'failed', 'cancelled'],
+  // 允许直接到 merging/completed：状态快照可能把本地状态滞后回 initialized，
+  // 此时后端后续的 merging/complete 事件仍应能把任务推进到终态
+  initialized: [
+    'checking',
+    'downloading',
+    'merging',
+    'completed',
+    'failed',
+    'cancelled',
+  ],
+  checking: ['uploading', 'merging', 'completed', 'failed', 'cancelled'],
+  // uploading → completed：合并很快时 SSE 可能只发来 complete 而错过 merging
+  uploading: ['paused', 'merging', 'completed', 'failed', 'cancelled'],
   downloading: ['paused', 'merging', 'completed', 'failed', 'cancelled'],
   paused: ['uploading', 'downloading', 'cancelled'],
   merging: ['completed', 'failed'],

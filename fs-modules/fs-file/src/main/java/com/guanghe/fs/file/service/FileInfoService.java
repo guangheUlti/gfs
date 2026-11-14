@@ -9,12 +9,15 @@ import com.guanghe.fs.file.domain.dto.RenameFileCmd;
 import com.guanghe.fs.file.domain.dto.UpdateTextContentCmd;
 import com.guanghe.fs.file.domain.qry.FileQry;
 import com.mybatisflex.core.service.IService;
+import com.guanghe.fs.file.domain.vo.FileConflictVO;
 import com.guanghe.fs.file.domain.vo.FileDetailVO;
 import com.guanghe.fs.file.domain.vo.FileVO;
 import com.guanghe.fs.framework.common.domain.PageResult;
 
 import java.io.InputStream;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 文件资源服务接口
@@ -54,6 +57,20 @@ public interface FileInfoService extends IService<FileInfo> {
      * @return 命中记录；未落库（无状态远端目录）时返回 null，由调用方回退到目录列表匹配
      */
     FileInfo findChildByExactName(String userId, String parentId, String displayName);
+
+    /**
+     * 按「父目录 + 显示名」查找同层条目（含目录），用于上传同名冲突判定。
+     * <p>
+     * 与 {@link #findChildByExactName} 的差异：无状态远端目录会实时列出一层并匹配，
+     * 同名文件优先于同名目录返回。
+     */
+    FileInfo findSameLevelEntry(String userId, String parentId, String displayName, String storagePlatformSettingId);
+
+    /**
+     * 上传同名冲突检测：返回目标目录中已存在、与待上传文件/目录同名的条目。
+     * 文件与目录分开查询，同名文件和同名目录可同时命中。
+     */
+    List<FileConflictVO> findUploadConflicts(String parentId, List<String> fileNames, List<String> dirNames);
 
     /**
      * 永久删除无状态远程文件/目录（直接作用于远端服务器，不涉及 file_info）
@@ -193,6 +210,16 @@ public interface FileInfoService extends IService<FileInfo> {
      * @return 已使用字节数
      */
     Long calculateUsedStorage();
+
+    /**
+     * 按天聚合上传字节数（SQL GROUP BY），key 为 yyyy-MM-dd
+     *
+     * @param storagePlatformSettingId 存储平台配置id，本地存储传 null
+     * @param start                    起始时间（含）
+     * @param end                      结束时间（含）
+     * @return 日期 -> 字节数，无数据返回空 Map
+     */
+    Map<String, Long> sumUploadBytesByDay(String storagePlatformSettingId, LocalDateTime start, LocalDateTime end);
 
     /**
      * 查询文件详情

@@ -12,6 +12,7 @@ import {
   hasExternalFiles,
   readDataTransferFiles,
 } from '@/utils/data-transfer'
+import { useUploadConflictPrompt } from './useUploadConflictPrompt'
 
 interface UseExternalFileDropOptions {
   /** 无写权限时整体不响应 */
@@ -39,6 +40,7 @@ export function useExternalFileDrop({
   const [isDragging, setIsDragging] = useState(false)
   const { startUploadSession, createTask, createTasksWithDirectory } =
     useTransferStore()
+  const { resolveUploadConflicts, conflictDialog } = useUploadConflictPrompt()
 
   const handleDragEnter = useCallback(
     (e: React.DragEvent) => {
@@ -77,14 +79,19 @@ export function useExternalFileDrop({
     [enabled]
   )
 
-  const handleDrop = useCallback(
-    async (e: React.DragEvent) => {
-      if (!enabled || !hasExternalFiles(e)) return
-      e.preventDefault()
-      setIsDragging(false)
-
-      const files = await readDataTransferFiles(e.dataTransfer)
+  /**
+   * 上传一组系统文件到指定目录（当前目录或拖到的文件夹行）。
+   */
+  const uploadFilesTo = useCallback(
+    async (files: File[], targetParentId?: string) => {
       if (files.length === 0) return
+
+      // 同名冲突先问策略再跳转/建任务：用户取消时不该留下空会话或空列表
+      const conflictDecision = await resolveUploadConflicts(
+        targetParentId,
+        files
+      )
+      if (conflictDecision === null) return
 
       // 相对路径带目录前缀（拖入文件夹）时按目录上传；纯顶层文件直接建任务
       const hasDirectory = files.some(
@@ -103,9 +110,22 @@ export function useExternalFileDrop({
       let failed = false
       try {
         if (hasDirectory) {
-          await createTasksWithDirectory(files, parentId)
+          await createTasksWithDirectory(
+            files,
+            targetParentId,
+            conflictDecision
+          )
         } else {
-          await Promise.all(files.map((file) => createTask(file, parentId)))
+          await Promise.all(
+            files.map((file) =>
+              createTask(
+                file,
+                targetParentId,
+                undefined,
+                conflictDecision.policy
+              )
+            )
+          )
         }
       } catch {
         failed = true
@@ -124,13 +144,24 @@ export function useExternalFileDrop({
       })
     },
     [
-      enabled,
-      parentId,
       startUploadSession,
       createTask,
       createTasksWithDirectory,
+      resolveUploadConflicts,
       t,
     ]
+  )
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      if (!enabled || !hasExternalFiles(e)) return
+      e.preventDefault()
+      setIsDragging(false)
+
+      const files = await readDataTransferFiles(e.dataTransfer)
+      await uploadFilesTo(files, parentId)
+    },
+    [enabled, parentId, uploadFilesTo]
   )
 
   return {
@@ -139,5 +170,7 @@ export function useExternalFileDrop({
     handleDragOver,
     handleDragLeave,
     handleDrop,
+    uploadFilesTo,
+    conflictDialog,
   }
 }

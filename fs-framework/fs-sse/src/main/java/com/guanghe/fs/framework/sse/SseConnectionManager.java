@@ -12,7 +12,7 @@ public interface SseConnectionManager {
     
     /**
      * 创建SSE连接
-     * 如果用户已有连接，将关闭旧连接并创建新连接
+     * 同一用户可并存多条连接（多标签页/多窗口），事件会广播到全部连接
      * 
      * @param userId 用户ID
      * @return SseEmitter实例
@@ -20,14 +20,14 @@ public interface SseConnectionManager {
     SseEmitter createConnection(String userId);
     
     /**
-     * 移除SSE连接
+     * 移除该用户的全部SSE连接
      * 
      * @param userId 用户ID
      */
     void removeConnection(String userId);
     
     /**
-     * 向指定用户推送事件
+     * 向指定用户的所有连接推送事件
      * 
      * @param userId 用户ID
      * @param eventType 事件类型

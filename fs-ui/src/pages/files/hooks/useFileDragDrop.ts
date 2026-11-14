@@ -1,25 +1,56 @@
-import { useState, useCallback } from 'react'
-import { hasExternalFiles } from '@/utils/data-transfer'
+import { useState, useCallback, useRef } from 'react'
+import {
+  hasExternalFiles,
+  readDataTransferFiles,
+} from '@/utils/data-transfer'
 import type { FileItem } from '@/types/file'
+
+export type DragMode = 'move' | 'copy' | 'upload'
 
 export interface DragDropState {
   isDragging: boolean
   draggedItems: FileItem[]
   dropTargetId: string | null
   dropTargetName: string | null
+  /** 内页拖拽按住 Ctrl/Cmd 时为复制 */
+  copyMode: boolean
+  /** 当前拖的是操作系统文件（拖到文件夹行=上传到该目录） */
+  external: boolean
+}
+
+interface UseFileDragDropOptions {
+  onMove: (fileIds: string[], targetDirId: string) => Promise<void>
+  /** Ctrl 拖拽复制；缺省时按住 Ctrl 也按移动处理 */
+  onCopy?: (fileIds: string[], targetDirId: string) => Promise<void>
+  /** 系统文件拖到文件夹行：上传到该文件夹而不是当前目录 */
+  onExternalFilesToFolder?: (
+    files: File[],
+    targetFolder: FileItem
+  ) => void | Promise<void>
+}
+
+const EMPTY_STATE: DragDropState = {
+  isDragging: false,
+  draggedItems: [],
+  dropTargetId: null,
+  dropTargetName: null,
+  copyMode: false,
+  external: false,
 }
 
 export function useFileDragDrop(
   selectedKeys: string[],
   fileList: FileItem[],
-  onMove: (fileIds: string[], targetDirId: string) => Promise<void>
+  { onMove, onCopy, onExternalFilesToFolder }: UseFileDragDropOptions
 ) {
-  const [dragState, setDragState] = useState<DragDropState>({
-    isDragging: false,
-    draggedItems: [],
-    dropTargetId: null,
-    dropTargetName: null,
-  })
+  const [dragState, setDragState] = useState<DragDropState>(EMPTY_STATE)
+  /** drop 事件的 ctrlKey 不可靠（部分浏览器为 false），dragover 时同步记录 */
+  const copyModeRef = useRef(false)
+
+  const resetDragState = useCallback(() => {
+    copyModeRef.current = false
+    setDragState(EMPTY_STATE)
+  }, [])
 
   /**
    * 开始拖拽
@@ -32,15 +63,18 @@ export function useFileDragDrop(
         ? fileList.filter((f) => selectedKeys.includes(f.id))
         : [file]
 
+      copyModeRef.current = e.ctrlKey || e.metaKey
       setDragState({
         isDragging: true,
         draggedItems,
         dropTargetId: null,
         dropTargetName: null,
+        copyMode: copyModeRef.current,
+        external: false,
       })
 
       // 设置拖拽数据
-      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.effectAllowed = 'copyMove'
       e.dataTransfer.setData(
         'application/json',
         JSON.stringify(draggedItems.map((f) => f.id))
@@ -199,21 +233,31 @@ export function useFileDragDrop(
    * 拖拽结束
    */
   const handleDragEnd = useCallback(() => {
-    setDragState({
-      isDragging: false,
-      draggedItems: [],
-      dropTargetId: null,
-      dropTargetName: null,
-    })
-  }, [])
+    resetDragState()
+  }, [resetDragState])
 
   /**
    * 拖拽进入目标
    */
   const handleDragEnter = useCallback(
     (e: React.DragEvent, targetFolder: FileItem) => {
-      // 系统文件拖入（上传）由容器级 handler 统一处理：不拦截事件让它冒泡，页内移动逻辑不掺和
-      if (hasExternalFiles(e)) return
+      // 系统文件：只有文件夹行接管（上传到该目录），其余行放行给容器级上传
+      if (hasExternalFiles(e)) {
+        if (!targetFolder.isDir) return
+        e.preventDefault()
+        e.stopPropagation()
+        setDragState((prev) =>
+          prev.external && prev.dropTargetId === targetFolder.id
+            ? prev
+            : {
+                ...prev,
+                dropTargetId: targetFolder.id,
+                dropTargetName: targetFolder.displayName,
+                external: true,
+              }
+        )
+        return
+      }
 
       e.preventDefault()
       e.stopPropagation()
@@ -239,7 +283,23 @@ export function useFileDragDrop(
    */
   const handleDragOver = useCallback(
     (e: React.DragEvent, targetFolder: FileItem) => {
-      if (hasExternalFiles(e)) return
+      if (hasExternalFiles(e)) {
+        if (!targetFolder.isDir) return
+        e.preventDefault()
+        e.stopPropagation()
+        e.dataTransfer.dropEffect = 'copy'
+        setDragState((prev) =>
+          prev.external && prev.dropTargetId === targetFolder.id
+            ? prev
+            : {
+                ...prev,
+                dropTargetId: targetFolder.id,
+                dropTargetName: targetFolder.displayName,
+                external: true,
+              }
+        )
+        return
+      }
 
       e.preventDefault()
       e.stopPropagation()
@@ -247,7 +307,13 @@ export function useFileDragDrop(
       // 只有文件夹才能作为拖放目标
       if (!targetFolder.isDir) return
 
-      e.dataTransfer.dropEffect = 'move'
+      // 拖动过程中按下/松开 Ctrl 会实时切换复制/移动，与资源管理器一致
+      const nextCopy = e.ctrlKey || e.metaKey
+      copyModeRef.current = nextCopy
+      e.dataTransfer.dropEffect = nextCopy ? 'copy' : 'move'
+      setDragState((prev) =>
+        prev.copyMode === nextCopy ? prev : { ...prev, copyMode: nextCopy }
+      )
     },
     []
   )
@@ -257,7 +323,9 @@ export function useFileDragDrop(
    */
   const handleDragLeave = useCallback(
     (e: React.DragEvent, targetFolder: FileItem) => {
-      if (hasExternalFiles(e)) return
+      if (hasExternalFiles(e)) {
+        if (!targetFolder.isDir) return
+      }
 
       e.preventDefault()
       e.stopPropagation()
@@ -273,13 +341,16 @@ export function useFileDragDrop(
         y < rect.top ||
         y >= rect.bottom
       ) {
-        setDragState((prev) => ({
-          ...prev,
-          dropTargetId:
-            prev.dropTargetId === targetFolder.id ? null : prev.dropTargetId,
-          dropTargetName:
-            prev.dropTargetId === targetFolder.id ? null : prev.dropTargetName,
-        }))
+        setDragState((prev) =>
+          prev.dropTargetId === targetFolder.id
+            ? {
+                ...prev,
+                dropTargetId: null,
+                dropTargetName: null,
+                external: false,
+              }
+            : prev
+        )
       }
     },
     []
@@ -290,7 +361,18 @@ export function useFileDragDrop(
    */
   const handleDrop = useCallback(
     async (e: React.DragEvent, targetFolder: FileItem) => {
-      if (hasExternalFiles(e)) return
+      // 系统文件拖到文件夹行：上传到该文件夹；非文件夹行交给容器级上传（当前目录）
+      if (hasExternalFiles(e)) {
+        if (!targetFolder.isDir) return
+        e.preventDefault()
+        e.stopPropagation()
+        const files = await readDataTransferFiles(e.dataTransfer)
+        resetDragState()
+        if (files.length > 0 && onExternalFilesToFolder) {
+          await onExternalFilesToFolder(files, targetFolder)
+        }
+        return
+      }
 
       e.preventDefault()
       e.stopPropagation()
@@ -307,20 +389,19 @@ export function useFileDragDrop(
         // 不能拖拽到自己身上
         if (fileIds.includes(targetFolder.id)) return
 
-        // 执行移动操作
-        await onMove(fileIds, targetFolder.id)
+        const isCopy = e.ctrlKey || e.metaKey || copyModeRef.current
+        if (isCopy && onCopy) {
+          await onCopy(fileIds, targetFolder.id)
+        } else {
+          await onMove(fileIds, targetFolder.id)
+        }
       } catch (error) {
-        console.error('拖拽移动失败:', error)
+        console.error('拖拽操作失败:', error)
       } finally {
-        setDragState({
-          isDragging: false,
-          draggedItems: [],
-          dropTargetId: null,
-          dropTargetName: null,
-        })
+        resetDragState()
       }
     },
-    [onMove]
+    [onMove, onCopy, onExternalFilesToFolder, resetDragState]
   )
 
   return {

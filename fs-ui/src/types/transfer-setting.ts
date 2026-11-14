@@ -41,13 +41,13 @@ export interface UpdateTransferSettingCmd {
   /** 下载速率限制 单位：MB/S（必填，-1表示不限制） */
   downloadSpeedLimit: number
 
-  /** 并发上传数量（必填，最大3） */
+  /** 并发上传数量（必填，最大5） */
   concurrentUploadQuantity: number
 
-  /** 并发下载数量（必填，最大3） */
+  /** 并发下载数量（必填，最大5） */
   concurrentDownloadQuantity: number
 
-  /** 分片大小（必填，单位：字节） */
+  /** 分片大小（必填，单位：字节，最大1GB） */
   chunkSize: number
 
   /** 任务添加后自动跳转传输页（可选；老客户端未传时后端保留原值） */

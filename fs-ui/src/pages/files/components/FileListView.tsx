@@ -48,7 +48,8 @@ import {
 } from '@/components/ui/table'
 import { FileIcon } from '@/components/file-icon'
 import { useAppearanceStore } from '@/store/appearance'
-import { useFileDragDrop } from '../hooks/useFileDragDrop'
+import { useFileClipboardStore } from '@/store/file-clipboard'
+import { useFileDragDrop, type DragMode } from '../hooks/useFileDragDrop'
 import { FileListScrollSentinel } from './FileListScrollSentinel'
 
 export function FileListRowActionIcon() {
@@ -124,13 +125,23 @@ interface FileListViewProps {
   onRename: (file: FileItem) => void
   onMove: (file: FileItem) => void
   onMoveFiles: (fileIds: string[], targetDirId: string) => Promise<void>
+  /** Ctrl+拖拽复制 */
+  onCopyFiles?: (fileIds: string[], targetDirId: string) => Promise<void>
+  /** 系统文件拖到文件夹行时上传到该文件夹 */
+  onExternalFilesToFolder?: (
+    files: File[],
+    folder: FileItem
+  ) => void | Promise<void>
+  /** 记录当前键盘导航位置（点击/右键时回调） */
+  onActiveIndexChange?: (index: number) => void
   onFavorite: (file: FileItem | FileItem[]) => void
   onPreview: (file: FileItem) => void
   onEdit?: (file: FileItem) => void
   onDetail: (file: FileItem) => void
   onDragStateChange?: (
     dropTargetName: string | null,
-    draggedCount: number
+    draggedCount: number,
+    mode: DragMode | null
   ) => void
   onBatchShare?: (files: FileItem[]) => void
   onBatchMove?: (files: FileItem[]) => void
@@ -159,6 +170,9 @@ export function FileListView({
   onRename,
   onMove,
   onMoveFiles,
+  onCopyFiles,
+  onExternalFilesToFolder,
+  onActiveIndexChange,
   onFavorite,
   onPreview,
   onEdit,
@@ -216,16 +230,36 @@ export function FileListView({
     handleDragOver,
     handleDragLeave,
     handleDrop,
-  } = useFileDragDrop(selectedKeys, fileList, onMoveFiles)
+  } = useFileDragDrop(selectedKeys, fileList, {
+    onMove: onMoveFiles,
+    onCopy: onCopyFiles,
+    onExternalFilesToFolder,
+  })
+
+  // 剪切中的行置灰，提示「粘贴后会从原位置移走」
+  const cutIds = useFileClipboardStore((state) => state.cutIds)
 
   // 通知父组件拖拽状态变化
   useEffect(() => {
     if (onDragStateChange) {
-      onDragStateChange(dragState.dropTargetName, dragState.draggedItems.length)
+      const mode: DragMode | null = dragState.dropTargetName
+        ? dragState.external
+          ? 'upload'
+          : dragState.copyMode
+            ? 'copy'
+            : 'move'
+        : null
+      onDragStateChange(
+        dragState.dropTargetName,
+        dragState.draggedItems.length,
+        mode
+      )
     }
   }, [
     dragState.dropTargetName,
     dragState.draggedItems.length,
+    dragState.copyMode,
+    dragState.external,
     onDragStateChange,
   ])
 
@@ -245,6 +279,7 @@ export function FileListView({
     event: React.MouseEvent,
     index: number
   ) => {
+    onActiveIndexChange?.(index)
     // 触屏多选模式：点一下就是选中/取消选中，选中态由行背景色表示
     if (selectMode) {
       toggleOne(file.id)
@@ -277,6 +312,7 @@ export function FileListView({
 
   // 右键未选中的行时先单选它（已选中的行保留当前多选），让高亮跟随操作对象
   const handleRowContextMenu = (file: FileItem, index: number) => {
+    onActiveIndexChange?.(index)
     if (!selectedKeys.includes(file.id)) {
       onSelectionChange([file.id])
       lastClickedIndexRef.current = index
@@ -369,6 +405,7 @@ export function FileListView({
         <TableBody>
           {fileList.map((file, index) => {
             const isSelected = selectedKeys.includes(file.id)
+            const isCut = cutIds.includes(file.id)
             const isDragging = dragState.draggedItems.some(
               (f) => f.id === file.id
             )
@@ -406,6 +443,7 @@ export function FileListView({
                         !isDropTarget &&
                         'bg-primary/[0.08] selected',
                       isDragging && 'cursor-move opacity-50',
+                      isCut && !isDragging && 'opacity-45',
                       isDropTarget && 'bg-primary/15 is-folder-drop-target'
                     )}
                     draggable={canWrite && !openMenuId}

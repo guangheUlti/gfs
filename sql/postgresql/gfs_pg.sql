@@ -139,6 +139,7 @@ CREATE TABLE "file_transfer_task" (
     "storage_platform_setting_id" varchar(255) DEFAULT NULL,
     "object_key" varchar(512) NOT NULL,
     "file_id" varchar(512) DEFAULT NULL,
+    "replace_file_id" varchar(512) DEFAULT NULL,
     "file_name" varchar(255) NOT NULL,
     "file_size" bigint NOT NULL,
     "file_md5" varchar(64) DEFAULT NULL,

@@ -23,6 +23,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { useUploadConflictPrompt } from '../hooks/useUploadConflictPrompt'
 
 interface UploadModalProps {
   open: boolean
@@ -79,6 +80,7 @@ export default function UploadModal({
   const folderInputRef = useRef<HTMLInputElement>(null)
 
   const { startUploadSession, createTasksWithDirectory } = useTransferStore()
+  const { resolveUploadConflicts, conflictDialog } = useUploadConflictPrompt()
 
   useEffect(() => {
     if (!open) {
@@ -128,12 +130,16 @@ export default function UploadModal({
       return
     }
 
+    // 同名冲突先问策略再建会话：用户取消时不该留下空的传输会话
+    const conflictDecision = await resolveUploadConflicts(parentId, fileList)
+    if (conflictDecision === null) return
+
     startUploadSession()
     // 建任务期间禁止自动返回：小文件可能在建后续任务时就把队列清空了
     beginTransferLaunch()
     try {
       // 混合输入安全：无相对路径的文件落到当前目录，带路径的按目录结构创建
-      await createTasksWithDirectory(fileList, parentId)
+      await createTasksWithDirectory(fileList, parentId, conflictDecision)
     } catch {
       // 大小/深度等超限由 transfer store 内部 toast 提示，弹窗保持打开
       return
@@ -249,6 +255,7 @@ export default function UploadModal({
           </Button>
         </DialogFooter>
       </DialogContent>
+      {conflictDialog}
     </Dialog>
   )
 }

@@ -8,16 +8,21 @@ import com.guanghe.fs.file.domain.dto.UploadChunkCmd;
 import com.guanghe.fs.file.domain.FileInfo;
 import com.guanghe.fs.file.domain.qry.DownloadChunkQry;
 import com.guanghe.fs.file.domain.qry.TransferFilesQry;
+import com.guanghe.fs.file.domain.qry.UploadConflictQry;
 import com.guanghe.fs.file.domain.vo.CheckUploadResultVO;
+import com.guanghe.fs.file.domain.vo.FileConflictVO;
 import com.guanghe.fs.file.domain.vo.FileDownloadVO;
 import com.guanghe.fs.file.domain.vo.FileTransferTaskVO;
 import com.guanghe.fs.file.domain.vo.FolderDownloadTaskVO;
 import com.guanghe.fs.file.domain.vo.InitDownloadResultVO;
 import com.guanghe.fs.file.domain.vo.InitUploadResultVO;
+import com.guanghe.fs.file.service.FileInfoService;
 import com.guanghe.fs.file.service.FileTransferTaskService;
 import com.guanghe.fs.file.serving.FileServingPipeline;
 import com.guanghe.fs.framework.common.domain.Result;
+import com.guanghe.fs.framework.common.exception.BusinessException;
 import com.guanghe.fs.framework.common.utils.FileUtils;
+import com.guanghe.fs.framework.common.utils.I18nUtils;
 import com.guanghe.fs.framework.sse.SseConnectionManager;
 import com.guanghe.fs.log.constant.OperationType;
 import com.guanghe.fs.log.service.SysOperationLogService;
@@ -61,9 +66,13 @@ import java.util.Set;
 public class FileTransferController {
 
     private final FileTransferTaskService fileTransferTaskService;
+    private final FileInfoService fileInfoService;
     private final SseConnectionManager sseConnectionManager;
     private final SysOperationLogService operationLogService;
     private final FileServingPipeline servingPipeline;
+
+    /** 一次性上传会把整块 body 读进堆算 MD5，与前端 upload-once 阈值保持一致 */
+    private static final long MAX_UPLOAD_ONCE_BYTES = 64L * 1024 * 1024;
 
     @GetMapping("/files")
     @Operation(summary = "获取传输列表", description = "获取传输列表")
@@ -94,6 +103,13 @@ public class FileTransferController {
         return Result.ok(result, "初始化成功");
     }
 
+    @PostMapping("/conflicts")
+    @Operation(summary = "检测上传同名冲突", description = "返回目标目录中已存在、与待上传文件/目录同名的条目，供前端弹窗选择替换或保留两者")
+    public Result<List<FileConflictVO>> checkUploadConflicts(@RequestBody @Validated UploadConflictQry qry) {
+        return Result.ok(fileInfoService.findUploadConflicts(
+                qry.getParentId(), qry.getFileNames(), qry.getDirNames()));
+    }
+
     @PostMapping("/upload-once")
     @Operation(summary = "一次性上传小文件", description = "不超过一个分片的文件：init + 校验 + 写入 + 合并合成一次请求，MD5 由服务端计算")
     public Result<CheckUploadResultVO> uploadOnce(
@@ -102,15 +118,22 @@ public class FileTransferController {
             @RequestParam("fileSize") Long fileSize,
             @RequestParam(value = "parentId", required = false) String parentId,
             @RequestParam(value = "chunkSize", required = false) Long chunkSize,
-            @RequestParam(value = "mimeType", required = false) String mimeType
+            @RequestParam(value = "mimeType", required = false) String mimeType,
+            @RequestParam(value = "conflictPolicy", required = false) String conflictPolicy
     ) throws Exception {
         InitUploadCmd cmd = new InitUploadCmd();
         cmd.setFileName(fileName);
         cmd.setFileSize(fileSize);
         cmd.setParentId(parentId);
         cmd.setTotalChunks(1);
-        cmd.setChunkSize(chunkSize != null && chunkSize > 0 ? chunkSize : Math.max(1, fileSize));
+        // chunkSize 缺省时不能退化成 1 字节：服务端要求分片大小在下限以上
+        cmd.setChunkSize(chunkSize != null && chunkSize > 0 ? chunkSize : Math.max(1024 * 1024L, fileSize));
         cmd.setMimeType(mimeType != null && !mimeType.isBlank() ? mimeType : "application/octet-stream");
+        cmd.setConflictPolicy(conflictPolicy);
+        // 该路径要整块读进内存算 MD5：先按 body 大小拒绝，别等 getBytes() 把堆打满
+        if (file.getSize() > MAX_UPLOAD_ONCE_BYTES) {
+            throw new BusinessException(I18nUtils.getMessage("task.upload.once.too.large"));
+        }
         CheckUploadResultVO result = fileTransferTaskService.uploadOnce(cmd, file.getBytes());
         return Result.ok(result, "上传完成");
     }
@@ -123,7 +146,7 @@ public class FileTransferController {
     }
 
     @PostMapping("/chunk")
-    @Operation(summary = "上传分片", description = "异步上传分片，立即返回，通过SSE推送进度")
+    @Operation(summary = "上传分片", description = "同步写入分片，落存储后返回，通过SSE推送进度")
     public Result<?> uploadChunk(
             @RequestParam("file") MultipartFile file,
             @RequestParam("taskId") String taskId,
@@ -134,9 +157,11 @@ public class FileTransferController {
         cmd.setTaskId(taskId);
         cmd.setChunkIndex(chunkIndex);
         cmd.setChunkMd5(chunkMd5);
-        byte[] fileBytes = file.getBytes();
-        fileTransferTaskService.uploadChunk(fileBytes, cmd);
-        return Result.ok(null, "分片接收成功，正在处理");
+        // 分片最大 1GB，不能整块 getBytes() 进堆：直接透传 multipart 流给存储层
+        try (InputStream inputStream = file.getInputStream()) {
+            fileTransferTaskService.uploadChunk(inputStream, file.getSize(), cmd);
+        }
+        return Result.ok(null, "分片写入成功");
     }
 
     @PostMapping("/pause/{taskId}")

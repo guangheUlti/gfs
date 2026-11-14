@@ -64,8 +64,14 @@ class SSEService {
   private connected = false
   private onReconnectSync: (() => Promise<void>) | null = null
   private reconnectAttempts = 0
+  private reconnectTimerId: number | null = null
+  private watchdogTimerId: number | null = null
+  private lastEventAt = 0
   private readonly MAX_RECONNECT_ATTEMPTS = 5
   private readonly RECONNECT_BASE_DELAY = 2000
+  // 服务端每 25s 发一次 ping，超过 45s 收不到任何事件就认为这条连接是僵尸连接
+  private readonly LIVENESS_TIMEOUT = 45_000
+  private readonly WATCHDOG_INTERVAL = 10_000
 
   private constructor(config: Partial<SSEServiceConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
@@ -79,13 +85,16 @@ class SSEService {
   }
 
   public connect(userId: string): void {
-    if (this.eventSource && this.currentUserId === userId) {
+    if (
+      this.eventSource &&
+      this.currentUserId === userId &&
+      this.eventSource.readyState !== EventSource.CLOSED
+    ) {
       return
     }
 
-    if (this.eventSource) {
-      this.disconnect()
-    }
+    // 已关闭的 EventSource 不会自己复活，必须换一个新的实例
+    this.closeSource()
 
     this.currentUserId = userId
 
@@ -103,6 +112,7 @@ class SSEService {
     try {
       this.eventSource = new EventSource(url)
       this.setupEventListeners()
+      this.startWatchdog()
     } catch (error) {
       console.error('SSE 连接失败:', error)
       this.setConnected(false)
@@ -110,12 +120,10 @@ class SSEService {
   }
 
   public disconnect(): void {
-    if (this.eventSource) {
-      this.eventSource.close()
-      this.eventSource = null
-      this.currentUserId = null
-      this.setConnected(false)
-    }
+    this.stopWatchdog()
+    this.clearReconnectTimer()
+    this.closeSource()
+    this.currentUserId = null
   }
 
   public isConnected(): boolean {
@@ -168,52 +176,116 @@ class SSEService {
   }
 
   private setupEventListeners(): void {
-    if (!this.eventSource) return
+    const source = this.eventSource
+    if (!source) return
 
-    this.eventSource.onopen = () => {
+    source.onopen = () => {
       this.reconnectAttempts = 0
+      this.markAlive()
       this.setConnected(true)
     }
 
-    this.eventSource.onerror = (error) => {
-      console.error('SSE 连接错误:', error)
+    source.onerror = () => {
+      // 任何错误都先按断开处理：CONNECTING 状态下浏览器会自己重试，
+      // 但页面不能继续以为连接还在，否则高频轮询会退化成 30s 兜底轮询
+      this.setConnected(false)
 
-      if (this.eventSource?.readyState === EventSource.CLOSED) {
-        this.setConnected(false)
-
-        if (this.reconnectAttempts < this.MAX_RECONNECT_ATTEMPTS) {
-          this.reconnectAttempts += 1
-          const delay = this.RECONNECT_BASE_DELAY * this.reconnectAttempts
-
-          setTimeout(() => {
-            if (this.currentUserId) {
-              this.connect(this.currentUserId)
-            }
-          }, delay)
-        }
+      if (source.readyState === EventSource.CLOSED) {
+        this.scheduleReconnect()
       }
     }
 
-    this.eventSource.addEventListener('progress', (event) => {
+    const markAlive = () => this.markAlive()
+    source.addEventListener('connected', markAlive)
+    source.addEventListener('ping', markAlive)
+
+    source.addEventListener('progress', (event) => {
+      this.markAlive()
       this.handleEvent('progress', event)
     })
 
-    this.eventSource.addEventListener('status', (event) => {
+    source.addEventListener('status', (event) => {
+      this.markAlive()
       this.handleEvent('status', event)
     })
 
-    this.eventSource.addEventListener('complete', (event) => {
+    source.addEventListener('complete', (event) => {
+      this.markAlive()
       this.handleEvent('complete', event)
     })
 
-    this.eventSource.addEventListener('error', (event) => {
+    source.addEventListener('error', (event) => {
       if (event instanceof MessageEvent) {
+        this.markAlive()
         this.handleEvent('error', event)
       }
     })
 
-    this.eventSource.onmessage = (event) => {
+    source.onmessage = (event) => {
+      this.markAlive()
       this.handleGenericMessage(event)
+    }
+  }
+
+  private markAlive(): void {
+    this.lastEventAt = Date.now()
+  }
+
+  private closeSource(): void {
+    if (this.eventSource) {
+      this.eventSource.close()
+      this.eventSource = null
+    }
+    this.setConnected(false)
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectTimerId !== null) return
+
+    this.reconnectAttempts += 1
+    // 快速重试若干次后退到 30s 一次，不彻底放弃：网络恢复后要能自己接回来
+    const delay =
+      this.reconnectAttempts <= this.MAX_RECONNECT_ATTEMPTS
+        ? this.RECONNECT_BASE_DELAY * this.reconnectAttempts
+        : 30_000
+
+    this.reconnectTimerId = window.setTimeout(() => {
+      this.reconnectTimerId = null
+      this.reconnectNow()
+    }, delay)
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimerId !== null) {
+      window.clearTimeout(this.reconnectTimerId)
+      this.reconnectTimerId = null
+    }
+  }
+
+  private reconnectNow(): void {
+    const userId = this.currentUserId
+    if (!userId) return
+
+    this.closeSource()
+    this.connect(userId)
+  }
+
+  private startWatchdog(): void {
+    if (this.watchdogTimerId !== null) return
+
+    this.watchdogTimerId = window.setInterval(() => {
+      if (!this.connected || this.eventSource === null) return
+      if (Date.now() - this.lastEventAt <= this.LIVENESS_TIMEOUT) return
+
+      console.warn('SSE 连接静默超时，强制重连')
+      this.reconnectNow()
+    }, this.WATCHDOG_INTERVAL)
+  }
+
+  private stopWatchdog(): void {
+    if (this.watchdogTimerId !== null) {
+      window.clearInterval(this.watchdogTimerId)
+      this.watchdogTimerId = null
     }
   }
 

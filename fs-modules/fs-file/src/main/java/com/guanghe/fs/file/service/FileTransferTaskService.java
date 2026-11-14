@@ -57,10 +57,11 @@ public interface FileTransferTaskService extends IService<FileTransferTask> {
     /**
      * 上传分片
      *
-     * @param fileBytes 分片文件字节数组
-     * @param cmd       上传分片命令
+     * @param inputStream 分片内容流（调用方负责关闭）
+     * @param chunkLength 分片实际字节数
+     * @param cmd         上传分片命令
      */
-    void uploadChunk(byte[] fileBytes, UploadChunkCmd cmd);
+    void uploadChunk(InputStream inputStream, long chunkLength, UploadChunkCmd cmd);
 
     /**
      * 暂停传输

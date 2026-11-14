@@ -5,6 +5,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import com.mybatisflex.core.query.QueryWrapper;
+import com.mybatisflex.core.update.UpdateChain;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.guanghe.fs.file.cache.TransferTaskCacheManager;
 import com.guanghe.fs.file.domain.FileInfo;
@@ -117,6 +118,15 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     private static final long FOLDER_DOWNLOAD_CANCEL_WAIT_SECONDS = 5L;
     private static final String FOLDER_DOWNLOAD_TASK_PREFIX = "gfs-folder-task-";
     private static final String FOLDER_DOWNLOAD_DIRECT_PREFIX = "gfs-folder-";
+    /** 分片大小上下限：下限防止用海量微型分片刷 Redis/合并；上限对齐 multipart 请求上限，且分片始终流式落盘 */
+    private static final long MIN_CHUNK_SIZE = 1024 * 1024L;
+    private static final long MAX_CHUNK_SIZE = 1024 * 1024 * 1024L;
+    /** 分片总数上限，避免客户端用小分片把单文件拆成海量任务元数据 */
+    private static final int MAX_TOTAL_CHUNKS = 20000;
+    /** 下载分片上限：客户端会把每个分片整块缓存在内存/OPFS，下载侧不能跟着上传档位放大 */
+    private static final long MAX_DOWNLOAD_CHUNK_SIZE = 64 * 1024 * 1024L;
+    /** 一次性上传上限：该路径会把整块文件读进内存算 MD5，不能随分片档位放大 */
+    private static final long MAX_ONCE_UPLOAD_SIZE = 64 * 1024 * 1024L;
     private final Map<String, FolderDownloadTask> folderDownloadTasks = new ConcurrentHashMap<>();
     private final Map<String, DeleteOnCloseInputStream> activeFolderDownloadStreams = new ConcurrentHashMap<>();
     private final Set<Path> activeFolderDownloadPaths = ConcurrentHashMap.newKeySet();
@@ -144,7 +154,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             if (vo.getStatus() == TransferTaskStatus.completed) {
                 Object completeEvent = cacheManager.getAndRemoveCompleteEvent(vo.getTaskId());
                 if (completeEvent != null) {
-                    log.info("检测到未推送的完成事件，通过轮询返回: taskId={}", vo.getTaskId());
+                    log.info("完成事件通过轮询下发（SSE 可能未送达）: taskId={}", vo.getTaskId());
                     vo.setCompleteEventData(completeEvent);
                 }
             }
@@ -264,18 +274,39 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     public InitUploadResultVO initUpload(InitUploadCmd cmd) {
         String userId = StpUtil.getLoginIdAsString();
         String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
+        validateUploadBounds(cmd);
         try {
             String taskId = IdUtil.fastSimpleUUID();
             String suffix = FileUtils.extName(cmd.getFileName());
             String tempFileName = IdUtil.fastSimpleUUID() + "." + suffix;
-            String displayName = fileInfoService.generateUniqueName(
-                    userId,
-                    cmd.getParentId(),
-                    cmd.getFileName(),
-                    false,
-                    null,
-                    storagePlatformSettingId
-            );
+            // 覆盖上传：命中同名文件就沿用原名并记住目标记录；同名目录仍要避让，
+            // 否则文件与目录同名会在列表/协议端产生歧义
+            boolean replaceRequested = StringUtils.isNotEmpty(cmd.getConflictPolicy())
+                    && "replace".equalsIgnoreCase(cmd.getConflictPolicy().trim());
+            String displayName;
+            String replaceFileId = null;
+            if (replaceRequested) {
+                FileInfo sameName = fileInfoService.findSameLevelEntry(
+                        userId, cmd.getParentId(), cmd.getFileName(), storagePlatformSettingId);
+                if (sameName != null && Boolean.TRUE.equals(sameName.getIsDir())) {
+                    displayName = fileInfoService.generateUniqueName(
+                            userId, cmd.getParentId(), cmd.getFileName(), false, null, storagePlatformSettingId);
+                } else {
+                    displayName = cmd.getFileName();
+                    if (sameName != null) {
+                        replaceFileId = sameName.getId();
+                    }
+                }
+            } else {
+                displayName = fileInfoService.generateUniqueName(
+                        userId,
+                        cmd.getParentId(),
+                        cmd.getFileName(),
+                        false,
+                        null,
+                        storagePlatformSettingId
+                );
+            }
             // 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地存储）：objectKey 即远端相对路径，不落 file_info
             boolean stateless = remoteMountService.isStatelessSetting(storagePlatformSettingId);
             boolean mount = !stateless && isMountStorage(storagePlatformSettingId);
@@ -313,6 +344,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             task.setUserId(userId);
             task.setParentId(cmd.getParentId());
             task.setFileName(displayName);
+            task.setReplaceFileId(replaceFileId);
             task.setFileSize(cmd.getFileSize());
             task.setSuffix(FileUtils.getSuffix(cmd.getFileName()));
             task.setMimeType(cmd.getMimeType());
@@ -344,6 +376,33 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     }
 
     /**
+     * 初始化参数边界：前端传的值不能直接当事实——
+     * 分片大小无上限会让单请求进堆过大，分片总数与文件大小脱钩则能无限刷任务元数据
+     */
+    private void validateUploadBounds(InitUploadCmd cmd) {
+        Long fileSize = cmd.getFileSize();
+        Long chunkSize = cmd.getChunkSize();
+        Integer totalChunks = cmd.getTotalChunks();
+        if (fileSize == null || fileSize < 0 || chunkSize == null || totalChunks == null) {
+            throw new BusinessException(I18nUtils.getMessage("task.upload.bounds.invalid"));
+        }
+        // 空文件走 totalChunks=0 的专用路径，不参与分片边界校验
+        if (fileSize == 0) {
+            if (totalChunks != 0) {
+                throw new BusinessException(I18nUtils.getMessage("task.upload.chunks.mismatch"));
+            }
+            return;
+        }
+        if (chunkSize < MIN_CHUNK_SIZE || chunkSize > MAX_CHUNK_SIZE) {
+            throw new BusinessException(I18nUtils.getMessage("task.upload.bounds.invalid"));
+        }
+        long expectedChunks = Math.ceilDiv(fileSize, chunkSize);
+        if (totalChunks != expectedChunks || totalChunks > MAX_TOTAL_CHUNKS) {
+            throw new BusinessException(I18nUtils.getMessage("task.upload.chunks.mismatch"));
+        }
+    }
+
+    /**
      * 一次性上传（init + check + 分片写入 + 合并）。
      * <p>
      * 适用于不超过一个分片的小文件：把原本 4 次往返压成 1 次，且 MD5 由服务端在内存里算，
@@ -351,6 +410,13 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
      */
     @Override
     public CheckUploadResultVO uploadOnce(InitUploadCmd cmd, byte[] bytes) {
+        // 声明大小与实际字节数必须一致，否则分片/合并的长度口径会被客户端单方面改写
+        if (bytes == null || cmd.getFileSize() == null || bytes.length != cmd.getFileSize()) {
+            throw new BusinessException(I18nUtils.getMessage("task.upload.chunks.mismatch"));
+        }
+        if (bytes.length > MAX_ONCE_UPLOAD_SIZE) {
+            throw new BusinessException(I18nUtils.getMessage("task.upload.once.too.large"));
+        }
         String taskId = initUpload(cmd).getTaskId();
         try {
             String fileMd5 = DigestUtil.md5Hex(bytes);
@@ -367,7 +433,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             chunkCmd.setTaskId(taskId);
             chunkCmd.setChunkIndex(0);
             chunkCmd.setChunkMd5(fileMd5);
-            doUploadChunk(bytes, chunkCmd);
+            doUploadChunk(new ByteArrayInputStream(bytes), bytes.length, chunkCmd);
 
             FileInfo merged = doMergeChunks(taskId);
             return CheckUploadResultVO.builder()
@@ -418,6 +484,8 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
 
             transferSseService.sendStatusEvent(userId, taskId,
                     TransferTaskStatus.checking.name(), I18nUtils.getMessage("task.checking"));
+            // 覆盖上传：秒传会新建一条记录而不是替换目标，必须真实写入后由合并/空文件路径替换
+            boolean replaceUpload = StringUtils.isNotEmpty(task.getReplaceFileId());
             if (isMountStorage(storagePlatformSettingId)) {
                 // 挂载式安全底线：跳过秒传查询——引用计数按 platform+objectKey 记账，
                 // 复用 uuid 对象会摧毁路径映射（8.4 定案设计，故意不简化）。
@@ -432,7 +500,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                 if (task.getFileSize() == null || task.getFileSize() == 0) {
                     return handleEmptyFileUpload(task, cmd.getFileMd5(), storagePlatformSettingId);
                 }
-            } else {
+            } else if (!replaceUpload) {
                 // 相同存储配置中的相同内容全局复用；回收站记录也属于有效引用。
                 try (FileObjectReferenceService.ReferenceLock ignored =
                              objectReferenceService.acquireContentLock(
@@ -455,6 +523,10 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                         return handleEmptyFileUpload(task, cmd.getFileMd5(), storagePlatformSettingId);
                     }
                 }
+            } else if (task.getFileSize() == null || task.getFileSize() == 0) {
+                // 覆盖上传的空文件：跳过秒传，写入空对象后替换目标记录
+                log.info("覆盖上传空文件，直写后替换目标记录: taskId={}", taskId);
+                return handleEmptyFileUpload(task, cmd.getFileMd5(), storagePlatformSettingId);
             }
             // 不是秒传，需要正常上传
             // 调用存储插件初始化分片上传
@@ -513,6 +585,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
         IStorageOperationService storageService = storageServiceFacade.getStorageService(storagePlatformSettingId);
         // 无状态远程：远端路径是唯一真相源，空文件也不落 file_info
         boolean stateless = remoteMountService.isStatelessSetting(storagePlatformSettingId);
+        FileInfo replaceTarget = resolveReplaceTarget(task);
         FileInfo[] completedFile = new FileInfo[1];
         try {
             mountManager.locks().callWithLock(storagePlatformSettingId, () -> {
@@ -521,6 +594,9 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                 if (stateless) {
                     completedFile[0] = remoteMountService.buildFile(storagePlatformSettingId,
                             task.getObjectKey(), task.getFileSize(), task.getUserId());
+                } else if (replaceTarget != null) {
+                    // 覆盖上传：沿用原记录（ID 不变），只把路径/大小/时间指向刚写入的空文件
+                    completedFile[0] = applyReplaceTarget(task, replaceTarget, task.getObjectKey(), null, now);
                 } else {
                     FileInfo fileInfo = new FileInfo();
                     fileInfo.setId(IdUtil.fastSimpleUUID());
@@ -572,9 +648,40 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
         String taskId = task.getTaskId();
 
         try {
+            final LocalDateTime now = LocalDateTime.now();
+            // 覆盖上传的空文件会走到这里：记录直接原地更新，不再新建一条同名记录
+            FileInfo replaceTarget = resolveReplaceTarget(task);
+            if (replaceTarget != null) {
+                FileInfo replaced = applyReplaceTarget(task, replaceTarget,
+                        existFile.getObjectKey(), fileMd5, now);
+                operationLogService.recordSuccessAs(
+                        task.getUserId(),
+                        resolveOperatorName(task.getUserId()),
+                        OperationType.UPLOAD,
+                        "上传文件（替换）",
+                        "FILE",
+                        replaced.getId(),
+                        replaced.getDisplayName(),
+                        "文件大小: " + FileUtils.formatFileSize(replaced.getSize())
+                );
+                task.setFileMd5(fileMd5);
+                task.setUploadedChunks(task.getTotalChunks());
+                task.setStatus(TransferTaskStatus.completed);
+                task.setCompleteTime(now);
+                this.updateById(task);
+                cacheManager.cleanTask(taskId);
+                transferSseService.sendCompleteEvent(task.getUserId(), taskId,
+                        replaced.getId(), replaced.getDisplayName(), replaced.getSize());
+                return CheckUploadResultVO.builder()
+                        .isQuickUpload(true)
+                        .taskId(taskId)
+                        .fileId(replaced.getId())
+                        .message(I18nUtils.getMessage("task.quick.upload.success"))
+                        .build();
+            }
+
             // 创建新的文件记录（引用相同的 objectKey）
             String fileId = IdUtil.fastSimpleUUID();
-            LocalDateTime now = LocalDateTime.now();
             String displayName = fileInfoService.generateUniqueName(
                     task.getUserId(),
                     task.getParentId(),
@@ -645,11 +752,12 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     /**
      * 上传分片
      *
-     * @param fileBytes 分片文件字节数组
-     * @param cmd       上传分片命令
+     * @param inputStream 分片内容流（调用方负责关闭）
+     * @param chunkLength 分片实际字节数
+     * @param cmd         上传分片命令
      */
     @Override
-    public void uploadChunk(byte[] fileBytes, UploadChunkCmd cmd) {
+    public void uploadChunk(InputStream inputStream, long chunkLength, UploadChunkCmd cmd) {
         String taskId = cmd.getTaskId();
         Integer chunkIndex = cmd.getChunkIndex();
         getAuthorizedTask(taskId);
@@ -659,7 +767,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
         // 同时服务端会积压成百上千个未写分片。写完再返回后，进度即真实落盘量，
         // 客户端的分片并发也自然成了服务端写入的限流阀。合并仍走异步（不阻塞分片响应）。
         try {
-            doUploadChunk(fileBytes, cmd);
+            doUploadChunk(inputStream, chunkLength, cmd);
 
             // 检查是否所有分片都已上传完成
             checkAndAutoMerge(taskId);
@@ -732,7 +840,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
     /**
      * 上传分片
      */
-    private void doUploadChunk(byte[] fileBytes, UploadChunkCmd cmd) throws IOException {
+    private void doUploadChunk(InputStream inputStream, long chunkLength, UploadChunkCmd cmd) throws IOException {
         String taskId = cmd.getTaskId();
         Integer chunkIndex = cmd.getChunkIndex();
         FileTransferTask task = getTaskFromCacheOrDB(taskId);
@@ -747,6 +855,17 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
         if (!TransferTaskStatus.uploading.equals(task.getStatus())) {
             throw new BusinessException(I18nUtils.getMessage("task.status.incorrect.expected", new Object[]{task.getStatus()}));
         }
+        // 分片序号与大小都要落在 init 时声明的范围内：序号越界会写出一个永远凑不齐的任务，
+        // 分片超大会绕过 multipart 上限把大块字节送进存储/合并
+        Integer totalChunks = task.getTotalChunks();
+        Long chunkSize = task.getChunkSize();
+        if (chunkIndex == null || chunkIndex < 0 || totalChunks == null || chunkIndex >= totalChunks) {
+            throw new BusinessException(I18nUtils.getMessage("task.chunk.index.invalid"));
+        }
+        if (chunkLength <= 0 || (chunkSize != null && chunkLength > chunkSize)
+                || chunkLength > MAX_CHUNK_SIZE) {
+            throw new BusinessException(I18nUtils.getMessage("task.chunk.size.invalid"));
+        }
         // 检查分片是否已存在（避免重复上传）
         if (cacheManager.isChunkTransferred(taskId, chunkIndex)) {
             log.info("分片已存在，跳过上传: taskId={}, chunkIndex={}", taskId, chunkIndex);
@@ -756,17 +875,15 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
         IStorageOperationService storageService =
                 storageServiceFacade.getStorageService(task.getStoragePlatformSettingId());
 
-        String eTag;
-        try (ByteArrayInputStream bis = new ByteArrayInputStream(fileBytes)) {
-            eTag = storageService.uploadPart(
-                    task.getObjectKey(),
-                    task.getUploadId(),
-                    chunkIndex,
-                    fileBytes.length,
-                    bis);
-        }
+        // 直接透传请求流给存储插件：1GB 档分片不再整块进堆，堆占用只剩插件自身的拷贝缓冲
+        String eTag = storageService.uploadPart(
+                task.getObjectKey(),
+                task.getUploadId(),
+                chunkIndex,
+                chunkLength,
+                inputStream);
         cacheManager.addTransferredChunk(taskId, chunkIndex, eTag);
-        cacheManager.recordTransferredBytes(taskId, fileBytes.length);
+        cacheManager.recordTransferredBytes(taskId, chunkLength);
 
         // 推送进度事件
         Integer uploadedChunks = cacheManager.getTransferredChunks(taskId);
@@ -1031,17 +1148,25 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             final LocalDateTime completeTime = LocalDateTime.now();
             final String uploadedObjectKey = task.getObjectKey();
             final FileTransferTask mergedTask = task;
+            final FileInfo replaceTarget = resolveReplaceTarget(task);
             FileInfo fileInfo;
 
             if (remoteMountService.isStatelessSetting(task.getStoragePlatformSettingId())) {
-                // 无状态远程：合并产物就是远端路径上的文件，直接构造虚拟文件记录，不落库
+                // 无状态远程：合并产物就是远端路径上的文件，直接构造虚拟文件记录，不落库。
+                // 覆盖上传时 init 已沿用原名/原路径，写入即覆盖，没有额外记录需要维护。
                 fileInfo = remoteMountService.buildFile(task.getStoragePlatformSettingId(),
                         uploadedObjectKey, task.getFileSize(), task.getUserId());
             } else if (isMountStorage(task.getStoragePlatformSettingId())) {
                 // 挂载式安全底线：跳过合并后二次去重（引用计数按 platform+objectKey 记账，
                 // 复用 uuid 对象会摧毁路径映射）。合并写真实文件与 file_info 落库都在 MountLocks 内，
                 // 与扫描器串行化（8.4-②）。
+                final FileInfo mountReplaceTarget = replaceTarget;
                 fileInfo = mountManager.locks().callWithLock(task.getStoragePlatformSettingId(), () -> {
+                    if (mountReplaceTarget != null) {
+                        // 覆盖上传：挂载记录的 objectKey 与本次写入路径一致，旧物理文件已被原地覆盖，
+                        // 只需把原记录指向新的大小/时间，ID 与分享、收藏等引用保持不变。
+                        return applyReplaceTarget(mergedTask, mountReplaceTarget, uploadedObjectKey, null, completeTime);
+                    }
                     FileInfo fi = buildUploadedFileInfo(mergedTask, uploadedObjectKey, completeTime);
                     // 挂载记录不参与秒传引用，md5 置空
                     fi.setContentMd5(null);
@@ -1050,8 +1175,17 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                 });
             } else if (storageService.isEncryptionEnabled()) {
                 // 落盘加密存储：合并产物已是密文，跳过并发去重复用，直接登记本次上传的对象
-                fileInfo = buildUploadedFileInfo(task, uploadedObjectKey, completeTime);
-                fileInfoService.save(fileInfo);
+                if (replaceTarget != null) {
+                    fileInfo = applyReplaceTarget(task, replaceTarget, uploadedObjectKey,
+                            task.getFileMd5(), completeTime);
+                } else {
+                    fileInfo = buildUploadedFileInfo(task, uploadedObjectKey, completeTime);
+                    fileInfoService.save(fileInfo);
+                }
+            } else if (replaceTarget != null) {
+                // 覆盖上传不做合并后去重：目标记录已确定，复用别的对象会留下无人引用的新上传对象
+                fileInfo = applyReplaceTarget(task, replaceTarget, uploadedObjectKey,
+                        task.getFileMd5(), completeTime);
             } else {
             // 合并完成后再次去重，解决多个相同文件并发上传时都未命中秒传的问题。
             try (FileObjectReferenceService.ReferenceLock ignored =
@@ -1096,7 +1230,7 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
                     task.getUserId(),
                     resolveOperatorName(task.getUserId()),
                     OperationType.UPLOAD,
-                    "上传文件",
+                    replaceTarget != null ? "上传文件（替换）" : "上传文件",
                     "FILE",
                     fileInfo.getId(),
                     fileInfo.getDisplayName(),
@@ -1145,6 +1279,76 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
         fileInfo.setUpdateTime(completeTime);
         fileInfo.setIsDeleted(false);
         return fileInfo;
+    }
+
+    /**
+     * 取出本次上传要覆盖的文件记录；目标已失效（被删、改成目录、换了位置/存储）时退回普通上传。
+     * 覆盖是「同名且同目录」语义，任何一项不再成立都不该悄悄覆盖别的文件。
+     */
+    private FileInfo resolveReplaceTarget(FileTransferTask task) {
+        if (StringUtils.isEmpty(task.getReplaceFileId())) {
+            return null;
+        }
+        FileInfo target = fileInfoService.getById(task.getReplaceFileId());
+        if (target == null
+                || Boolean.TRUE.equals(target.getIsDeleted())
+                || Boolean.TRUE.equals(target.getIsDir())
+                || !Objects.equals(target.getUserId(), task.getUserId())
+                || !Objects.equals(target.getParentId(), task.getParentId())
+                || !Objects.equals(target.getStoragePlatformSettingId(), task.getStoragePlatformSettingId())
+                || !Objects.equals(target.getDisplayName(), task.getFileName())) {
+            log.warn("覆盖上传目标已失效，按普通上传处理: taskId={}, replaceFileId={}",
+                    task.getTaskId(), task.getReplaceFileId());
+            return null;
+        }
+        return target;
+    }
+
+    /**
+     * 把合并产物原地写入已有文件记录：文件ID、分享、收藏、最近访问等引用全部保持不变。
+     * 旧物理对象只在没有其他记录引用时才清理（可能是别人的秒传引用）。
+     */
+    private FileInfo applyReplaceTarget(FileTransferTask task, FileInfo target, String objectKey,
+                                        String fileMd5, LocalDateTime completeTime) {
+        String oldObjectKey = target.getObjectKey();
+        Long oldSize = target.getSize();
+        String oldMd5 = target.getContentMd5();
+
+        UpdateChain.of(FileInfo.class)
+                .set(FileInfo::getObjectKey, objectKey)
+                .set(FileInfo::getSize, task.getFileSize())
+                .set(FileInfo::getContentMd5, fileMd5)
+                .set(FileInfo::getOriginalName, task.getFileName())
+                .set(FileInfo::getMimeType, task.getMimeType())
+                .set(FileInfo::getSuffix, task.getSuffix())
+                .set(FileInfo::getUploadTime, completeTime)
+                .set(FileInfo::getUpdateTime, completeTime)
+                .where(FILE_INFO.ID.eq(target.getId()))
+                .update();
+
+        target.setObjectKey(objectKey);
+        target.setSize(task.getFileSize());
+        target.setContentMd5(fileMd5);
+        target.setOriginalName(task.getFileName());
+        target.setMimeType(task.getMimeType());
+        target.setSuffix(task.getSuffix());
+        target.setUploadTime(completeTime);
+        target.setUpdateTime(completeTime);
+
+        if (StringUtils.isNotEmpty(oldObjectKey) && !Objects.equals(oldObjectKey, objectKey)) {
+            FileInfo oldRef = new FileInfo();
+            oldRef.setObjectKey(oldObjectKey);
+            oldRef.setSize(oldSize);
+            oldRef.setContentMd5(oldMd5);
+            oldRef.setStoragePlatformSettingId(target.getStoragePlatformSettingId());
+            try {
+                objectReferenceService.deletePhysicalFileIfUnreferencedWithLock(oldRef);
+            } catch (Exception e) {
+                // 新记录已指向新对象，旧对象清理失败只会留下孤立文件，不影响业务
+                log.warn("清理被替换文件的旧物理对象失败: objectKey={}", oldObjectKey, e);
+            }
+        }
+        return target;
     }
 
     /**
@@ -2443,6 +2647,12 @@ public class FileTransferTaskServiceImpl extends ServiceImpl<FileTransferTaskMap
             Long chunkSize = cmd.getChunkSize();
             if (chunkSize == null || chunkSize <= 0) {
                 chunkSize = userTransferSettingService.getChunkSize(userId);
+            }
+            // 上传档位可以到 1GB，但下载端每个分片要整块驻留内存/OPFS，这里回退到安全上限
+            if (chunkSize > MAX_DOWNLOAD_CHUNK_SIZE) {
+                log.info("下载分片大小超过安全上限，回退: fileId={}, requested={}, applied={}",
+                        fileInfo.getId(), chunkSize, MAX_DOWNLOAD_CHUNK_SIZE);
+                chunkSize = MAX_DOWNLOAD_CHUNK_SIZE;
             }
 
             int totalChunks = calculateTotalChunks(fileInfo.getSize(), chunkSize);

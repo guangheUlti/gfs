@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { FileItem } from '@/types/file'
 import { toast } from 'sonner'
 import {
+  copyFiles,
   deleteFiles,
   permanentlyDeleteFiles,
   renameFile,
@@ -11,12 +12,14 @@ import {
   createTextFile,
   favoriteFile,
   unfavoriteFile,
+  restoreFiles,
 } from '@/api/file'
 import { createDirectLink } from '@/api/share'
 import { copyToClipboard } from '@/utils/clipboard'
 import { usePreviewStore } from '@/store/preview'
 import { useTransferStore } from '@/store/transfer'
 import { useFeatureStore } from '@/store/feature'
+import type { RecordUndo } from './useFileUndo'
 
 /** 无状态远程（SFTP/SMB/FTP/WebDAV/内存/本地存储）虚拟 ID：vfs:<settingId>:...，不落库 */
 const isVirtualFileId = (id: string) => id.startsWith('vfs:')
@@ -26,9 +29,89 @@ export function useFileOperations(
   clearSelectionCallback?: () => void,
   onCreateFolderSuccess?: () => void,
   updateFileItemsCallback?: (ids: string[], patch: Partial<FileItem>) => void,
-  removeFileItemsCallback?: (ids: string[]) => void
+  removeFileItemsCallback?: (ids: string[]) => void,
+  extras?: {
+    /** 按 ID 查当前列表中的文件（撤销移动需要原始父目录） */
+    getFileById?: (id: string) => FileItem | undefined
+    recordUndo?: RecordUndo
+  }
 ) {
   const { t } = useTranslation('files')
+  const { getFileById, recordUndo } = extras ?? {}
+
+  /** 撤销「删除/新建」时移除对应条目：虚拟 ID 无回收站，其余按开关走回收站 */
+  const deleteForUndo = useCallback(
+    async (fileIds: string[]) => {
+      if (fileIds.length === 0) return
+      const recycle =
+        !!useFeatureStore.getState().toggles.recycleBin &&
+        !fileIds.some((id) => isVirtualFileId(id))
+      if (recycle) {
+        await deleteFiles(fileIds)
+      } else {
+        await permanentlyDeleteFiles(fileIds)
+      }
+    },
+    []
+  )
+
+  /** 记录移动的撤销：按原始父目录分组移回；目标与原始目录相同的项不参与 */
+  const recordMoveUndo = useCallback(
+    (moved: { id: string; parentId: string | null }[], targetDirId: string) => {
+      if (!recordUndo) return
+      const groups = new Map<string, string[]>()
+      for (const item of moved) {
+        if ((item.parentId ?? null) === (targetDirId || null)) continue
+        const key = item.parentId ?? ''
+        const ids = groups.get(key) ?? []
+        ids.push(item.id)
+        groups.set(key, ids)
+      }
+      if (groups.size === 0) return
+      const movedIds = moved.map((item) => item.id)
+      recordUndo({
+        label: t('undo.labelMove'),
+        undo: async () => {
+          for (const [dirId, ids] of groups) {
+            await moveFiles(dirId, ids)
+          }
+          refreshCallback()
+        },
+        redo: async () => {
+          await moveFiles(targetDirId, movedIds)
+          refreshCallback()
+        },
+      })
+    },
+    [recordUndo, refreshCallback, t]
+  )
+
+  /** 复制文件/文件夹到目标目录（粘贴、Ctrl+拖拽共用），可撤销 */
+  const handleCopy = useCallback(
+    async (fileIds: string[], targetDirId: string) => {
+      try {
+        let copyIds = await copyFiles(targetDirId || undefined, fileIds)
+        toast.success(t('operations.copyOk'))
+        if (recordUndo) {
+          recordUndo({
+            label: t('undo.labelCopy'),
+            undo: async () => {
+              await deleteForUndo(copyIds)
+              refreshCallback()
+            },
+            redo: async () => {
+              copyIds = await copyFiles(targetDirId || undefined, fileIds)
+              refreshCallback()
+            },
+          })
+        }
+        refreshCallback()
+      } catch (error) {
+        // 请求拦截器已提示服务端错误；无状态远程不支持复制时同样走这里
+      }
+    },
+    [recordUndo, deleteForUndo, refreshCallback, t]
+  )
   // 模态框状态
   const [createFolderModalVisible, setCreateFolderModalVisible] =
     useState(false)
@@ -73,17 +156,34 @@ export function useFileOperations(
    */
   const handleCreateFolder = useCallback(
     async (folderName: string, parentId?: string) => {
+      const name = folderName.trim()
       try {
-        await createFolder({ folderName: folderName.trim(), parentId })
+        const created = await createFolder({ folderName: name, parentId })
         toast.success(t('operations.mkdirOk'))
         setCreateFolderModalVisible(false)
         onCreateFolderSuccess?.()
         refreshCallback()
+        if (recordUndo) {
+          // 重做会生成新 ID，闭包里的 currentId 随之更新，后续撤销仍指向最新那次新建
+          let currentId = created.id
+          recordUndo({
+            label: t('undo.labelCreateFolder'),
+            undo: async () => {
+              await deleteForUndo([currentId])
+              refreshCallback()
+            },
+            redo: async () => {
+              const again = await createFolder({ folderName: name, parentId })
+              currentId = again.id
+              refreshCallback()
+            },
+          })
+        }
       } catch (error) {
         toast.error(t('operations.mkdirFail'))
       }
     },
-    [refreshCallback, onCreateFolderSuccess, t]
+    [refreshCallback, onCreateFolderSuccess, recordUndo, deleteForUndo, t]
   )
 
   /**
@@ -100,16 +200,44 @@ export function useFileOperations(
   const handleCreateText = useCallback(
     async (fileName: string, parentId?: string) => {
       try {
-        await createTextFile({ fileName, suffix: createTextSuffix, parentId })
+        let currentId = await createTextFile({
+          fileName,
+          suffix: createTextSuffix,
+          parentId,
+        })
         toast.success(t('operations.createTextOk'))
         setCreateTextModalVisible(false)
         onCreateFolderSuccess?.()
         refreshCallback()
+        if (recordUndo) {
+          recordUndo({
+            label: t('undo.labelCreateText'),
+            undo: async () => {
+              await deleteForUndo([currentId])
+              refreshCallback()
+            },
+            redo: async () => {
+              currentId = await createTextFile({
+                fileName,
+                suffix: createTextSuffix,
+                parentId,
+              })
+              refreshCallback()
+            },
+          })
+        }
       } catch (error) {
         toast.error(t('operations.createTextFail'))
       }
     },
-    [refreshCallback, onCreateFolderSuccess, t, createTextSuffix]
+    [
+      refreshCallback,
+      onCreateFolderSuccess,
+      recordUndo,
+      deleteForUndo,
+      t,
+      createTextSuffix,
+    ]
   )
 
   /**
@@ -132,18 +260,33 @@ export function useFileOperations(
    */
   const handleRename = useCallback(
     async (fileId: string, newName: string) => {
+      const name = newName.trim()
+      const oldName = renamingFile?.displayName
       try {
-        await renameFile(fileId, newName.trim())
+        await renameFile(fileId, name)
         toast.success(t('operations.renameOk'))
         setRenameModalVisible(false)
         setRenamingFile(null)
         clearSelectionCallback?.()
         refreshCallback()
+        if (recordUndo && oldName && oldName !== name) {
+          recordUndo({
+            label: t('undo.labelRename'),
+            undo: async () => {
+              await renameFile(fileId, oldName)
+              refreshCallback()
+            },
+            redo: async () => {
+              await renameFile(fileId, name)
+              refreshCallback()
+            },
+          })
+        }
       } catch (error) {
         toast.error(t('operations.renameFail'))
       }
     },
-    [refreshCallback, clearSelectionCallback, t]
+    [refreshCallback, clearSelectionCallback, recordUndo, renamingFile, t]
   )
 
   /**
@@ -169,6 +312,12 @@ export function useFileOperations(
    */
   const handleMove = useCallback(
     async (fileIds: string[], targetDirId: string) => {
+      // 撤销移动需要原始父目录，必须在移动前记录（搜索视图下同一批可能来自不同目录）
+      const sources = fileIds.map((id) => {
+        const file =
+          getFileById?.(id) ?? movingFiles.find((item) => item.id === id)
+        return file ? { id, parentId: file.parentId ?? null } : null
+      })
       try {
         await moveFiles(targetDirId, fileIds)
         toast.success(t('operations.moveOk'))
@@ -177,11 +326,24 @@ export function useFileOperations(
         setMovingFiles([])
         clearSelectionCallback?.()
         refreshCallback()
+        if (sources.every((item) => item !== null)) {
+          recordMoveUndo(
+            sources as { id: string; parentId: string | null }[],
+            targetDirId
+          )
+        }
       } catch (error) {
         toast.error(t('operations.moveFail'))
       }
     },
-    [refreshCallback, clearSelectionCallback, t]
+    [
+      refreshCallback,
+      clearSelectionCallback,
+      getFileById,
+      movingFiles,
+      recordMoveUndo,
+      t,
+    ]
   )
 
   /**
@@ -254,6 +416,19 @@ export function useFileOperations(
           ? t('operations.deleteForeverOne')
           : t('operations.deleteForeverMany', { count: fileIds.length })
       toast.success(successMsg)
+      if (recycleEnabled && recordUndo) {
+        recordUndo({
+          label: t('undo.labelDelete'),
+          undo: async () => {
+            await restoreFiles(fileIds)
+            refreshCallback()
+          },
+          redo: async () => {
+            await deleteFiles(fileIds)
+            refreshCallback()
+          },
+        })
+      }
       setDeleteDialogVisible(false)
       setDeletingFiles([])
       clearSelectionCallback?.()
@@ -277,6 +452,7 @@ export function useFileOperations(
     refreshCallback,
     clearSelectionCallback,
     removeFileItemsCallback,
+    recordUndo,
     t,
     isRecycleEnabled,
   ])
@@ -458,6 +634,7 @@ export function useFileOperations(
     openMoveModal,
     openBatchMoveModal,
     handleMove,
+    handleCopy,
     openShareModal,
     openBatchShareModal,
     copyDirectLink,

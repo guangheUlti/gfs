@@ -60,6 +60,11 @@ public class FileTransferTask extends BaseEntity {
      */
     private String fileId;
     /**
+     * 覆盖上传时被替换的文件ID（普通上传为空）。
+     * 合并完成后直接更新这条记录，保持文件ID/分享/收藏等引用不变。
+     */
+    private String replaceFileId;
+    /**
      * 文件名
      */
     private String fileName;

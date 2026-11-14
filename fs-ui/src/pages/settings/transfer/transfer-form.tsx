@@ -35,6 +35,22 @@ type TransferFormValues = {
   autoNavigateTransfer: boolean
 }
 
+const MB = 1024 * 1024
+const CONCURRENCY_OPTIONS = [1, 2, 3, 4, 5]
+/** 分片档位：1GB 档只减少上传请求数，下载侧服务端会回退到安全上限 */
+const CHUNK_SIZE_OPTIONS = [5 * MB, 20 * MB, 100 * MB, 1024 * MB]
+
+function formatChunkSize(size: number): string {
+  return size >= 1024 * MB ? `${size / (1024 * MB)} GB` : `${size / MB} MB`
+}
+
+/** 已下线的旧档位（2MB/10MB）映射到 5MB，避免下拉框显示空值 */
+function normalizeChunkSize(value?: number): number {
+  return value && CHUNK_SIZE_OPTIONS.includes(value)
+    ? value
+    : CHUNK_SIZE_OPTIONS[0]
+}
+
 export function TransferForm() {
   const { t } = useTranslation('settings')
   const transferFormSchema = useMemo(
@@ -42,8 +58,8 @@ export function TransferForm() {
       z.object({
         enableDownloadSpeedLimit: z.boolean(),
         downloadSpeedLimit: z.number().min(1).max(200).optional(),
-        concurrentUploadQuantity: z.number().min(1).max(3),
-        concurrentDownloadQuantity: z.number().min(1).max(3),
+        concurrentUploadQuantity: z.number().min(1).max(5),
+        concurrentDownloadQuantity: z.number().min(1).max(5),
         chunkSize: z.number(),
         autoNavigateTransfer: z.boolean(),
       }),
@@ -80,6 +96,7 @@ export function TransferForm() {
     settingsReadyRef.current = false
     try {
       const settings = await userApi.getTransferSetting()
+      const chunkSize = normalizeChunkSize(settings.chunkSize)
 
       form.reset({
         enableDownloadSpeedLimit: settings.downloadSpeedLimit > 0,
@@ -87,10 +104,24 @@ export function TransferForm() {
           settings.downloadSpeedLimit > 0 ? settings.downloadSpeedLimit : 5,
         concurrentUploadQuantity: settings.concurrentUploadQuantity || 1,
         concurrentDownloadQuantity: settings.concurrentDownloadQuantity || 1,
-        chunkSize: settings.chunkSize || 5 * 1024 * 1024,
+        chunkSize,
         autoNavigateTransfer: settings.autoNavigateTransfer !== false,
       })
       settingsReadyRef.current = true
+
+      // 旧档位已下线：静默改成 5MB，保证界面显示与实际生效值一致
+      if (settings.chunkSize !== chunkSize) {
+        void userApi
+          .updateTransferSetting({
+            downloadSpeedLimit: settings.downloadSpeedLimit,
+            concurrentUploadQuantity: settings.concurrentUploadQuantity || 1,
+            concurrentDownloadQuantity: settings.concurrentDownloadQuantity || 1,
+            chunkSize,
+            autoNavigateTransfer: settings.autoNavigateTransfer !== false,
+          })
+          .then(() => loadTransferSetting())
+          .catch(() => undefined)
+      }
     } catch {
       toast.error(t('transfer.loadFailed'))
     } finally {
@@ -282,7 +313,7 @@ export function TransferForm() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {[1, 2, 3].map((num) => (
+                      {CONCURRENCY_OPTIONS.map((num) => (
                         <SelectItem key={num} value={String(num)}>
                           {t('transfer.unitCount', { count: num })}
                         </SelectItem>
@@ -317,7 +348,7 @@ export function TransferForm() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {[1, 2, 3].map((num) => (
+                      {CONCURRENCY_OPTIONS.map((num) => (
                         <SelectItem key={num} value={String(num)}>
                           {t('transfer.unitCount', { count: num })}
                         </SelectItem>
@@ -352,11 +383,11 @@ export function TransferForm() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value={String(2 * 1024 * 1024)}>2 MB</SelectItem>
-                      <SelectItem value={String(5 * 1024 * 1024)}>5 MB</SelectItem>
-                      <SelectItem value={String(10 * 1024 * 1024)}>
-                        10 MB
-                      </SelectItem>
+                      {CHUNK_SIZE_OPTIONS.map((size) => (
+                        <SelectItem key={size} value={String(size)}>
+                          {formatChunkSize(size)}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </SettingsRow>

@@ -38,7 +38,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { FileIcon } from '@/components/file-icon'
 import { useAppearanceStore } from '@/store/appearance'
-import { useFileDragDrop } from '../hooks/useFileDragDrop'
+import { useFileClipboardStore } from '@/store/file-clipboard'
+import { useFileDragDrop, type DragMode } from '../hooks/useFileDragDrop'
 import { FileListScrollSentinel } from './FileListScrollSentinel'
 
 interface FileGridViewProps {
@@ -54,13 +55,23 @@ interface FileGridViewProps {
   onRename: (file: FileItem) => void
   onMove: (file: FileItem) => void
   onMoveFiles: (fileIds: string[], targetDirId: string) => Promise<void>
+  /** Ctrl+拖拽复制 */
+  onCopyFiles?: (fileIds: string[], targetDirId: string) => Promise<void>
+  /** 系统文件拖到文件夹卡片时上传到该文件夹 */
+  onExternalFilesToFolder?: (
+    files: File[],
+    folder: FileItem
+  ) => void | Promise<void>
+  /** 记录当前键盘导航位置（点击/右键时回调） */
+  onActiveIndexChange?: (index: number) => void
   onFavorite: (file: FileItem | FileItem[]) => void
   onPreview: (file: FileItem) => void
   onEdit?: (file: FileItem) => void
   onDetail: (file: FileItem) => void
   onDragStateChange?: (
     dropTargetName: string | null,
-    draggedCount: number
+    draggedCount: number,
+    mode: DragMode | null
   ) => void
   onBatchShare?: (files: FileItem[]) => void
   onBatchMove?: (files: FileItem[]) => void
@@ -86,6 +97,9 @@ export function FileGridView({
   onRename,
   onMove,
   onMoveFiles,
+  onCopyFiles,
+  onExternalFilesToFolder,
+  onActiveIndexChange,
   onFavorite,
   onPreview,
   onEdit,
@@ -131,16 +145,39 @@ export function FileGridView({
     handleDragOver,
     handleDragLeave,
     handleDrop,
-  } = useFileDragDrop(selectedKeys, fileList, onMoveFiles)
+  } = useFileDragDrop(selectedKeys, fileList, {
+    onMove: onMoveFiles,
+    onCopy: onCopyFiles,
+    onExternalFilesToFolder,
+  })
+
+  // 剪切中的卡片置灰，提示「粘贴后会从原位置移走」
+  const cutIds = useFileClipboardStore((state) => state.cutIds)
 
   // 通知父组件拖拽状态变化
   useEffect(() => {
     if (onDragStateChange) {
-      onDragStateChange(dragState.dropTargetName, dragState.draggedItems.length)
+      const mode: DragMode | null = dragState.dropTargetName
+        ? dragState.external
+          ? 'upload'
+          : dragState.copyMode
+            ? 'copy'
+            : 'move'
+        : null
+      onDragStateChange(
+        dragState.dropTargetName,
+        dragState.draggedItems.length,
+        mode
+      )
     }
     // onDragStateChange 是父组件传入的稳定引用，不加入依赖以避免无效重跑
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dragState.dropTargetName, dragState.draggedItems.length])
+  }, [
+    dragState.dropTargetName,
+    dragState.draggedItems.length,
+    dragState.copyMode,
+    dragState.external,
+  ])
 
   /** 上一次普通点击的卡片序号，Shift 范围选以它为起点 */
   const lastClickedIndexRef = useRef<number | null>(null)
@@ -158,6 +195,7 @@ export function FileGridView({
     event: React.MouseEvent,
     index: number
   ) => {
+    onActiveIndexChange?.(index)
     // 触屏多选模式：点一下就是选中/取消选中，选中态由卡片背景色表达
     if (selectMode) {
       toggleOne(file.id)
@@ -190,6 +228,7 @@ export function FileGridView({
 
   // 右键未选中的卡片时先单选它（已选中的保留当前多选），让高亮跟随操作对象
   const handleItemContextMenu = (file: FileItem, index: number) => {
+    onActiveIndexChange?.(index)
     if (!selectedSet.has(file.id)) {
       onSelectionChange([file.id])
       lastClickedIndexRef.current = index
@@ -215,6 +254,7 @@ export function FileGridView({
         <div className='grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-4'>
         {fileList.map((file, index) => {
           const isSelected = selectedSet.has(file.id)
+          const isCut = cutIds.includes(file.id)
           const isDragging = dragState.draggedItems.some(
             (f) => f.id === file.id
           )
@@ -245,6 +285,7 @@ export function FileGridView({
                     'hover:bg-accent',
                     isSelected && 'bg-primary/10 selected',
                     isDragging && 'cursor-move opacity-50',
+                    isCut && !isDragging && 'opacity-45',
                     isDropTarget && 'bg-primary/15 is-folder-drop-target'
                   )}
                   draggable={canWrite && !openMenuId}

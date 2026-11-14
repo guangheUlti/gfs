@@ -1,9 +1,6 @@
 package com.guanghe.fs.file.service.impl;
 
-import cn.hutool.core.collection.CollUtil;
 import com.guanghe.fs.storage.plugin.boot.LocalStorageManager;
-import com.mybatisflex.core.query.QueryWrapper;
-import com.guanghe.fs.file.domain.FileInfo;
 import com.guanghe.fs.file.domain.qry.FileHomeUsedBytesQry;
 import com.guanghe.fs.file.domain.qry.FileQry;
 import com.guanghe.fs.file.domain.vo.FileHomeUsedBytesVO;
@@ -30,10 +27,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-
-import static com.guanghe.fs.file.domain.table.FileInfoTableDef.FILE_INFO;
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -96,31 +89,12 @@ public class FileHomeServiceImpl implements FileHomeService {
         LocalDateTime endTime = now.with(LocalTime.MAX);
         LocalDateTime startTime = calculateStartTime(qry.getDateType(), now);
 
-        QueryWrapper queryWrapper = QueryWrapper.create()
-                .select(FILE_INFO.UPLOAD_TIME, FILE_INFO.SIZE)
-                .where(FILE_INFO.IS_DIR.eq(false))
-                .and(FILE_INFO.IS_DELETED.eq(false))
-                .and(FILE_INFO.UPLOAD_TIME.between(startTime, endTime));
-        // 本地存储的 configId 为 null，需用 IS NULL 匹配
-        if (storageId == null || storageId.isBlank()) {
-            queryWrapper.and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.isNull());
-        } else {
-            queryWrapper.and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.eq(storageId));
-        }
-
-        List<FileInfo> files = fileInfoService.list(queryWrapper);
-        if (CollUtil.isEmpty(files)) {
-            return CollUtil.newArrayList();
-        }
-        // 内存聚合：按日期字符串分组求和
-        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-        Map<String, Long> dateMap = files.stream()
-                .collect(Collectors.groupingBy(
-                        f -> f.getUploadTime().format(fmt),
-                        Collectors.summingLong(FileInfo::getSize)
-                ));
+        // 按天聚合下推到库：原先把区间内全部文件行读进内存再分组，三个月数据量大时内存与耗时都不可控
+        Map<String, Long> dateMap =
+                fileInfoService.sumUploadBytesByDay(storageId, startTime, endTime);
 
         double divisor = unitDivisor(qry.getUnit());
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
         // 补全日期并转换单位
         return buildFinalResult(startTime, endTime, dateMap, divisor, fmt, qry.getUnit());

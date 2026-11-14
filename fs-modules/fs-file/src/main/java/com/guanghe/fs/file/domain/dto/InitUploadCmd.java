@@ -23,4 +23,12 @@ public class InitUploadCmd {
 
     @NotBlank(message = "MIME类型不能为空")
     private String mimeType;
+
+    /**
+     * 同名冲突策略：
+     * <p>
+     * - 空 / keepBoth：保留两者，服务端自动重命名（默认，兼容老客户端）
+     * - replace：覆盖目标目录中的同名文件，合并完成后更新原记录，文件ID 不变
+     */
+    private String conflictPolicy;
 }

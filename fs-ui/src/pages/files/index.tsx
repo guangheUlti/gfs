@@ -59,12 +59,35 @@ import {
 } from './components'
 import UploadModal from './components/UploadModal'
 import UploadPanel from './components/UploadPanel'
+import { moveFiles } from '@/api/file'
+import { useFileClipboardStore } from '@/store/file-clipboard'
 import { useExternalFileDrop } from './hooks/useExternalFileDrop'
 import { useFileList } from './hooks/useFileList'
 import { useFileOperations } from './hooks/useFileOperations'
+import { useFileUndo } from './hooks/useFileUndo'
 import { useMarqueeSelection } from './hooks/useMarqueeSelection'
 
 type ViewMode = 'list' | 'grid'
+
+const ARROW_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])
+
+/** 网格视图一行卡片数：按首行元素数推算，响应式列数变化时自动适配 */
+function getGridColumnCount(container: HTMLElement): number {
+  const nodes = Array.from(
+    container.querySelectorAll<HTMLElement>('[data-file-id]')
+  )
+  if (nodes.length === 0) return 1
+  const firstTop = nodes[0].getBoundingClientRect().top
+  let columns = 0
+  for (const node of nodes) {
+    if (Math.abs(node.getBoundingClientRect().top - firstTop) < 2) {
+      columns += 1
+    } else {
+      break
+    }
+  }
+  return Math.max(1, columns)
+}
 
 export default function FilesPage() {
   const { t } = useTranslation('files')
@@ -90,6 +113,14 @@ export default function FilesPage() {
   // 拖拽状态
   const [dragTargetName, setDragTargetName] = useState<string | null>(null)
   const [draggedCount, setDraggedCount] = useState(0)
+  const [dragMode, setDragMode] = useState<'move' | 'copy' | 'upload' | null>(
+    null
+  )
+
+  // 键盘导航：当前活动行与 Shift 范围锚点；粘贴请求防连点
+  const navIndexRef = useRef(-1)
+  const navAnchorRef = useRef<number | null>(null)
+  const pastePendingRef = useRef(false)
 
   const fileScrollAreaRef = useRef<HTMLDivElement>(null)
 
@@ -100,12 +131,20 @@ export default function FilesPage() {
   }>({ active: false, onCancel: null })
 
   const fileList = useFileList()
+  // 解构出稳定引用：避免每次渲染都重建键盘监听的依赖
+  const {
+    recordUndo,
+    undo: undoAction,
+    redo: redoAction,
+  } = useFileUndo()
 
   /**
    * 清空选中
    */
   const clearSelection = () => {
     setSelectedKeys([])
+    navIndexRef.current = -1
+    navAnchorRef.current = null
   }
 
   // 鼠标框选：仅从列表空白处起拖，拖出的矩形实时决定选中项
@@ -113,7 +152,15 @@ export default function FilesPage() {
     useMarqueeSelection({
       containerRef: fileScrollAreaRef,
       enabled: !fileList.loading && fileList.fileList.length > 0,
-      onChange: setSelectedKeys,
+      onChange: (keys) => {
+        setSelectedKeys(keys)
+        // 框选后方向键从最早选中的一项继续走
+        navIndexRef.current =
+          keys.length > 0
+            ? fileList.fileList.findIndex((file) => file.id === keys[0])
+            : -1
+        navAnchorRef.current = null
+      },
     })
 
   const operations = useFileOperations(
@@ -127,7 +174,11 @@ export default function FilesPage() {
       }
     },
     fileList.updateFileItems,
-    fileList.removeFileItems
+    fileList.removeFileItems,
+    {
+      getFileById: (id) => fileList.fileList.find((file) => file.id === id),
+      recordUndo,
+    }
   )
 
   // 计算当前视图类型
@@ -145,6 +196,14 @@ export default function FilesPage() {
   const canRead = hasPermission('file:read')
   const canWrite = hasPermission('file:write')
   const canShare = hasPermission('file:share')
+
+  /** 粘贴目标只认「全部文件」里的具体目录，收藏/搜索/回收站等视图不提供粘贴 */
+  const canPaste =
+    canWrite &&
+    isAllFilesView &&
+    !isRecycleBin &&
+    !isSharesView &&
+    !fileList.searchKeyword
 
   // 操作系统文件/文件夹拖入上传：仅全部文件视图且有写权限时启用
   const externalDrop = useExternalFileDrop({
@@ -179,6 +238,8 @@ export default function FilesPage() {
     const isInteractiveTarget = () => {
       const el = document.activeElement as HTMLElement | null
       if (!el) return false
+      // 弹窗已关闭但节点仍在：焦点可能残留在隐藏输入框里，不能算作输入态
+      if (el.closest('[data-state="closed"]')) return false
       const tag = el.tagName
       return (
         tag === 'INPUT' ||
@@ -187,6 +248,13 @@ export default function FilesPage() {
         el.isContentEditable
       )
     }
+
+    // Radix 关闭后仍保留 role="dialog" 节点（data-state="closed"），必须只认真正打开的弹窗，
+    // 否则任何弹窗关闭过一次后所有快捷键都会失效
+    const isDialogOpen = () =>
+      !!document.querySelector(
+        '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]'
+      )
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // ESC 键退出多选模式并取消选中
@@ -203,11 +271,118 @@ export default function FilesPage() {
         return
       }
 
+      // Ctrl/Cmd 组合键：剪贴板、全选、撤销重做；输入框和弹窗内让位给原生行为
+      if ((e.ctrlKey || e.metaKey) && !isInteractiveTarget() && !isDialogOpen()) {
+        const key = e.key.toLowerCase()
+        if (key === 'a') {
+          e.preventDefault()
+          if (fileList.fileList.length > 0) handleSelectAll(true)
+          return
+        }
+        if (key === 'c') {
+          e.preventDefault()
+          handleCopySelection()
+          return
+        }
+        if (key === 'x') {
+          e.preventDefault()
+          handleCutSelection()
+          return
+        }
+        if (key === 'v') {
+          e.preventDefault()
+          if (canPaste) {
+            void handlePaste()
+          } else if (useFileClipboardStore.getState().mode) {
+            // 收藏/搜索/回收站等视图没有明确的粘贴目标
+            toast.error(t('operations.pasteUnavailable'))
+          }
+          return
+        }
+        if (key === 'z') {
+          e.preventDefault()
+          if (e.shiftKey) {
+            void redoAction()
+          } else {
+            void undoAction()
+          }
+          return
+        }
+        if (key === 'y') {
+          e.preventDefault()
+          void redoAction()
+          return
+        }
+      }
+
+      // 方向键移动选中：列表上下移动，网格按整行上下、按单个左右移动
+      if (
+        ARROW_KEYS.has(e.key) &&
+        !isInteractiveTarget() &&
+        !isDialogOpen() &&
+        !isRecycleBin &&
+        !isSharesView
+      ) {
+        const items = fileList.fileList
+        if (items.length === 0) return
+        e.preventDefault()
+
+        const vertical = e.key === 'ArrowUp' || e.key === 'ArrowDown'
+        const prevIndex = navIndexRef.current
+        let index = prevIndex
+        if (index < 0 || index >= items.length) {
+          // 未选中时：向下选第一个，向上选最后一个
+          index =
+            e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? items.length - 1 : 0
+        } else {
+          let step = 1
+          if (viewMode === 'grid' && vertical) {
+            step = fileScrollAreaRef.current
+              ? getGridColumnCount(fileScrollAreaRef.current)
+              : 1
+          } else if (viewMode !== 'grid' && !vertical) {
+            // 列表视图的左右键不用于切换选中
+            return
+          }
+          const delta =
+            e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -step : step
+          index = Math.min(items.length - 1, Math.max(0, index + delta))
+        }
+
+        const item = items[index]
+        if (!item) return
+        if (e.shiftKey) {
+          const prevAnchor = navAnchorRef.current
+          // 首次 Shift+方向键：锚点取移动前的位置，才能把「当前项到新位置」连成区间
+          const anchor =
+            prevAnchor !== null && prevAnchor >= 0
+              ? prevAnchor
+              : prevIndex >= 0 && prevIndex < items.length
+                ? prevIndex
+                : index
+          const from = Math.min(anchor, index)
+          const to = Math.max(anchor, index)
+          setSelectedKeys(items.slice(from, to + 1).map((f) => f.id))
+          navAnchorRef.current = anchor
+        } else {
+          setSelectedKeys([item.id])
+          navAnchorRef.current = null
+        }
+        navIndexRef.current = index
+        requestAnimationFrame(() => {
+          const nodes = fileScrollAreaRef.current?.querySelectorAll<HTMLElement>(
+            '[data-file-id]'
+          )
+          nodes?.[index]?.scrollIntoView({ block: 'nearest' })
+        })
+        return
+      }
+
       // F2 / Delete：输入框内或弹窗打开时让位给组件自身交互
       // （删除/永久删除确认框是 alertdialog 角色，需一并检测）
       if (e.key === 'F2' || e.key === 'Delete') {
         if (isInteractiveTarget()) return
-        if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return
+        if (isDialogOpen()) return
       }
 
       // F2 键重命名（仅当选中单个文件时）
@@ -240,7 +415,21 @@ export default function FilesPage() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedKeys, selectedFiles, fileList.fileList, canWrite, selectMode])
+  }, [
+    selectedKeys,
+    selectedFiles,
+    fileList.fileList,
+    fileList.currentParentId,
+    canWrite,
+    canPaste,
+    selectMode,
+    viewMode,
+    isRecycleBin,
+    isSharesView,
+    undoAction,
+    redoAction,
+    t,
+  ])
 
   /**
    * 当目录变化时清空选中状态并退出多选模式
@@ -248,6 +437,8 @@ export default function FilesPage() {
   useEffect(() => {
     clearSelection()
     setSelectMode(false)
+    navIndexRef.current = -1
+    navAnchorRef.current = null
   }, [fileList.currentParentId, viewType, fileType, isDirFilter])
 
   /**
@@ -340,6 +531,91 @@ export default function FilesPage() {
       setSelectedKeys(fileList.fileList.map((f) => f.id))
     } else {
       setSelectedKeys([])
+    }
+  }
+
+  /**
+   * 复制到页内剪贴板：只记住对象，不立刻复制，等 Ctrl+V 时再落到目标目录
+   */
+  const handleCopySelection = () => {
+    if (selectedFiles.length === 0) return
+    useFileClipboardStore.getState().setClipboard('copy', selectedFiles)
+    toast.success(
+      t('operations.copyToClipboardOk', { count: selectedFiles.length })
+    )
+  }
+
+  /**
+   * 剪切到页内剪贴板：粘贴成功后才从原目录移走
+   */
+  const handleCutSelection = () => {
+    if (!canWrite || selectedFiles.length === 0) return
+    useFileClipboardStore.getState().setClipboard('cut', selectedFiles)
+    toast.success(
+      t('operations.cutToClipboardOk', { count: selectedFiles.length })
+    )
+  }
+
+  /**
+   * 粘贴到当前目录：复制模式经复制接口，剪切模式为移动；两者都可撤销
+   */
+  const handlePaste = async () => {
+    if (!canPaste || pastePendingRef.current) return
+    const clipboard = useFileClipboardStore.getState()
+    if (!clipboard.mode || clipboard.items.length === 0) return
+
+    const targetDirId = fileList.currentParentId ?? ''
+    const fileIds = clipboard.items.map((item) => item.id)
+    pastePendingRef.current = true
+    try {
+      if (clipboard.mode === 'copy') {
+        await operations.handleCopy(fileIds, targetDirId)
+        return
+      }
+
+      // 已经在目标目录里的项无需移动（资源管理器同样跳过），全部在内则直接丢弃剪贴板
+      const movingItems = clipboard.items.filter(
+        (item) => (item.parentId ?? '') !== targetDirId
+      )
+      if (movingItems.length === 0) {
+        useFileClipboardStore.getState().clear()
+        return
+      }
+      const movingIds = movingItems.map((item) => item.id)
+
+      await moveFiles(targetDirId, movingIds)
+      toast.success(
+        t('operations.pasteMoveOk', { count: movingItems.length })
+      )
+
+      const groups = new Map<string, string[]>()
+      for (const item of movingItems) {
+        const originalDir = item.parentId ?? ''
+        const ids = groups.get(originalDir) ?? []
+        ids.push(item.id)
+        groups.set(originalDir, ids)
+      }
+      recordUndo({
+        label: t('undo.labelMove'),
+        undo: async () => {
+          for (const [dirId, ids] of groups) {
+            await moveFiles(dirId, ids)
+          }
+          fileList.refreshSilent()
+        },
+        redo: async () => {
+          await moveFiles(targetDirId, movingIds)
+          fileList.refreshSilent()
+        },
+      })
+
+      useFileClipboardStore.getState().clear()
+      clearSelection()
+      fileList.refreshSilent()
+    } catch (error) {
+      // 请求拦截器已提示错误；剪切失败时保留剪贴板，便于重试
+    } finally {
+      pastePendingRef.current = false
     }
   }
 
@@ -445,10 +721,12 @@ export default function FilesPage() {
    */
   const handleDragStateChange = (
     dropTargetName: string | null,
-    draggedCount: number
+    draggedCount: number,
+    mode: 'move' | 'copy' | 'upload' | null
   ) => {
     setDragTargetName(dropTargetName)
     setDraggedCount(draggedCount)
+    setDragMode(mode)
   }
 
   const isAllSelected =
@@ -683,6 +961,14 @@ export default function FilesPage() {
                       onRename={operations.openRenameModal}
                       onMove={operations.openMoveModal}
                       onMoveFiles={handleMoveFiles}
+                      onCopyFiles={operations.handleCopy}
+                      onExternalFilesToFolder={(files, folder) =>
+                        externalDrop.uploadFilesTo(files, folder.id)
+                      }
+                      onActiveIndexChange={(index) => {
+                        navIndexRef.current = index
+                        navAnchorRef.current = null
+                      }}
                       onFavorite={operations.handleFavorite}
                       onPreview={(file) =>
                         operations.openPreview(file, fileList.fileList)
@@ -717,6 +1003,14 @@ export default function FilesPage() {
                       onRename={operations.openRenameModal}
                       onMove={operations.openMoveModal}
                       onMoveFiles={handleMoveFiles}
+                      onCopyFiles={operations.handleCopy}
+                      onExternalFilesToFolder={(files, folder) =>
+                        externalDrop.uploadFilesTo(files, folder.id)
+                      }
+                      onActiveIndexChange={(index) => {
+                        navIndexRef.current = index
+                        navAnchorRef.current = null
+                      }}
                       onFavorite={operations.handleFavorite}
                       onPreview={(file) =>
                         operations.openPreview(file, fileList.fileList)
@@ -768,7 +1062,8 @@ export default function FilesPage() {
         </ContextMenu>
 
         {/* 系统文件拖入提示：drop 才真正入队，此层只做视觉且不拦截指针 */}
-        {externalDrop.isDragging && (
+        {/* 拖到文件夹行时由行高亮指明目标，不再盖整块上传遮罩 */}
+        {externalDrop.isDragging && dragMode !== 'upload' && (
           <div className='pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-xl border-2 border-dashed border-primary bg-primary/10'>
             <div className='flex flex-col items-center gap-2 rounded-lg bg-background/85 px-6 py-4 backdrop-blur-sm'>
               <Upload className='h-8 w-8 text-primary' />
@@ -779,6 +1074,9 @@ export default function FilesPage() {
           </div>
         )}
       </div>
+
+      {/* 拖入文件与目录内已有文件重名时，先问「替换 / 保留两者」 */}
+      {externalDrop.conflictDialog}
 
       {/* 拖拽移动提示：fixed 底部，避免插入文档流导致布局抖动 */}
       {dragTargetName && (
@@ -805,8 +1103,13 @@ export default function FilesPage() {
               />
             </svg>
             <span>
-              {t('index.dragMoveTo', { name: dragTargetName })}{' '}
-              {draggedCount > 1 &&
+              {dragMode === 'copy'
+                ? t('index.dragCopyTo', { name: dragTargetName })
+                : dragMode === 'upload'
+                  ? t('index.dragUploadTo', { name: dragTargetName })
+                  : t('index.dragMoveTo', { name: dragTargetName })}{' '}
+              {dragMode !== 'upload' &&
+                draggedCount > 1 &&
                 t('index.dragMoveToMulti', { count: draggedCount })}
             </span>
           </div>

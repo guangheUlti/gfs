@@ -18,6 +18,7 @@ import com.guanghe.fs.file.domain.dto.UpdateTextContentCmd;
 import com.guanghe.fs.file.domain.qry.FileQry;
 import com.guanghe.fs.file.domain.table.FileInfoTableDef;
 import com.guanghe.fs.file.domain.table.FileUserFavoritesTableDef;
+import com.guanghe.fs.file.domain.vo.FileConflictVO;
 import com.guanghe.fs.file.domain.vo.FileDetailVO;
 import com.guanghe.fs.file.domain.vo.FileVO;
 import com.guanghe.fs.file.mapper.FileInfoMapper;
@@ -186,8 +187,177 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     }
 
     @Override
-    public void deleteRemoteFiles(List<String> fileIds) {
-        if (CollUtil.isEmpty(fileIds)) {
+    public FileInfo findSameLevelEntry(String userId, String parentId,
+                                       String displayName, String storagePlatformSettingId) {
+        if (StrUtil.isBlank(displayName)) {
+            return null;
+        }
+        // 无状态远程：实时列一层，同名文件优先于同名目录
+        StatelessDir statelessDir = statelessDirOf(parentId, storagePlatformSettingId);
+        if (statelessDir != null) {
+            FileInfo dirEntry = null;
+            for (FileInfo child : remoteMountService.listChildren(statelessDir.settingId(), statelessDir.path())) {
+                if (!displayName.equals(child.getDisplayName())) {
+                    continue;
+                }
+                if (!Boolean.TRUE.equals(child.getIsDir())) {
+                    return child;
+                }
+                if (dirEntry == null) {
+                    dirEntry = child;
+                }
+            }
+            return dirEntry;
+        }
+        QueryWrapper wrapper = exactChildQuery(userId, parentId, displayName, storagePlatformSettingId);
+        // is_dir=false 排在前面：同名文件与目录并存时按文件处理
+        wrapper.orderBy(FILE_INFO.IS_DIR.asc());
+        List<FileInfo> matched = this.list(wrapper);
+        return matched.isEmpty() ? null : matched.get(0);
+    }
+
+    @Override
+    public List<FileConflictVO> findUploadConflicts(String parentId, List<String> fileNames, List<String> dirNames) {
+        String userId = StpUtil.getLoginIdAsString();
+        String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
+        LinkedHashSet<String> names = normalizeNames(fileNames);
+        LinkedHashSet<String> dirs = normalizeNames(dirNames);
+        if (names.isEmpty() && dirs.isEmpty()) {
+            return List.of();
+        }
+        if (StrUtil.isNotBlank(parentId)) {
+            FileInfo parent = getAuthorizedFile(parentId);
+            if (!Boolean.TRUE.equals(parent.getIsDir())) {
+                return List.of();
+            }
+        }
+
+        Map<String, FileInfo> fileConflicts = new LinkedHashMap<>();
+        Map<String, FileInfo> dirConflicts = new LinkedHashMap<>();
+        StatelessDir statelessDir = statelessDirOf(parentId, storagePlatformSettingId);
+        if (statelessDir != null) {
+            for (FileInfo child : remoteMountService.listChildren(statelessDir.settingId(), statelessDir.path())) {
+                String name = child.getDisplayName();
+                if (Boolean.TRUE.equals(child.getIsDir())) {
+                    if (dirs.contains(name)) {
+                        dirConflicts.putIfAbsent(name, child);
+                    }
+                } else if (names.contains(name)) {
+                    fileConflicts.putIfAbsent(name, child);
+                }
+            }
+        } else {
+            if (!names.isEmpty()) {
+                for (FileInfo file : listLevelEntries(userId, parentId, storagePlatformSettingId, names, false)) {
+                    fileConflicts.putIfAbsent(file.getDisplayName(), file);
+                }
+            }
+            if (!dirs.isEmpty()) {
+                for (FileInfo dir : listLevelEntries(userId, parentId, storagePlatformSettingId, dirs, true)) {
+                    dirConflicts.putIfAbsent(dir.getDisplayName(), dir);
+                }
+            }
+        }
+
+        // 文件在前、目录在后：与前端弹窗的展示顺序一致
+        List<FileConflictVO> result = new ArrayList<>();
+        for (String name : names) {
+            FileInfo file = fileConflicts.get(name);
+            if (file != null) {
+                result.add(toConflictVO(file, false));
+            }
+        }
+        for (String name : dirs) {
+            FileInfo dir = dirConflicts.get(name);
+            if (dir != null) {
+                result.add(toConflictVO(dir, true));
+            }
+        }
+        return result;
+    }
+
+    private LinkedHashSet<String> normalizeNames(List<String> names) {
+        if (names == null) {
+            return new LinkedHashSet<>();
+        }
+        return names.stream()
+                .filter(StrUtil::isNotBlank)
+                .map(String::trim)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /** 按名称批量查询目标目录下同层的文件或目录（isDir 区分），大小写与列表接口规则一致 */
+    private List<FileInfo> listLevelEntries(String userId, String parentId, String storagePlatformSettingId,
+                                            Collection<String> names, boolean isDir) {
+        QueryWrapper wrapper = new QueryWrapper()
+                .where(FILE_INFO.USER_ID.eq(userId))
+                .and(FILE_INFO.IS_DELETED.eq(false))
+                .and(FILE_INFO.IS_DIR.eq(isDir))
+                .and(FILE_INFO.DISPLAY_NAME.in(names));
+        if (StrUtil.isBlank(parentId)) {
+            wrapper.and(FILE_INFO.PARENT_ID.isNull());
+        } else {
+            wrapper.and(FILE_INFO.PARENT_ID.eq(parentId));
+        }
+        if (StrUtil.isBlank(storagePlatformSettingId)) {
+            wrapper.and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.isNull());
+        } else {
+            wrapper.and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.eq(storagePlatformSettingId));
+        }
+        return this.list(wrapper);
+    }
+
+    private FileConflictVO toConflictVO(FileInfo entry, boolean isDir) {
+        FileConflictVO vo = new FileConflictVO();
+        vo.setFileName(entry.getDisplayName());
+        vo.setFileId(entry.getId());
+        vo.setIsDir(isDir);
+        if (!isDir) {
+            vo.setSize(entry.getSize());
+            vo.setUploadTime(entry.getUploadTime());
+        }
+        return vo;
+    }
+
+    /**
+     * 解析无状态远程目录；非无状态存储返回 null。
+     * 与 {@link #generateUniqueName} 的判定保持一致：虚拟父目录按 id 解析，根目录看当前存储能力位。
+     */
+    private StatelessDir statelessDirOf(String parentId, String storagePlatformSettingId) {
+        if (StrUtil.isNotBlank(parentId) && remoteMountService.isVirtualId(parentId)) {
+            RemoteMountService.VirtualPath parentPath = remoteMountService.parse(parentId);
+            return new StatelessDir(parentPath.settingId(), parentPath.path());
+        }
+        if (StrUtil.isBlank(parentId) && isStatelessStorage(storagePlatformSettingId)) {
+            return new StatelessDir(storagePlatformSettingId, "");
+        }
+        return null;
+    }
+
+    private QueryWrapper exactChildQuery(String userId, String parentId,
+                                         String displayName, String storagePlatformSettingId) {
+        QueryWrapper wrapper = new QueryWrapper()
+                .where(FILE_INFO.USER_ID.eq(userId))
+                .and(FILE_INFO.IS_DELETED.eq(false))
+                .and(FILE_INFO.DISPLAY_NAME.eq(displayName));
+        if (StrUtil.isBlank(parentId)) {
+            wrapper.and(FILE_INFO.PARENT_ID.isNull());
+        } else {
+            wrapper.and(FILE_INFO.PARENT_ID.eq(parentId));
+        }
+        if (StrUtil.isBlank(storagePlatformSettingId)) {
+            wrapper.and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.isNull());
+        } else {
+            wrapper.and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.eq(storagePlatformSettingId));
+        }
+        return wrapper;
+    }
+
+    private record StatelessDir(String settingId, String path) {
+    }
+
+    @Override
+    public void deleteRemoteFiles(List<String> fileIds) {        if (CollUtil.isEmpty(fileIds)) {
             return;
         }
         for (String fileId : fileIds.stream().filter(remoteMountService::isVirtualId).distinct().toList()) {
@@ -342,7 +512,7 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
 
                 // 如果是文件夹，递归获取所有子文件和子文件夹
                 if (fileInfo.getIsDir()) {
-                    List<FileInfo> children = getAllChildrenRecursively(fileInfo.getId(), false);
+                    List<FileInfo> children = getAllChildrenRecursively(fileInfo.getId(), userId, false);
                     toDeleteList.addAll(children);
                 }
             }
@@ -370,15 +540,17 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
      * 递归获取文件夹下的所有子文件和子文件夹
      *
      * @param parentId       父文件夹ID
+     * @param userId         所属用户，带上是为命中 idx_user_query(user_id,is_deleted,parent_id)
      * @param includeDeleted 是否包含已删除的文件
      * @return 所有子文件列表
      */
-    private List<FileInfo> getAllChildrenRecursively(String parentId, boolean includeDeleted) {
+    private List<FileInfo> getAllChildrenRecursively(String parentId, String userId, boolean includeDeleted) {
         List<FileInfo> allChildren = new ArrayList<>();
 
         // 查询直接子文件
         QueryWrapper query = new QueryWrapper()
-                .where(FILE_INFO.PARENT_ID.eq(parentId));
+                .where(FILE_INFO.PARENT_ID.eq(parentId))
+                .and(FILE_INFO.USER_ID.eq(userId));
 
         if (!includeDeleted) {
             query.and(FILE_INFO.IS_DELETED.eq(false));
@@ -391,7 +563,7 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
 
             // 如果是文件夹，递归查询
             if (child.getIsDir()) {
-                allChildren.addAll(getAllChildrenRecursively(child.getId(), includeDeleted));
+                allChildren.addAll(getAllChildrenRecursively(child.getId(), userId, includeDeleted));
             }
         }
 
@@ -1613,15 +1785,19 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
 
             wrapper.orderBy(FILE_INFO.IS_DIR.desc());
             if ("display_name".equals(orderByField)) {
-                // 逐段按数值比较名称中的数字，避免 1、10、2，以及 2 (1)、2 (10)、2 (2)。
-                // 文本段套用拼音排序规则：汉字按拼音排列且整体排在字母/数字之后，与 Windows 资源管理器一致。
-                wrapper.orderBy("CASE WHEN display_name REGEXP '[0-9]' THEN 0 ELSE 1 END", isAsc)
-                        .orderBy("CASE WHEN display_name REGEXP '^[一-鿿]' THEN 1 ELSE 0 END", isAsc)
-                        .orderBy(pinyinSortable("REGEXP_SUBSTR(display_name, '^[^0-9]*')"), isAsc)
-                        .orderBy("CAST(REGEXP_SUBSTR(display_name, '[0-9]+', 1, 1) AS UNSIGNED)", isAsc)
-                        .orderBy("CAST(REGEXP_SUBSTR(display_name, '[0-9]+', 1, 2) AS UNSIGNED)", isAsc)
-                        .orderBy("CAST(REGEXP_SUBSTR(display_name, '[0-9]+', 1, 3) AS UNSIGNED)", isAsc)
-                        .orderBy(pinyinSortable("display_name"), isAsc);
+                // 与 Windows 资源管理器一致的自然排序：字母/数字开头的名称在汉字之前，汉字按拼音；
+                // 名称里的数字段按数值比较（音乐(2) 在 音乐(10) 之前，1.txt 在 10.txt 之前）。
+                // 不能再按「含数字」整体分组：那会把 音乐(1)、file1.txt 提到 a.txt、古风 之前，
+                // 新建副本（保留两者生成的 xxx(1)）会跑到列表最前面。
+                wrapper.orderBy("CASE WHEN display_name REGEXP '^[一-鿿]' THEN 1 ELSE 0 END", isAsc)
+                        .orderBy(pinyinSortable("REGEXP_SUBSTR(display_name, '^[^0-9]*')"), isAsc);
+                for (int i = 1; i <= 3; i++) {
+                    String number = "REGEXP_SUBSTR(display_name, '[0-9]+', 1, " + i + ")";
+                    // 无该数字段排在该段最前；有数字段先比位数再比值，等价于按数值比较
+                    wrapper.orderBy("CASE WHEN " + number + " IS NULL THEN -1 ELSE LENGTH(" + number + ") END", isAsc)
+                            .orderBy(number, isAsc);
+                }
+                wrapper.orderBy(pinyinSortable("display_name"), isAsc);
             } else {
                 wrapper.orderBy(orderByField, isAsc);
             }
@@ -1815,23 +1991,26 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
         if (isStatelessStorage(storagePlatformSettingId)) {
             return 0L;
         }
+        // 本地存储的 configId 为 null，mapper 内按 IS NULL 匹配
+        return getMapper().sumStoredSize(storagePlatformSettingId);
+    }
 
-        QueryWrapper query = new QueryWrapper()
-                .where(FILE_INFO.IS_DELETED.eq(false))
-                .and(FILE_INFO.IS_DIR.eq(false));
-        // 本地存储的 configId 为 null，需用 IS NULL 匹配，否则等值比较永远不成立
-        if (StringUtils.isEmpty(storagePlatformSettingId)) {
-            query.and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.isNull());
-        } else {
-            query.and(FILE_INFO.STORAGE_PLATFORM_SETTING_ID.eq(storagePlatformSettingId));
+    @Override
+    public Map<String, Long> sumUploadBytesByDay(String storagePlatformSettingId,
+                                                 LocalDateTime start,
+                                                 LocalDateTime end) {
+        List<Map<String, Object>> rows =
+                getMapper().sumUploadSizeGroupByDay(storagePlatformSettingId, start, end);
+        Map<String, Long> result = new HashMap<>(rows.size() * 2);
+        for (Map<String, Object> row : rows) {
+            Object day = row.get("d");
+            Object total = row.get("total");
+            if (day == null || !(total instanceof Number number)) {
+                continue;
+            }
+            result.merge(day.toString(), number.longValue(), Long::sum);
         }
-
-        // 统计总大小
-        return this.list(query).stream()
-                .map(FileInfo::getSize)
-                .filter(Objects::nonNull)
-                .mapToLong(Long::longValue)
-                .sum();
+        return result;
     }
 
     @Override
@@ -1860,7 +2039,7 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
             stats.getOrDefault("fileCount", 0L);
             stats.put("fileCount", 0L);
             stats.put("folderCount", 0L);
-            recursiveAccumulate(fileId, stats);
+            recursiveAccumulate(fileId, fileInfo.getUserId(), stats);
 
             //如果为文件夹则需要统计该文件夹下所有文件
             vo.setSize(stats.get("size"));
@@ -1875,12 +2054,13 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
     }
 
     /**
-     * 递归统计文件夹信息
+     * 递归统计文件夹信息（按用户过滤以命中 idx_user_query）
      */
-    private void recursiveAccumulate(String parentId, Map<String, Long> stats) {
+    private void recursiveAccumulate(String parentId, String userId, Map<String, Long> stats) {
         String storagePlatformSettingId = StoragePlatformContextHolder.getConfigId();
         QueryWrapper query = new QueryWrapper()
                 .where(FILE_INFO.PARENT_ID.eq(parentId))
+                .and(FILE_INFO.USER_ID.eq(userId))
                 .and(FILE_INFO.IS_DELETED.eq(false));
         // 同 calculateUsedStorage：本地存储的 configId 为 null
         if (StringUtils.isEmpty(storagePlatformSettingId)) {
@@ -1898,7 +2078,7 @@ public class FileInfoServiceImpl extends ServiceImpl<FileInfoMapper, FileInfo> i
             if (child.getIsDir()) {
                 // 统计文件夹个数并向下递归
                 stats.put("folderCount", stats.get("folderCount") + 1);
-                recursiveAccumulate(child.getId(), stats);
+                recursiveAccumulate(child.getId(), userId, stats);
             } else {
                 // 统计文件个数及大小
                 stats.put("fileCount", stats.get("fileCount") + 1);

@@ -7,6 +7,8 @@ import type {
   ProgressUpdate,
   FileTransferTaskVO,
   SSEMessage,
+  ConflictPolicy,
+  UploadConflictDecision,
 } from '@/types/transfer'
 import { toast } from 'sonner'
 import { create } from 'zustand'
@@ -17,6 +19,7 @@ import {
   cancelUpload,
   initUpload,
   uploadOnce,
+  checkUploadConflicts,
   clearCompletedTasks as clearCompletedTasksApi,
 } from '@/api/transfer'
 import { createFolder } from '@/api/file'
@@ -30,6 +33,28 @@ import {
 import i18n from '@/i18n'
 import type { FileItem } from '@/types/file'
 import { useUserStore } from './user'
+
+/** 冲突探测单次最多 200 个名称（UploadConflictQry @Size(max=500)） */
+const CONFLICT_NAME_BATCH_SIZE = 200
+
+/** 查询指定目录下已存在的同名子目录：name → 目录 ID */
+async function fetchExistingChildDirIds(
+  parentId: string | undefined,
+  names: string[]
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>()
+  for (let i = 0; i < names.length; i += CONFLICT_NAME_BATCH_SIZE) {
+    const conflicts = await checkUploadConflicts(
+      parentId,
+      [],
+      names.slice(i, i + CONFLICT_NAME_BATCH_SIZE)
+    )
+    conflicts.forEach((conflict) => {
+      if (conflict.isDir) result.set(conflict.fileName, conflict.fileId)
+    })
+  }
+  return result
+}
 
 interface TransferStore {
   tasks: Map<string, TransferTask>
@@ -64,11 +89,13 @@ interface TransferStore {
   createTask: (
     file: File,
     parentId?: string,
-    sessionId?: string
+    sessionId?: string,
+    conflictPolicy?: ConflictPolicy
   ) => Promise<string>
   createTasksWithDirectory: (
     files: File[],
-    parentId?: string
+    parentId?: string,
+    decision?: UploadConflictDecision
   ) => Promise<void>
   createDownloadTasks: (files: FileItem[]) => Promise<void>
   pauseTask: (taskId: string) => Promise<void>
@@ -118,6 +145,13 @@ let hasCleanedStaleTasks = false
 let pollingTimerId: number | null = null
 let beforeUnloadWarningSetup = false
 const POLLING_INTERVAL = 3000
+/**
+ * SSE 在线时只做低频对账：进度/状态本来由推送更新，
+ * 仍每 3s 拉一次全量任务列表纯属重复请求；保留低频轮询兜 SSE 静默失联。
+ * 但不能拉太长：半开 TCP 下服务端写入不报错、浏览器也收不到错误，
+ * 连接看起来一直在线，只能靠对账兜底，30s 一次对用户就是「卡死了」。
+ */
+const SSE_RECONCILE_EVERY_TICKS = 3
 
 /**
  * 「准备中」停留超过该时长且账号内没有任何进行中的传输，即视为已被中断。
@@ -126,7 +160,30 @@ const POLLING_INTERVAL = 3000
  */
 const STALE_INITIALIZED_TASK_MAX_AGE_MS = 10 * 60 * 1000
 
+/**
+ * 状态推进优先级：任务列表快照只允许把本地状态往前推，不能拉回
+ * （如快照来自 SSE 重连前的时刻，会把 uploading 压回 initialized）
+ */
+const TASK_STATUS_PRIORITY: Record<TaskStatus, number> = {
+  idle: 0,
+  initialized: 1,
+  checking: 2,
+  paused: 3,
+  uploading: 4,
+  downloading: 4,
+  merging: 5,
+  cancelled: 6,
+  failed: 7,
+  completed: 8,
+}
+
 const LOCAL_SESSION_TASKS_KEY = 'gfsLocalSessionTaskIds'
+
+/**
+ * 一次性上传走单请求（服务端整块读取算 MD5），分片档位调到 1GB 后
+ * 100MB 文件也会被算成 1 片；这里再按体积兜底，大文件仍走分片流式上传。
+ */
+const UPLOAD_ONCE_MAX_SIZE = 64 * 1024 * 1024
 
 /**
  * 目标存储不支持去重的上传任务。
@@ -201,14 +258,46 @@ function convertVOToTask(vo: FileTransferTaskVO): TransferTask {
 }
 
 /**
- * 清理遗留的「准备中」上传任务。
+ * 本机发起的上传任务停在「准备中」且既不在队列、也没有执行器上下文时，
+ * 当前标签页已经没有谁能再推进它（状态快照覆盖、入队项丢失都会造成）。
+ * 文件对象还在内存里就重新入队续传（服务端记着已传分片）；
+ * 文件对象已随页面刷新丢失则直接收尾，不必等 10 分钟宽限期。
+ */
+async function healLocalUploadTasks(): Promise<void> {
+  const store = useTransferStore.getState()
+  const stalled = store.getTaskList().filter(
+    (task) =>
+      task.taskType === 'upload' &&
+      task.status === 'initialized' &&
+      localSessionTaskIds.has(task.taskId) &&
+      !store.uploadQueue.includes(task.taskId) &&
+      !uploadExecutor.getTaskContext(task.taskId)
+  )
+  if (stalled.length === 0) return
+
+  const resumable = stalled.filter((task) => store.fileCache.has(task.taskId))
+  const orphaned = stalled.filter((task) => !store.fileCache.has(task.taskId))
+
+  if (resumable.length > 0) {
+    useTransferStore.setState({
+      uploadQueue: [
+        ...useTransferStore.getState().uploadQueue,
+        ...resumable.map((task) => task.taskId),
+      ],
+    })
+    useTransferStore.getState().pumpUploadQueue()
+  }
+
+  await cancelTaskList(orphaned)
+}
+
+/**
+ * 清理其他端遗留的「准备中」上传任务。
  *
- * 这类任务（初始化成功但从未开始传分片）只会出现在发起端异常退出时：页面关闭、
- * 浏览器崩溃或后端重启。它们不属于本机会话（SessionStorage 已清），
- * 既不会被续传也不会被取消，却会永远留在「上传中」并让前端轮询不停。
- *
- * 安全前提：账号内没有任何进行中的传输才动手——若还有上传/下载在跑，
- * 这些 initialized 很可能是别端排队中的任务，误杀会中断另一台设备的上传。
+ * 这类任务只会出现在发起端异常退出时，本机既不能续传也不会被取消，
+ * 却会一直占着「上传中」列表。安全前提：账号内没有任何进行中的传输
+ * 才动手，且要给足宽限期——它们可能是别端排队中的任务，误杀会中断
+ * 另一台设备的上传。
  */
 async function cancelStaleInitializedTasks(): Promise<void> {
   if (hasCleanedStaleTasks) return
@@ -222,19 +311,18 @@ async function cancelStaleInitializedTasks(): Promise<void> {
   if (hasActiveTransfer) return
 
   const now = Date.now()
-  const stale = tasks.filter((task) => {
-    if (task.status !== 'initialized') return false
-    if (now - task.createdAt <= STALE_INITIALIZED_TASK_MAX_AGE_MS) return false
-    if (!localSessionTaskIds.has(task.taskId)) return true
-    // 本机发起的也要能收尾：既不在队列里、也没有执行器上下文和文件缓存，
-    // 说明发起它的页面刷新/崩溃过，本机再也传不动，留着只会永远停在「准备中」
-    return (
-      !store.uploadQueue.includes(task.taskId) &&
-      !uploadExecutor.getTaskContext(task.taskId) &&
-      !store.fileCache.has(task.taskId)
-    )
-  })
+  const stale = tasks.filter(
+    (task) =>
+      task.status === 'initialized' &&
+      !localSessionTaskIds.has(task.taskId) &&
+      now - task.createdAt > STALE_INITIALIZED_TASK_MAX_AGE_MS
+  )
+  await cancelTaskList(stale)
+}
+
+async function cancelTaskList(stale: TransferTask[]): Promise<void> {
   if (stale.length === 0) return
+  const store = useTransferStore.getState()
 
   let cancelled = 0
   for (const task of stale) {
@@ -568,9 +656,27 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       // 确保 taskVOs 是数组
       const tasks = Array.isArray(taskVOs) ? taskVOs : []
 
+      // 快照可能来自比本地更早的时刻（SSE 重连、请求耗时），只允许把状态
+      // 往前推：整表覆盖一旦把 uploading 压回 initialized，后续 merging/
+      // complete 事件就再也没法把它带到终态，界面会永远停在「准备中」
+      const currentTasks = get().tasks
       tasks.forEach((vo) => {
         const task = convertVOToTask(vo)
-        newTasks.set(task.taskId, task)
+        const existing = currentTasks.get(task.taskId)
+        if (
+          existing &&
+          TASK_STATUS_PRIORITY[existing.status] >
+            TASK_STATUS_PRIORITY[task.status]
+        ) {
+          newTasks.set(task.taskId, {
+            ...existing,
+            uploadedBytes: task.uploadedBytes,
+            uploadedChunks: task.uploadedChunks,
+            totalChunks: task.totalChunks,
+          })
+        } else {
+          newTasks.set(task.taskId, task)
+        }
       })
 
       // 快照里没有、但本地刚建好的任务原样保留（不降级它们的本地状态）
@@ -581,7 +687,10 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       set({ tasks: newTasks })
 
       await get().checkUnfinishedTasks()
+      await healLocalUploadTasks()
       await cancelStaleInitializedTasks()
+      // 快照里带回来的活跃任务不是经 transitionTo 入表的，这里补一次轮询兜底
+      get().checkAndStartPolling()
     } catch (error) {
       console.error('获取传输任务列表失败:', error)
       // 静默失败，不抛出错误
@@ -745,21 +854,8 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
         if (!existingTask) {
           newTasks.set(vo.taskId, newTask)
         } else {
-          const statePriority: Record<TaskStatus, number> = {
-            idle: 0,
-            initialized: 1,
-            checking: 2,
-            paused: 3,
-            uploading: 4,
-            downloading: 4,
-            merging: 5,
-            cancelled: 6,
-            failed: 7,
-            completed: 8,
-          }
-
-          const existingPriority = statePriority[existingTask.status] || 0
-          const newPriority = statePriority[newTask.status] || 0
+          const existingPriority = TASK_STATUS_PRIORITY[existingTask.status] || 0
+          const newPriority = TASK_STATUS_PRIORITY[newTask.status] || 0
 
           if (
             newPriority > existingPriority ||
@@ -842,7 +938,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     return sessionId
   },
 
-  createTask: async (file, parentId, sessionId) => {
+  createTask: async (file, parentId, sessionId, conflictPolicy) => {
     // 从用户 store 获取传输设置
     const userStore = useUserStore.getState()
     if (!userStore.transferSetting) {
@@ -871,7 +967,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
 
     // 单分片小文件：一次请求跑完 init + 校验 + 写入 + 合并，省掉 3 次往返。
     // 0 字节文件（totalChunks=0）仍走分片路径，服务端有空文件专用逻辑
-    if (totalChunks === 1) {
+    if (totalChunks === 1 && file.size <= UPLOAD_ONCE_MAX_SIZE) {
       const mimeType = file.type || 'application/octet-stream'
       let result
       try {
@@ -880,6 +976,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
           parentId,
           chunkSize,
           mimeType,
+          conflictPolicy,
         })
       } catch (error) {
         const message = error instanceof Error ? error.message : '上传失败'
@@ -941,6 +1038,7 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       totalChunks,
       chunkSize,
       mimeType: file.type || 'application/octet-stream',
+      conflictPolicy,
     })
     const taskId = initResult.taskId
     markLocalSessionTask(taskId)
@@ -998,12 +1096,18 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
     return taskId
   },
 
-  createTasksWithDirectory: async (files, parentId) => {
+  createTasksWithDirectory: async (files, parentId, decision) => {
     interface FileWithPath {
       webkitRelativePath?: string
     }
 
     const filesWithPath = files as (File & FileWithPath)[]
+    const conflictPolicy = decision?.policy
+    // 「替换」对目录的含义是合并：顶层同名目录直接复用已有目录，子树里同名目录也复用
+    const mergeExistingDirs = conflictPolicy === 'replace'
+    const existingTopDirIds = decision?.existingDirIds ?? {}
+    /** 本次上传复用来的已有目录路径（这些目录里的同名文件需要按替换策略覆盖） */
+    const preExistingDirs = new Set<string>()
 
     // ========== 限制检查 ==========
 
@@ -1100,6 +1204,17 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       return aDepth - bDepth
     })
 
+    // 每个父目录下的子目录名：合并已有目录时按父目录批量查一次，避免逐层多次请求
+    const childNamesByParent = new Map<string, string[]>()
+    sortedDirs.forEach((dirPath) => {
+      const pathParts = dirPath.split('/')
+      const parentPath = pathParts.slice(0, -1).join('/')
+      const names = childNamesByParent.get(parentPath) ?? []
+      names.push(pathParts[pathParts.length - 1])
+      childNamesByParent.set(parentPath, names)
+    })
+    const existingChildrenByParent = new Map<string, Map<string, string>>()
+
     // 显示上传信息
     toast.info(`准备上传 ${filteredFiles.length} 个文件，共 ${sortedDirs.length} 个文件夹`, {
       description: `总大小: ${formatFileSize(totalSize)}`
@@ -1115,6 +1230,36 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
         
         // 获取父目录 ID
         const parentFolderId = parentPath ? dirMap.get(parentPath) : parentId
+
+        // 替换：顶层同名目录合并进已有目录，不新建、不改名
+        if (mergeExistingDirs && !parentPath && existingTopDirIds[folderName]) {
+          dirMap.set(dirPath, existingTopDirIds[folderName])
+          preExistingDirs.add(dirPath)
+          continue
+        }
+        // 父目录是复用来的已有目录：这一层可能已存在同名子目录，命中就合并进去
+        if (mergeExistingDirs && parentPath && preExistingDirs.has(parentPath)) {
+          let existingChildren = existingChildrenByParent.get(parentPath)
+          if (!existingChildren) {
+            try {
+              existingChildren = await fetchExistingChildDirIds(
+                parentFolderId,
+                childNamesByParent.get(parentPath) ?? []
+              )
+            } catch (error) {
+              // 探测失败就按新建处理：宁可多一个重命名目录，也不要中断整批上传
+              console.warn(`查询已有子目录失败: ${parentPath}`, error)
+              existingChildren = new Map()
+            }
+            existingChildrenByParent.set(parentPath, existingChildren)
+          }
+          const reusedId = existingChildren.get(folderName)
+          if (reusedId) {
+            dirMap.set(dirPath, reusedId)
+            preExistingDirs.add(dirPath)
+            continue
+          }
+        }
 
         try {
           // 调用创建文件夹 API
@@ -1142,9 +1287,14 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       
       filesByDir.forEach((dirFiles, dirPath) => {
         const targetParentId = dirPath ? dirMap.get(dirPath) : parentId
-        
+        // 合并进已有目录时同名文件要覆盖；本次新建的目录里不可能重名
+        const policy: ConflictPolicy | undefined = !dirPath
+          ? conflictPolicy
+          : mergeExistingDirs && preExistingDirs.has(dirPath)
+            ? 'replace'
+            : undefined
         dirFiles.forEach((file) => {
-          uploadPromises.push(get().createTask(file, targetParentId))
+          uploadPromises.push(get().createTask(file, targetParentId, undefined, policy))
         })
       })
 
@@ -1679,8 +1829,9 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
   startPolling: () => {
     if (pollingTimerId !== null) return
 
+    let tick = 0
     pollingTimerId = window.setInterval(async () => {
-      const { tasks } = get()
+      const { tasks, sseConnected } = get()
       const activeTasks = Array.from(tasks.values()).filter(
         (task) =>
           task.status === 'initialized' ||
@@ -1692,6 +1843,11 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
 
       if (activeTasks.length === 0) {
         get().stopPolling()
+        return
+      }
+
+      tick += 1
+      if (sseConnected && tick % SSE_RECONCILE_EVERY_TICKS !== 0) {
         return
       }
 

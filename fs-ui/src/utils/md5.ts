@@ -175,16 +175,27 @@ function calculateFastFingerprintInline(file: File): Promise<string> {
   })
 }
 
-/** 主线程兜底：分片 MD5 */
+/** 主线程兜底：分片 MD5（按 2MB 切片读，1GB 档分片不能整块进堆） */
 function calculateBlobMD5Inline(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
+    const spark = new SparkMD5.ArrayBuffer()
     const fileReader = new FileReader()
+    let offset = 0
+
+    function loadNext() {
+      if (offset >= blob.size) {
+        resolve(spark.end())
+        return
+      }
+      const end = Math.min(offset + INLINE_CHUNK_SIZE, blob.size)
+      fileReader.readAsArrayBuffer(blob.slice(offset, end))
+      offset = end
+    }
 
     fileReader.onload = (e) => {
       if (e.target?.result) {
-        const spark = new SparkMD5.ArrayBuffer()
         spark.append(e.target.result as ArrayBuffer)
-        resolve(spark.end())
+        loadNext()
       }
     }
 
@@ -192,7 +203,7 @@ function calculateBlobMD5Inline(blob: Blob): Promise<string> {
       reject(new Error(i18n.t('common:fileErrors.chunkReadFailed')))
     }
 
-    fileReader.readAsArrayBuffer(blob)
+    loadNext()
   })
 }
 

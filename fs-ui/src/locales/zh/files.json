@@ -28,6 +28,8 @@
     "ariaList": "列表视图",
     "toastNoDownload": "没有可下载的文件",
     "dragMoveTo": "移动至 \"{{name}}\"",
+    "dragCopyTo": "复制到 \"{{name}}\"",
+    "dragUploadTo": "上传到 \"{{name}}\"",
     "dragMoveToMulti": " (共 {{count}} 项)",
     "emptyTitle": "暂无文件",
     "emptyDesc": "上传文件或创建文件夹开始使用",
@@ -192,6 +194,13 @@
     "chooseFolder": "选择文件夹",
     "addToList": "添加到上传列表"
   },
+  "conflictDialog": {
+    "title": "发现同名文件或文件夹",
+    "desc": "当前文件夹中已存在 {{count}} 个同名项：替换会覆盖同名文件并合并文件夹（分享、收藏保持不变），保留两者会把本次上传自动重命名。",
+    "replace": "替换",
+    "keepBoth": "保留两者",
+    "folder": "文件夹"
+  },
   "fileDetail": {
     "sizeWithCounts": "{{size}}（包含 {{files}} 个文件，{{folders}} 个文件夹）",
     "locationRoot": "全部文件",
@@ -322,7 +331,24 @@
     "copyDirectLinkOk": "直链已复制，粘贴到浏览器即可免登录下载",
     "copyDirectLinkFail": "直链生成/复制失败",
     "uploadFileAdded": "文件已添加到传输列表",
-    "uploadCheckProgress": "可前往传输列表查看上传进度"
+    "uploadCheckProgress": "可前往传输列表查看上传进度",
+    "copyOk": "已复制",
+    "copyToClipboardOk": "已复制 {{count}} 项，可在目标文件夹按 Ctrl+V 粘贴",
+    "cutToClipboardOk": "已剪切 {{count}} 项，可在目标文件夹按 Ctrl+V 粘贴",
+    "pasteMoveOk": "已移动 {{count}} 项",
+    "pasteUnavailable": "当前视图不支持粘贴"
+  },
+  "undo": {
+    "undoOk": "已撤销：{{action}}",
+    "undoFail": "撤销失败：{{action}}",
+    "redoOk": "已重做：{{action}}",
+    "redoFail": "重做失败：{{action}}",
+    "labelRename": "重命名",
+    "labelMove": "移动",
+    "labelCopy": "复制",
+    "labelDelete": "删除",
+    "labelCreateFolder": "新建文件夹",
+    "labelCreateText": "新建文本"
   },
   "uploadPanel": {
     "sec": "{{n}}秒",

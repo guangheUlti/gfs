@@ -75,7 +75,8 @@ export function createTextFile(data: {
   parentId?: string
   content?: string
 }) {
-  return request.post('/apis/file/text', data)
+  // 返回新建文件 ID，供前端撤销「新建文本」
+  return request.post<string>('/apis/file/text', data)
 }
 
 /**
@@ -130,6 +131,13 @@ export function renameFile(fileId: string, displayName: string) {
  */
 export function moveFiles(dirId: string, fileIds: string[]) {
   return request.put('/apis/file/moves', { dirId, fileIds })
+}
+
+/**
+ * 复制文件/文件夹（dirId 为空表示根目录），返回副本 ID 列表
+ */
+export function copyFiles(dirId: string | undefined, fileIds: string[]) {
+  return request.post<string[]>('/apis/file/copies', { dirId, fileIds })
 }
 
 /**
