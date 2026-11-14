@@ -33,3 +33,4 @@ description: 一句话说明适用场景
 - 生产日志与安全排查：[skills/gfs-incident-audit/SKILL.md](skills/gfs-incident-audit/SKILL.md)
 - 数据模型与初始化 SQL：[skills/gfs-data-model/SKILL.md](skills/gfs-data-model/SKILL.md)
 - 存储插件与协议接入：[skills/gfs-storage-plugin/SKILL.md](skills/gfs-storage-plugin/SKILL.md)
+- 生产 Windows 服务器连接与运维：[skills/gfs-prod-windows/SKILL.md](skills/gfs-prod-windows/SKILL.md)（凭据放 `%USERPROFILE%\.gfs\prod-153.cred`，不入库；远程部署用 `scripts/prod-deploy.ps1`）
