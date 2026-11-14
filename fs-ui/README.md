@@ -1,6 +1,6 @@
 <div align="center">
 
-<img alt="GFS Logo" src="../.images/logo.png" width="100"/>
+<img alt="GFS Logo" src="../doc/.images/logo.png" width="100"/>
 
 # GFS Frontend
 

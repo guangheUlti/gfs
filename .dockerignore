@@ -20,7 +20,7 @@ logs/
 release/
 
 # 文档、图片资产（不参与构建）
-.images/
+doc/.images/
 
 # 环境变量（不能打入镜像！）
 .env

@@ -43,10 +43,12 @@ logs/
 
 .kiro/
 
-.freebuff/
-
 ### IDE / internal agent dirs ###
 .trae/
+
+### Agent workspace: skills/scripts/notes are tracked, tmp is disposable ###
+.agent/tmp/*
+!.agent/tmp/.gitignore
 
 ### Frontend (fs-ui) ###
 node_modules/

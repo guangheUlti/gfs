@@ -14,9 +14,15 @@
 
 - 本地联调直接跑 `D:\devTools` 的 MySQL/Redis + `fs-admin` 的 dev 配置（或 `mvn spring-boot:run`），**不要执行 `release\deploy-package\bin\start.bat`**——那会在部署包里产生数据、日志和机器本地配置。
 
-## 临时文件与截图
+## Agent 协作目录（.agent，强制）
 
-- 临时文件、临时截图、验证输出等仅供开发过程使用的文件统一放在仓库根目录 `.freebuff/` 中，不要在根目录新增 `screenshots/` 等临时目录；长期有效的产品文档和测试报告应放在对应的 `doc/` 下。
+- 所有 agent（Qoder / Claude / Cursor / Trae 等）对本项目的操作统一使用仓库根目录 `.agent/`：
+  - `skills/`：项目技能，入口为各技能目录下的 `SKILL.md`
+  - `scripts/`：可复用的操作脚本
+  - `notes/`：交接记录、排查结论、历史发布说明
+  - `tmp/`：临时文件、临时截图、验证输出（已 gitignore，可随时清空）
+- 不要在根目录新增 `screenshots/` 等临时目录；历史 `.freebuff/` 已废弃并删除，不要重新创建。
+- 长期有效的产品文档和测试报告放在对应的 `doc/` 下，图片资源统一放 `doc/.images/`。
 
 ## release\deploy-package（发行版模板目录）
 
