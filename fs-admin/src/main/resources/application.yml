@@ -108,9 +108,20 @@ security:
   #   文件收集访问码限制会同时失效。
   # true：仅当应用确实坐在 Nginx 等可信代理后面、且代理覆写（而非追加）了转发头时开启。
   trust-proxy: false
+  # 防暴力：登录按「账号+IP」计失败次数；注册除失败锁外，成功注册也按 IP 计配额
+  brute-force:
+    # 连续失败多少次后锁定
+    max-attempts: 3
+    # 锁定时长（分钟）
+    lock-minutes: 30
+    # 同一 IP 每小时允许的成功注册次数（0 表示不限制）
+    register-max-per-hour: 10
+    # 同一 IP 每 24 小时允许的成功注册次数（0 表示不限制）
+    register-max-per-day: 50
   #排除不需要登录认证的接口
   excludes:
     - /apis/auth/login
+    - /apis/auth/config
     - /apis/transfer/sse
     - /apis/user/register
     - /apis/invitation/verify/**

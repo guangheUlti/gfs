@@ -10,8 +10,6 @@ import com.guanghe.fs.system.mapper.SysFeatureToggleMapper;
 import com.guanghe.fs.system.service.SysFeatureToggleService;
 import com.guanghe.fs.system.service.SysUserService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -31,12 +29,15 @@ public class SysFeatureToggleServiceImpl extends ServiceImpl<SysFeatureToggleMap
 
     private final SysUserService sysUserService;
 
+    /**
+     * 不做缓存：开关表只有几行，查询成本可忽略；而缓存的整张 Map 在新增开关键后
+     * 会缺少字段（旧版本写进 Redis 的缓存没有过期时间），导致新开关被误判为关闭。
+     */
     @Override
-    @Cacheable(value = "featureToggles", key = "'all'")
     public Map<String, Boolean> listToggles() {
         Map<String, Boolean> result = new HashMap<>();
-        // 全部开关缺省关闭（含回收站、分享）：按需在「设置-功能开关」中开启
-        FeatureKeys.ALL.forEach(key -> result.put(key, false));
+        // 未配置的开关按 FeatureKeys.DEFAULT_ENABLED 兜底：回收站、分享等默认关闭，注册默认开启
+        FeatureKeys.ALL.forEach(key -> result.put(key, FeatureKeys.DEFAULT_ENABLED.contains(key)));
         this.list().forEach(toggle -> {
             if (FeatureKeys.ALL.contains(toggle.getFeatureKey())) {
                 result.put(toggle.getFeatureKey(), Boolean.TRUE.equals(toggle.getEnabled()));
@@ -50,7 +51,6 @@ public class SysFeatureToggleServiceImpl extends ServiceImpl<SysFeatureToggleMap
      * 查询接口对所有登录用户开放（前端需按开关显隐入口）
      */
     @Override
-    @CacheEvict(value = "featureToggles", key = "'all'")
     public void updateToggles(FeatureToggleEditCmd cmd) {
         sysUserService.assertSuperAdmin();
 

@@ -95,6 +95,9 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     public void register(UserRegisterCmd cmd) {
         // 防暴力：同一 IP 注册失败过多后禁止注册
         loginGuardService.checkRegisterAllowed();
+        // 成功注册也占配额，挡住「换用户名就能无限注册」
+        loginGuardService.reserveRegisterQuota();
+        boolean success = false;
         try {
             SysUser user = this.getByUsername(cmd.getUsername());
             if (user != null) {
@@ -116,9 +119,15 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
 
             // 初始化用户传输配置
             userTransferSettingService.initUserTransferSetting(user.getId());
+            success = true;
         } catch (BusinessException e) {
             loginGuardService.recordRegisterFailure();
             throw e;
+        } finally {
+            // 没注册成功就退回预占的配额，避免用户输错密码也耗掉名额
+            if (!success) {
+                loginGuardService.releaseRegisterQuota();
+            }
         }
         loginGuardService.clearRegisterFailures();
     }

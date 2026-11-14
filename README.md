@@ -1,6 +1,6 @@
 <div align="center">
 
-<img alt="GFS Logo" src=".images/logo.png" width="100"/>
+<img alt="GFS Logo" src="doc/.images/logo.png" width="100"/>
 
 # GFS
 
@@ -62,7 +62,9 @@
 - **认证与授权**
     - 用户名密码登录
     - Sa-Token 会话认证（会话存 Redis，重启不掉线、可多实例）
+    - 开放注册开关（可在「功能开关」中关闭注册入口，服务端同步拒绝注册请求）
     - 新注册用户审核
+    - 注册限流：同一 IP 注册失败 3 次锁 30 分钟，成功注册按 IP 限额（默认 10 次/小时、50 次/24 小时）
     - 登录管理（查看在线设备、管理员强制下线）
 
 - **回收站**

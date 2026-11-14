@@ -1,13 +1,17 @@
 package com.guanghe.fs.system.controller;
 
 import com.guanghe.fs.framework.common.domain.Result;
+import com.guanghe.fs.system.constant.FeatureKeys;
 import com.guanghe.fs.system.domain.dto.LoginCmd;
 import com.guanghe.fs.system.service.AuthService;
+import com.guanghe.fs.system.service.SysFeatureToggleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 /**
  * 认证入口
@@ -23,6 +27,20 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+
+    private final SysFeatureToggleService featureToggleService;
+
+    /**
+     * 登录页公开配置：登录页未认证，不能读需要登录的 /apis/feature/toggles。
+     */
+    @Operation(summary = "登录页公开配置")
+    @GetMapping("/config")
+    public Result<Map<String, Boolean>> getPublicConfig() {
+        return Result.ok(Map.of(
+                "registerEnabled",
+                Boolean.TRUE.equals(featureToggleService.listToggles().get(FeatureKeys.REGISTER))
+        ));
+    }
 
     @Operation(summary = "登录")
     @PostMapping("/login")

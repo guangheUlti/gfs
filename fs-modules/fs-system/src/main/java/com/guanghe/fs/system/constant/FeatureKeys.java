@@ -25,6 +25,15 @@ public final class FeatureKeys {
     /** 分享：关闭后文件页不出现分享入口，分享链接访问不受影响 */
     public static final String SHARE = "share";
 
+    /** 注册：关闭后隐藏登录页注册入口并拒绝注册请求；已有账号登录不受影响 */
+    public static final String REGISTER = "register";
+
     /** 全部合法的功能标识 */
-    public static final Set<String> ALL = Set.of(FAVORITE, HISTORY, RECYCLE_BIN, SHARE);
+    public static final Set<String> ALL = Set.of(FAVORITE, HISTORY, RECYCLE_BIN, SHARE, REGISTER);
+
+    /**
+     * 缺省开启的开关：其余开关未配置时按关闭处理，注册必须反过来，
+     * 否则升级后所有人都会突然无法注册。
+     */
+    public static final Set<String> DEFAULT_ENABLED = Set.of(REGISTER);
 }

@@ -1,5 +1,6 @@
-import React, { Suspense, useState } from 'react'
+import React, { Suspense, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { userApi } from '@/api'
 import LoginFormContent from './components/LoginFormContent'
 import RegisterFormContent from './components/RegisterFormContent'
 import { LoginLanguageSwitcher } from './components/LoginLanguageSwitcher'
@@ -12,7 +13,29 @@ const LoginPage: React.FC = () => {
   const { t } = useTranslation('login')
   const [searchParams, setSearchParams] = useSearchParams()
   const [legalType, setLegalType] = useState<LegalType>(null)
+  const [registerEnabled, setRegisterEnabled] = useState(true)
   const type = searchParams.get('type') || 'login'
+
+  useEffect(() => {
+    let cancelled = false
+    userApi
+      .getAuthConfig()
+      .then((config) => {
+        if (!cancelled) setRegisterEnabled(!!config?.registerEnabled)
+      })
+      // 取不到配置时按开启渲染，服务端开关校验仍会兜底
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // 直接访问 ?type=register 但注册已关闭时退回登录表单
+  useEffect(() => {
+    if (!registerEnabled && type === 'register') {
+      setSearchParams({ type: 'login' }, { replace: true })
+    }
+  }, [registerEnabled, type, setSearchParams])
 
   const handleSwitchForm = (form: 'login' | 'register') => {
     setSearchParams({ type: form })
@@ -23,7 +46,12 @@ const LoginPage: React.FC = () => {
       case 'register':
         return <RegisterFormContent onSwitchForm={handleSwitchForm} />
       default:
-        return <LoginFormContent onSwitchForm={handleSwitchForm} />
+        return (
+          <LoginFormContent
+            onSwitchForm={handleSwitchForm}
+            registerEnabled={registerEnabled}
+          />
+        )
     }
   }
 

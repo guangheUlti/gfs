@@ -1,9 +1,13 @@
 package com.guanghe.fs.system.controller;
 
 import com.guanghe.fs.framework.common.domain.Result;
+import com.guanghe.fs.framework.common.exception.BusinessException;
+import com.guanghe.fs.framework.common.utils.I18nUtils;
+import com.guanghe.fs.system.constant.FeatureKeys;
 import com.guanghe.fs.system.domain.SysUserTransferSetting;
 import com.guanghe.fs.system.domain.dto.*;
 import com.guanghe.fs.system.domain.vo.SysUserVO;
+import com.guanghe.fs.system.service.SysFeatureToggleService;
 import com.guanghe.fs.system.service.SysUserService;
 import com.guanghe.fs.system.service.SysUserTransferSettingService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,6 +34,8 @@ public class UserController {
 
     private final SysUserTransferSettingService userTransferSettingService;
 
+    private final SysFeatureToggleService featureToggleService;
+
     @Operation(summary = "获取用户详细信息")
     @GetMapping("/info")
     public Result<SysUserVO> getDetail() {
@@ -40,6 +46,10 @@ public class UserController {
     @Operation(summary = "注册用户")
     @PostMapping("/register")
     public Result<?> register(@Validated @RequestBody UserRegisterCmd cmd) {
+        // 开关在服务端强制校验：隐藏前端入口不等于拒绝直接调接口
+        if (!Boolean.TRUE.equals(featureToggleService.listToggles().get(FeatureKeys.REGISTER))) {
+            throw new BusinessException(I18nUtils.getMessage("user.register.disabled"));
+        }
         userService.register(cmd);
         return Result.ok();
     }

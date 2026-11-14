@@ -38,10 +38,22 @@ public class LoginGuardService {
     @Value("${security.brute-force.lock-minutes:30}")
     private int lockMinutes;
 
+    /** 同一 IP 每小时允许成功注册的次数（0 表示不限制） */
+    @Value("${security.brute-force.register-max-per-hour:10}")
+    private int registerMaxPerHour;
+
+    /** 同一 IP 每 24 小时允许成功注册的次数（0 表示不限制） */
+    @Value("${security.brute-force.register-max-per-day:50}")
+    private int registerMaxPerDay;
+
     private static final String KEY_LOGIN_FAIL = "login:guard:fail:";
     private static final String KEY_LOGIN_LOCK = "login:guard:lock:";
     private static final String KEY_REGISTER_FAIL = "register:guard:fail:";
     private static final String KEY_REGISTER_LOCK = "register:guard:lock:";
+    private static final String KEY_REGISTER_HOUR = "register:guard:count:hour:";
+    private static final String KEY_REGISTER_DAY = "register:guard:count:day:";
+    private static final long HOUR_SECONDS = 3600L;
+    private static final long DAY_SECONDS = 86400L;
 
     /**
      * 登录前检查：账号+IP 是否已被锁定
@@ -216,6 +228,51 @@ public class LoginGuardService {
      */
     public void clearRegisterFailures() {
         redisRepository.del(KEY_REGISTER_FAIL + IpUtils.getIpAddr());
+    }
+
+    /**
+     * 预占一次注册配额：成功的注册同样要计数，否则攻击者换用户名就能无限注册。
+     * 先自增再判断并在超限时回滚，避免并发请求同时通过检查。
+     * 必须与 {@link #releaseRegisterQuota()} 配对：注册最终失败时释放预占，避免白占名额。
+     */
+    public void reserveRegisterQuota() {
+        String ip = IpUtils.getIpAddr();
+        Long hourCount = incrWithTtl(KEY_REGISTER_HOUR + ip, HOUR_SECONDS);
+        Long dayCount = incrWithTtl(KEY_REGISTER_DAY + ip, DAY_SECONDS);
+        boolean hourExceeded = registerMaxPerHour > 0 && hourCount != null && hourCount > registerMaxPerHour;
+        boolean dayExceeded = registerMaxPerDay > 0 && dayCount != null && dayCount > registerMaxPerDay;
+        if (hourExceeded || dayExceeded) {
+            releaseRegisterQuota(ip);
+            throw new BusinessException(I18nUtils.getMessage("user.register.tooMany"));
+        }
+    }
+
+    /**
+     * 释放 {@link #reserveRegisterQuota()} 预占的配额（注册失败时调用）
+     */
+    public void releaseRegisterQuota() {
+        releaseRegisterQuota(IpUtils.getIpAddr());
+    }
+
+    private void releaseRegisterQuota(String ip) {
+        releaseCounter(KEY_REGISTER_HOUR + ip);
+        releaseCounter(KEY_REGISTER_DAY + ip);
+    }
+
+    /** 回滚计数；计数已过期或归零时直接删除，避免留下无 TTL 的负值键 */
+    private void releaseCounter(String key) {
+        Long remaining = redisRepository.decr(key, 1);
+        if (remaining != null && remaining <= 0) {
+            redisRepository.del(key);
+        }
+    }
+
+    private Long incrWithTtl(String key, long ttlSeconds) {
+        Long count = redisRepository.incr(key, 1);
+        if (count != null && count == 1) {
+            redisRepository.expire(key, ttlSeconds);
+        }
+        return count;
     }
 
     /**

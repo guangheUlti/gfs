@@ -105,6 +105,8 @@
     "recycleBinDesc": "When enabled, deleted files move to the Recycle Bin and can be restored. When disabled, deletion permanently removes files",
     "share": "Share",
     "shareDesc": "When enabled, the Share entry appears on the files page for creating share links. When disabled, the entry is hidden while existing share links remain accessible",
+    "register": "Open registration",
+    "registerDesc": "When enabled, the sign-in page shows \"Register now\"; new accounts still require admin approval. When disabled, the entry is hidden and registration requests are refused; existing accounts can still sign in",
     "loadFailed": "Failed to load feature toggles",
     "saveFailed": "Failed to save feature toggles"
   },

@@ -14,6 +14,8 @@ import FieldBox, { fieldInputClass } from './FieldBox'
 
 interface Props {
   onSwitchForm: (form: 'login' | 'register') => void
+  /** 注册开关；关闭时隐藏「立即注册」入口 */
+  registerEnabled?: boolean
 }
 
 function getSafeRedirectPath(searchParams: URLSearchParams): string | null {
@@ -28,7 +30,10 @@ function getSafeRedirectPath(searchParams: URLSearchParams): string | null {
   }
 }
 
-export default function LoginFormContent({ onSwitchForm }: Props) {
+export default function LoginFormContent({
+  onSwitchForm,
+  registerEnabled = true,
+}: Props) {
   const { t } = useTranslation('login')
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -158,15 +163,17 @@ export default function LoginFormContent({ onSwitchForm }: Props) {
         {loading ? t('loggingIn') : t('login')}
       </Button>
 
-      <div className='flex w-full items-center justify-end text-sm'>
-        <button
-          type='button'
-          className='cursor-pointer text-[#3573FF] hover:underline'
-          onClick={() => onSwitchForm('register')}
-        >
-          {t('registerNow')}
-        </button>
-      </div>
+      {registerEnabled && (
+        <div className='flex w-full items-center justify-end text-sm'>
+          <button
+            type='button'
+            className='cursor-pointer text-[#3573FF] hover:underline'
+            onClick={() => onSwitchForm('register')}
+          >
+            {t('registerNow')}
+          </button>
+        </div>
+      )}
     </form>
   )
 }

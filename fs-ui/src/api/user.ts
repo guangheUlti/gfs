@@ -14,6 +14,11 @@ import {
 import { request } from './request'
 
 export const userApi = {
+  // 登录页公开配置（注册开关等；无需登录）
+  getAuthConfig: () => {
+    return request.get<{ registerEnabled: boolean }>('/apis/auth/config')
+  },
+
   // 登录
   login: (data: LoginParams) => {
     return request.post<LoginRes>('/apis/auth/login', data)
