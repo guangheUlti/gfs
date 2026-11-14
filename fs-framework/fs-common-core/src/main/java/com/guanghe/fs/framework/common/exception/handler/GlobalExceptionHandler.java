@@ -159,10 +159,13 @@ public class GlobalExceptionHandler {
 
     /**
      * HttpRequestMethodNotSupportedException 异常处理返回json
+     * 多为扫描器或错误客户端，记 WARN 且不打堆栈，避免刷日志
      */
     @ExceptionHandler({HttpRequestMethodNotSupportedException.class})
-    public Result<?> handleHttpRequestMethodNotSupportedException(HttpRequestMethodNotSupportedException e) {
-        return defHandler(I18nUtils.getMessage("request.method.not.supported"), e);
+    public Result<?> handleHttpRequestMethodNotSupportedException(HttpRequestMethodNotSupportedException e,
+            HttpServletRequest request) {
+        log.warn("请求地址'{}',方法不支持'{}'", request.getRequestURI(), e.getMethod());
+        return Result.error(I18nUtils.getMessage("request.method.not.supported"));
     }
 
 
@@ -174,6 +177,10 @@ public class GlobalExceptionHandler {
             org.springframework.web.multipart.MultipartException.class
     })
     public Result<?> handleFileUploadException(Exception e) {
+        if (e instanceof MaxUploadSizeExceededException) {
+            log.warn("文件上传超过大小限制: {}", e.getMessage());
+            return Result.error(HttpStatus.BAD_REQUEST.value(), I18nUtils.getMessage("file.size.exceeded"), null);
+        }
         log.error("文件上传异常: {}", e.getClass().getName(), e);
         String message = I18nUtils.getMessage("file.upload.failed") + ": " + e.getMessage();
         return Result.error(HttpStatus.BAD_REQUEST.value(), message, null);

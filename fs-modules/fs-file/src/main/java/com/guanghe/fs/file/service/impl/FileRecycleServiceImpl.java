@@ -47,6 +47,8 @@ import static com.guanghe.fs.file.domain.table.FileInfoTableDef.FILE_INFO;
 @RequiredArgsConstructor
 public class FileRecycleServiceImpl implements FileRecycleService {
 
+    private static final int MAX_LOGGED_SAMPLES = 5;
+
     private final Converter converter;
 
     private final FileInfoService fileInfoService;
@@ -303,33 +305,93 @@ public class FileRecycleServiceImpl implements FileRecycleService {
                 new TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        for (FileInfo file : physicalObjectsFinal) {
-                            try {
-                                objectReferenceService.deletePhysicalFileIfUnreferencedWithLock(file);
-                            } catch (Exception e) {
-                                log.error("删除无引用物理文件失败: {}", file.getObjectKey(), e);
-                            }
-                        }
+                        deletePhysicalObjects(physicalObjectsFinal);
                         // 挂载目录：直接删真实目录树（幂等，真实目录已不存在时静默通过）
-                        for (Map.Entry<String, List<FileInfo>> entry : mountDirDeletesFinal.entrySet()) {
-                            try {
-                                IStorageOperationService storageService =
-                                        storageServiceFacade.getStorageService(entry.getKey());
-                                for (FileInfo dir : entry.getValue()) {
-                                    try {
-                                        storageService.deleteDirectory(dir.getObjectKey());
-                                        log.info("挂载目录永久删除完成: objectKey={}", dir.getObjectKey());
-                                    } catch (Exception e) {
-                                        log.error("挂载目录永久删除失败: {}", dir.getObjectKey(), e);
-                                    }
-                                }
-                            } catch (Exception e) {
-                                log.error("获取挂载存储实例失败，跳过目录删除: settingId={}", entry.getKey(), e);
-                            }
-                        }
+                        deleteMountDirectories(mountDirDeletesFinal);
                     }
                 }
         );
+    }
+
+    /**
+     * 按存储配置分组删除物理对象。配置已删除/禁用时整组跳过，其余失败按组汇总，
+     * 避免一个不可用的存储把每个文件都打成一条堆栈（2026-11-05 单日 2.45GB 即此原因）。
+     */
+    private void deletePhysicalObjects(List<FileInfo> physicalObjects) {
+        if (CollUtil.isEmpty(physicalObjects)) {
+            return;
+        }
+        Map<String, List<FileInfo>> bySetting = new LinkedHashMap<>();
+        for (FileInfo file : physicalObjects) {
+            bySetting.computeIfAbsent(StrUtil.blankToDefault(file.getStoragePlatformSettingId(), ""),
+                    key -> new ArrayList<>()).add(file);
+        }
+        for (Map.Entry<String, List<FileInfo>> entry : bySetting.entrySet()) {
+            List<FileInfo> files = entry.getValue();
+            try {
+                storageServiceFacade.getStorageService(entry.getKey());
+            } catch (Exception e) {
+                log.warn("存储配置不可用，跳过 {} 个物理对象删除: settingId={}, reason={}",
+                        files.size(), entry.getKey(), e.getMessage());
+                continue;
+            }
+            int failed = 0;
+            List<String> failedSamples = new ArrayList<>();
+            String firstError = null;
+            for (FileInfo file : files) {
+                try {
+                    objectReferenceService.deletePhysicalFileIfUnreferencedWithLock(file);
+                } catch (Exception e) {
+                    failed++;
+                    if (failedSamples.size() < MAX_LOGGED_SAMPLES) {
+                        failedSamples.add(file.getObjectKey());
+                    }
+                    if (firstError == null) {
+                        firstError = e.getMessage();
+                    }
+                }
+            }
+            if (failed > 0) {
+                log.error("物理对象删除失败 {}/{}: settingId={}, samples={}, firstError={}",
+                        failed, files.size(), entry.getKey(), failedSamples, firstError);
+            } else {
+                log.info("物理对象清理完成: settingId={}, count={}", entry.getKey(), files.size());
+            }
+        }
+    }
+
+    private void deleteMountDirectories(Map<String, List<FileInfo>> mountDirDeletes) {
+        for (Map.Entry<String, List<FileInfo>> entry : mountDirDeletes.entrySet()) {
+            IStorageOperationService storageService;
+            try {
+                storageService = storageServiceFacade.getStorageService(entry.getKey());
+            } catch (Exception e) {
+                log.warn("存储配置不可用，跳过 {} 个挂载目录删除: settingId={}, reason={}",
+                        entry.getValue().size(), entry.getKey(), e.getMessage());
+                continue;
+            }
+            int failed = 0;
+            List<String> failedSamples = new ArrayList<>();
+            String firstError = null;
+            for (FileInfo dir : entry.getValue()) {
+                try {
+                    storageService.deleteDirectory(dir.getObjectKey());
+                    log.info("挂载目录永久删除完成: objectKey={}", dir.getObjectKey());
+                } catch (Exception e) {
+                    failed++;
+                    if (failedSamples.size() < MAX_LOGGED_SAMPLES) {
+                        failedSamples.add(dir.getObjectKey());
+                    }
+                    if (firstError == null) {
+                        firstError = e.getMessage();
+                    }
+                }
+            }
+            if (failed > 0) {
+                log.error("挂载目录删除失败 {}/{}: settingId={}, samples={}, firstError={}",
+                        failed, entry.getValue().size(), entry.getKey(), failedSamples, firstError);
+            }
+        }
     }
 
     /** 当前配置是否为挂载式存储（能力位判断，勿比较 identifier 字符串） */

@@ -33,10 +33,14 @@
 
     <!-- 输出到文件 -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>${log.path}/${application_name}.%d{yyyy-MM-dd}.log</fileNamePattern>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${log.path}/${application_name}.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <!--单个文件上限，避免异常风暴把单日日志撑到 GB 级-->
+            <maxFileSize>200MB</maxFileSize>
             <!--日志文件保留天数-->
             <MaxHistory>30</MaxHistory>
+            <!--全部历史日志总上限-->
+            <totalSizeCap>10GB</totalSizeCap>
         </rollingPolicy>
         <encoder>
             <Pattern>${FILE_LOG_PATTERN}</Pattern>
