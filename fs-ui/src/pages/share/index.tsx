@@ -69,9 +69,10 @@ export default function SharePage() {
 
   const parentId = searchParams.get('parentId') || undefined
 
-  // 验证提取码
-  const handleVerify = async () => {
-    if (!accessCode.trim()) {
+  // 验证提取码（codeInput 用于 URL 里带来的码，避免读到旧 state）
+  const handleVerify = async (codeInput?: string) => {
+    const code = (codeInput ?? accessCode).trim()
+    if (!code) {
       toast.warning(t('toast.enterCode'))
       return
     }
@@ -79,12 +80,12 @@ export default function SharePage() {
     try {
       const result = await validateShareCode({
         shareId: shareToken!,
-        shareCode: accessCode,
+        shareCode: code,
       })
       if (result) {
         setIsVerified(true)
         const params = new URLSearchParams(searchParams)
-        params.set('shareCode', accessCode)
+        params.set('shareCode', code)
         navigate(`/s/${shareToken}?${params.toString()}`, { replace: true })
       } else {
         toast.error(t('toast.codeWrong'))
@@ -115,7 +116,7 @@ export default function SharePage() {
         const urlCode = searchParams.get('shareCode')
         if (urlCode) {
           setAccessCode(urlCode)
-          handleVerify()
+          handleVerify(urlCode)
         }
       }
     } catch (error: any) {
@@ -137,12 +138,19 @@ export default function SharePage() {
     }
   }
 
+  // 分享设了提取码时，所有匿名读接口都要带上它
+  const shareCodeParam = shareData.hasCheckCode ? accessCode : undefined
+
   // 获取分享文件列表
   const fetchShareFile = async () => {
     if (!isVerified) return
     setBodyLoading(true)
     try {
-      const data = await getShareItemList(shareToken!, parentId)
+      const data = await getShareItemList(
+        shareToken!,
+        parentId,
+        shareCodeParam
+      )
       setFileList(data)
     } finally {
       setBodyLoading(false)
@@ -199,15 +207,21 @@ export default function SharePage() {
 
   // 处理预览：分享匿名开放，直链内联展示可预览类型，其余浏览器自动下载
   const handlePreview = (file: FileItem) => {
+    const query = shareCodeParam
+      ? `?shareCode=${encodeURIComponent(shareCodeParam)}`
+      : ''
     window.open(
-      `${import.meta.env.VITE_API_BASE_URL}/apis/share/${shareToken}/raw/${file.id}`,
+      `${import.meta.env.VITE_API_BASE_URL}/apis/share/${shareToken}/raw/${file.id}${query}`,
       '_blank'
     )
   }
 
-  // 处理下载：下载接口本身匿名，无需携带 token
+  // 处理下载：下载接口本身匿名，设了提取码时需带 shareCode
   const handleDownload = (file: FileItem) => {
-    const downloadUrl = `${import.meta.env.VITE_API_BASE_URL}/apis/share/${shareToken}/download/${file.id}`
+    const query = shareCodeParam
+      ? `?shareCode=${encodeURIComponent(shareCodeParam)}`
+      : ''
+    const downloadUrl = `${import.meta.env.VITE_API_BASE_URL}/apis/share/${shareToken}/download/${file.id}${query}`
 
     const link = document.createElement('a')
     link.href = downloadUrl

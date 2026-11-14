@@ -95,49 +95,51 @@ public interface FileShareService extends IService<FileShare> {
     /**
      * 获取分享文件列表
      *
-     * @param shareId  分享id
-     * @param parentId 父目录id
+     * @param shareId   分享id
+     * @param parentId  父目录id
+     * @param shareCode 提取码（分享设了提取码时必填）
      * @return
      */
-    List<FileVO> getShareFileItems(String shareId, String parentId);
+    List<FileVO> getShareFileItems(String shareId, String parentId, String shareCode);
 
     /**
      * 下载文件
      *
-     * @param shareId 分享id
-     * @param fileId  文件id
+     * @param shareId   分享id
+     * @param fileId    文件id
+     * @param shareCode 提取码（分享设了提取码时必填）
      */
-    FileDownloadVO downloadFiles(String shareId, String fileId);
+    FileDownloadVO downloadFiles(String shareId, String fileId, String shareCode);
 
     /**
      * 获取直链文件元信息（文件名/大小），不打开数据流。
      * 供直链端点构建交付请求（鉴权语义与 downloadFiles 一致）。
      */
-    FileDownloadVO getShareFileMeta(String shareId, String fileId);
+    FileDownloadVO getShareFileMeta(String shareId, String fileId, String shareCode);
 
     /**
      * 按 Range 打开分享文件流：全量用 downloadFile，Range 用存储侧裁剪的 downloadFileRange。
      * start=0 且 end=-1 表示全量。
      */
-    InputStream openShareFileRange(String shareId, String fileId, long start, long end) throws Exception;
+    InputStream openShareFileRange(String shareId, String fileId, long start, long end, String shareCode) throws Exception;
 
     /**
      * 创建分享文件夹下载任务
      */
-    FolderDownloadTaskVO createFolderDownloadTask(String shareId, String folderId);
+    FolderDownloadTaskVO createFolderDownloadTask(String shareId, String folderId, String shareCode);
 
     /**
      * 查询分享文件夹下载任务
      */
-    FolderDownloadTaskVO getFolderDownloadTask(String shareId, String taskId);
+    FolderDownloadTaskVO getFolderDownloadTask(String shareId, String taskId, String shareCode);
 
     /**
      * 取消分享文件夹下载打包任务
      */
-    void cancelFolderDownloadTask(String shareId, String taskId);
+    void cancelFolderDownloadTask(String shareId, String taskId, String shareCode);
 
     /**
      * 下载分享文件夹压缩包
      */
-    FileDownloadVO downloadFolderTaskFile(String shareId, String taskId);
+    FileDownloadVO downloadFolderTaskFile(String shareId, String taskId, String shareCode);
 }

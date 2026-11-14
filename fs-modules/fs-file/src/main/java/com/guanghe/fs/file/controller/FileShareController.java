@@ -11,6 +11,7 @@ import com.guanghe.fs.file.service.FileShareService;
 import com.guanghe.fs.file.serving.FileServingPipeline;
 import com.guanghe.fs.framework.common.domain.PageResult;
 import com.guanghe.fs.framework.common.domain.Result;
+import com.guanghe.fs.framework.common.exception.BusinessException;
 import com.guanghe.fs.framework.preview.config.FilePreviewConfig;
 import com.guanghe.fs.log.constant.OperationType;
 import com.guanghe.fs.log.service.SysOperationLogService;
@@ -143,16 +144,20 @@ public class FileShareController {
 
     @Operation(summary = "获取分享页文件列表数据", description = "获取分享页文件列表数据")
     @GetMapping("/{shareId}/items")
-    public Result<List<FileVO>> getShareFileItems(@PathVariable String shareId, @RequestParam(required = false) String parentId) {
-        return Result.ok(fileShareService.getShareFileItems(shareId, parentId));
+    public Result<List<FileVO>> getShareFileItems(@PathVariable String shareId,
+                                                  @RequestParam(required = false) String parentId,
+                                                  @RequestParam(value = "shareCode", required = false) String shareCode) {
+        return Result.ok(fileShareService.getShareFileItems(shareId, parentId, shareCode));
     }
 
     @Operation(summary = "分享内文件下载", description = "分享内文件下载")
     @GetMapping("/{shareId}/download/{fileId}")
-    public ResponseEntity<Resource> downloadShareFile(@PathVariable String shareId, @PathVariable String fileId) {
+    public ResponseEntity<Resource> downloadShareFile(@PathVariable String shareId,
+                                                      @PathVariable String fileId,
+                                                      @RequestParam(value = "shareCode", required = false) String shareCode) {
         try {
             // 获取文件信息和文件流
-            FileDownloadVO fileDownload = fileShareService.downloadFiles(shareId, fileId);
+            FileDownloadVO fileDownload = fileShareService.downloadFiles(shareId, fileId, shareCode);
 
             // 设置响应头
             HttpHeaders headers = new HttpHeaders();
@@ -164,6 +169,9 @@ public class FileShareController {
                     .headers(headers)
                     .contentLength(fileDownload.getFileSize())
                     .body(fileDownload.getResource());
+        } catch (BusinessException e) {
+            // 提取码/过期等业务错误按原文返回，别被兜底包装成“系统异常”
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("文件下载失败", e);
         }
@@ -173,12 +181,13 @@ public class FileShareController {
     @Operation(summary = "直链访问分享文件", description = "绕过分享页直接访问分享内文件，白名单媒体类型内联展示（支持 Range 断点/视频拖拽），其余类型转为下载")
     public ResponseEntity<StreamingResponseBody> rawShareFile(@PathVariable String shareId,
                                                               @PathVariable String fileId,
+                                                              @RequestParam(value = "shareCode", required = false) String shareCode,
                                                               @RequestHeader(value = "Range", required = false) String rangeHeader) {
-        FileDownloadVO meta = fileShareService.getShareFileMeta(shareId, fileId);
+        FileDownloadVO meta = fileShareService.getShareFileMeta(shareId, fileId, shareCode);
         long size = meta.getFileSize() == null ? -1 : meta.getFileSize();
         FileServingPipeline.Request request = FileServingPipeline.Request
                 .inline(meta.getFileName(), size,
-                        (start, end) -> fileShareService.openShareFileRange(shareId, fileId, start, end))
+                        (start, end) -> fileShareService.openShareFileRange(shareId, fileId, start, end, shareCode))
                 // 直链媒体类型内联、可 Range（修复原实现不支持拖进度条）；svg/html 等不安全类型由管道自动回退 attachment
                 .withMaxRangeSize(previewConfig.getMaxRangeSize());
         return servingPipeline.serve(request, rangeHeader);
@@ -187,31 +196,35 @@ public class FileShareController {
     @PostMapping("/{shareId}/folder-download/tasks/{folderId}")
     @Operation(summary = "创建分享文件夹下载任务", description = "异步打包分享内文件夹")
     public Result<FolderDownloadTaskVO> createFolderDownloadTask(@PathVariable String shareId,
-                                                                  @PathVariable String folderId) {
-        return Result.ok(fileShareService.createFolderDownloadTask(shareId, folderId));
+                                                                  @PathVariable String folderId,
+                                                                  @RequestParam(value = "shareCode", required = false) String shareCode) {
+        return Result.ok(fileShareService.createFolderDownloadTask(shareId, folderId, shareCode));
     }
 
     @GetMapping("/{shareId}/folder-download/tasks/{taskId}")
     @Operation(summary = "查询分享文件夹下载任务", description = "查询分享文件夹打包进度")
     public Result<FolderDownloadTaskVO> getFolderDownloadTask(@PathVariable String shareId,
-                                                               @PathVariable String taskId) {
-        return Result.ok(fileShareService.getFolderDownloadTask(shareId, taskId));
+                                                               @PathVariable String taskId,
+                                                               @RequestParam(value = "shareCode", required = false) String shareCode) {
+        return Result.ok(fileShareService.getFolderDownloadTask(shareId, taskId, shareCode));
     }
 
     @DeleteMapping("/{shareId}/folder-download/tasks/{taskId}")
     @Operation(summary = "取消分享文件夹下载打包任务", description = "取消分享文件夹打包并清理临时文件")
     public Result<Void> cancelFolderDownloadTask(@PathVariable String shareId,
-                                                  @PathVariable String taskId) {
-        fileShareService.cancelFolderDownloadTask(shareId, taskId);
+                                                  @PathVariable String taskId,
+                                                  @RequestParam(value = "shareCode", required = false) String shareCode) {
+        fileShareService.cancelFolderDownloadTask(shareId, taskId, shareCode);
         return Result.ok();
     }
 
     @GetMapping("/{shareId}/folder-download/tasks/{taskId}/file")
     @Operation(summary = "下载分享文件夹压缩包", description = "下载已打包完成的分享文件夹 zip")
     public ResponseEntity<Resource> downloadFolderTaskFile(@PathVariable String shareId,
-                                                            @PathVariable String taskId) {
+                                                            @PathVariable String taskId,
+                                                            @RequestParam(value = "shareCode", required = false) String shareCode) {
         try {
-            FileDownloadVO fileDownload = fileShareService.downloadFolderTaskFile(shareId, taskId);
+            FileDownloadVO fileDownload = fileShareService.downloadFolderTaskFile(shareId, taskId, shareCode);
             HttpHeaders headers = new HttpHeaders();
             headers.add(HttpHeaders.CONTENT_DISPOSITION,
                     "attachment; filename=\"" + URLEncoder.encode(fileDownload.getFileName(), StandardCharsets.UTF_8) + "\"");
@@ -220,6 +233,8 @@ public class FileShareController {
                     .headers(headers)
                     .contentLength(fileDownload.getFileSize())
                     .body(fileDownload.getResource());
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("分享文件夹下载失败", e);
         }

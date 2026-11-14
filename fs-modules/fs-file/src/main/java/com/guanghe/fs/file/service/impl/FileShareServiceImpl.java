@@ -48,6 +48,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -260,6 +262,8 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
                 .where(FILE_SHARE.ID.in(shareIdSet))
                 .and(FILE_SHARE.USER_ID.eq(userId))
                 .and(FILE_SHARE.EXPIRE_TIME.isNull().or(FILE_SHARE.EXPIRE_TIME.gt(LocalDateTime.now())))
+                // 带提取码的分享不能给直链复用：直链端点无法携带提取码
+                .and(FILE_SHARE.SHARE_CODE.isNull().or(FILE_SHARE.SHARE_CODE.eq("")))
                 .orderBy(FILE_SHARE.CREATED_AT.desc()));
         return reusable == null ? null : reusable.getId();
     }
@@ -381,10 +385,8 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
         if (share == null) {
             throw new BusinessException(I18nUtils.getMessage("share.not.exist"));
         }
-
-        if (!share.getShareCode().equals(cmd.getShareCode())) {
-            throw new BusinessException(I18nUtils.getMessage("share.code.incorrect"));
-        }
+        validateShareNotExpired(share);
+        validateShareCode(share, cmd.getShareCode());
         return true;
     }
 
@@ -411,8 +413,8 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
     }
 
     @Override
-    public List<FileVO> getShareFileItems(String shareId, String parentId) {
-        FileShare fileShare = getValidShare(shareId);
+    public List<FileVO> getShareFileItems(String shareId, String parentId, String shareCode) {
+        FileShare fileShare = getValidShare(shareId, shareCode);
 
         List<String> shareFileIds = fileShareItemService.getShareFileIds(shareId);
         List<FileInfo> fileInfos;
@@ -473,15 +475,15 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
     }
 
     /** 校验分享有效性并从分享内取回可访问文件元信息 */
-    private FileInfo getShareAccessibleFileInfo(String shareId, String fileId) {
-        FileShare fileShare = getValidShare(shareId);
+    private FileInfo getShareAccessibleFileInfo(String shareId, String fileId, String shareCode) {
+        FileShare fileShare = getValidShare(shareId, shareCode);
         List<String> shareFileIds = fileShareItemService.getShareFileIds(shareId);
         return getShareAccessibleFile(fileShare, shareFileIds, fileId);
     }
 
     @Override
-    public FileDownloadVO downloadFiles(String shareId, String fileId) {
-        FileInfo fileInfo = getShareAccessibleFileInfo(shareId, fileId);
+    public FileDownloadVO downloadFiles(String shareId, String fileId, String shareCode) {
+        FileInfo fileInfo = getShareAccessibleFileInfo(shareId, fileId, shareCode);
 
         IStorageOperationService storageService = storageServiceFacade.getStorageService(fileInfo.getStoragePlatformSettingId());
 
@@ -501,8 +503,8 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
     }
 
     @Override
-    public FileDownloadVO getShareFileMeta(String shareId, String fileId) {
-        FileInfo fileInfo = getShareAccessibleFileInfo(shareId, fileId);
+    public FileDownloadVO getShareFileMeta(String shareId, String fileId, String shareCode) {
+        FileInfo fileInfo = getShareAccessibleFileInfo(shareId, fileId, shareCode);
         FileDownloadVO downloadVO = new FileDownloadVO();
         downloadVO.setFileName(fileInfo.getDisplayName());
         downloadVO.setFileSize(fileInfo.getSize());
@@ -510,8 +512,8 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
     }
 
     @Override
-    public InputStream openShareFileRange(String shareId, String fileId, long start, long end) throws Exception {
-        FileInfo fileInfo = getShareAccessibleFileInfo(shareId, fileId);
+    public InputStream openShareFileRange(String shareId, String fileId, long start, long end, String shareCode) throws Exception {
+        FileInfo fileInfo = getShareAccessibleFileInfo(shareId, fileId, shareCode);
         IStorageOperationService storageService =
                 storageServiceFacade.getStorageService(fileInfo.getStoragePlatformSettingId());
         // 全量：大小未知（end=-1）或范围覆盖到文件末尾且从 0 开始
@@ -525,8 +527,8 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
     }
 
     @Override
-    public FolderDownloadTaskVO createFolderDownloadTask(String shareId, String folderId) {
-        FileShare fileShare = getValidShare(shareId);
+    public FolderDownloadTaskVO createFolderDownloadTask(String shareId, String folderId, String shareCode) {
+        FileShare fileShare = getValidShare(shareId, shareCode);
         List<String> shareFileIds = fileShareItemService.getShareFileIds(shareId);
         FileInfo folder = getShareAccessibleFile(fileShare, shareFileIds, folderId);
         if (!Boolean.TRUE.equals(folder.getIsDir())) {
@@ -536,8 +538,8 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
     }
 
     @Override
-    public FolderDownloadTaskVO getFolderDownloadTask(String shareId, String taskId) {
-        FileShare fileShare = getValidShare(shareId);
+    public FolderDownloadTaskVO getFolderDownloadTask(String shareId, String taskId, String shareCode) {
+        FileShare fileShare = getValidShare(shareId, shareCode);
         FolderDownloadTaskVO task = fileTransferTaskService.getFolderDownloadTask(taskId);
         List<String> shareFileIds = fileShareItemService.getShareFileIds(shareId);
         getShareAccessibleFile(fileShare, shareFileIds, task.getFolderId());
@@ -545,8 +547,8 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
     }
 
     @Override
-    public void cancelFolderDownloadTask(String shareId, String taskId) {
-        FileShare fileShare = getValidShare(shareId);
+    public void cancelFolderDownloadTask(String shareId, String taskId, String shareCode) {
+        FileShare fileShare = getValidShare(shareId, shareCode);
         FolderDownloadTaskVO task = fileTransferTaskService.getFolderDownloadTask(taskId);
         List<String> shareFileIds = fileShareItemService.getShareFileIds(shareId);
         getShareAccessibleFile(fileShare, shareFileIds, task.getFolderId());
@@ -554,21 +556,40 @@ public class FileShareServiceImpl extends ServiceImpl<FileShareMapper, FileShare
     }
 
     @Override
-    public FileDownloadVO downloadFolderTaskFile(String shareId, String taskId) {
-        FileShare fileShare = getValidShare(shareId);
+    public FileDownloadVO downloadFolderTaskFile(String shareId, String taskId, String shareCode) {
+        FileShare fileShare = getValidShare(shareId, shareCode);
         FolderDownloadTaskVO task = fileTransferTaskService.getFolderDownloadTask(taskId);
         List<String> shareFileIds = fileShareItemService.getShareFileIds(shareId);
         getShareAccessibleFile(fileShare, shareFileIds, task.getFolderId());
         return fileTransferTaskService.downloadFolderTaskFile(taskId);
     }
 
-    private FileShare getValidShare(String shareId) {
+    private FileShare getValidShare(String shareId, String shareCode) {
         FileShare fileShare = this.getById(shareId);
         if (fileShare == null) {
             throw new BusinessException(I18nUtils.getMessage("share.not.exist.or.deleted"));
         }
         validateShareNotExpired(fileShare);
+        validateShareCode(fileShare, shareCode);
         return fileShare;
+    }
+
+    /**
+     * 提取码校验：设了提取码的分享，所有匿名读接口都必须带上正确的码
+     */
+    private void validateShareCode(FileShare share, String shareCode) {
+        String expect = share.getShareCode();
+        if (StringUtils.isEmpty(expect)) {
+            return;
+        }
+        if (StringUtils.isEmpty(shareCode)) {
+            throw new BusinessException(I18nUtils.getMessage("share.code.required"));
+        }
+        if (!MessageDigest.isEqual(
+                expect.getBytes(StandardCharsets.UTF_8),
+                shareCode.getBytes(StandardCharsets.UTF_8))) {
+            throw new BusinessException(I18nUtils.getMessage("share.code.incorrect"));
+        }
     }
 
     private FileInfo getShareAccessibleFile(FileShare share, List<String> shareFileIds, String fileId) {

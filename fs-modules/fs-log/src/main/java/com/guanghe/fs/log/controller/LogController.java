@@ -34,6 +34,7 @@ public class LogController {
 
     @Operation(summary = "分页获取登录日志列表")
     @GetMapping("/login/pages")
+    @SaCheckPermission("log:read")
     public PageResult<SysLoginLogVO> getPages(LoginLogPageQry qry) {
         return loginLogService.getPages(qry);
     }

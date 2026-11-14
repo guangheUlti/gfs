@@ -66,9 +66,16 @@ export function validateShareCode(params: ShareValidParams) {
 /**
  * 获取分享文件列表
  */
-export function getShareItemList(shareId: string, parentId?: string) {
+export function getShareItemList(
+  shareId: string,
+  parentId?: string,
+  shareCode?: string
+) {
+  const params: Record<string, string> = {}
+  if (parentId) params.parentId = parentId
+  if (shareCode) params.shareCode = shareCode
   return request.get<FileItem[]>(`/apis/share/${shareId}/items`, {
-    params: parentId ? { parentId } : undefined,
+    params: Object.keys(params).length ? params : undefined,
   })
 }
 
@@ -91,8 +98,13 @@ export function getShareAccessRecords(shareId: string) {
 /**
  * 下载分享文件
  */
-export function downloadShareFile(shareId: string, fileId: string) {
+export function downloadShareFile(
+  shareId: string,
+  fileId: string,
+  shareCode?: string
+) {
   return service.get(`/apis/share/${shareId}/download/${fileId}`, {
     responseType: 'blob',
+    params: shareCode ? { shareCode } : undefined,
   })
 }

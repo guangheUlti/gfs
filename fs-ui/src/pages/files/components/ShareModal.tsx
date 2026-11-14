@@ -176,7 +176,8 @@ export function ShareModal({
         setShareExpireTime(response.expireTime || '')
         setIsPermanent(response.isPermanent)
         setRawLink(
-          singleFile
+          // 设了提取码的分享不能给直链：直链端点无法携带提取码
+          singleFile && !response.shareCode
             ? `${baseUrl}/apis/share/${response.id}/raw/${singleFile.id}`
             : ''
         )

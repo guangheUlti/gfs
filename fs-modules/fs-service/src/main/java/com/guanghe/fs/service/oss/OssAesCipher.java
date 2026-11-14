@@ -24,15 +24,21 @@ public class OssAesCipher {
     private static final String TRANSFORMATION = "AES/GCM/NoPadding";
     private static final int IV_LENGTH = 12;
     private static final int TAG_LENGTH_BITS = 128;
+    /** 旧版本随仓库发布的默认密钥：等同于公开密钥，必须按「未配置」处理 */
+    private static final String LEGACY_DEFAULT_KEY = "ChangeMeOssAesKey32Bytes012345Ab";
 
     private final SecretKeySpec0 keySpec;
     private final SecureRandom random = new SecureRandom();
 
     public OssAesCipher(@Value("${oss.aes-key:}") String configuredKey) {
         String key = configuredKey == null ? "" : configuredKey.trim();
-        if (key.isEmpty()) {
+        boolean legacyDefault = LEGACY_DEFAULT_KEY.equals(key);
+        if (key.isEmpty() || legacyDefault) {
             key = RandomUtil.randomStringUpper(32);
-            log.warn("未配置 oss.aes-key，已生成本次运行随机主密钥；重启后已签发的 OSS Secret Key 将无法解密，请尽快在 application.yml 固化 32 位密钥");
+            log.warn("{}，已生成本次运行随机主密钥；重启后已签发的 OSS Secret Key 将无法解密，请通过 OSS_AES_KEY 固化 32 位密钥",
+                    legacyDefault
+                            ? "oss.aes-key 仍是仓库旧默认值（等同于公开密钥），已忽略"
+                            : "未配置 oss.aes-key");
         } else if (key.length() != 32) {
             log.warn("oss.aes-key 长度应为 32 字节（AES-256），当前 {} 字节，将按 SHA-256 摘要对齐", key.length());
             key = cn.hutool.crypto.digest.DigestUtil.sha256Hex(key).substring(0, 32);
